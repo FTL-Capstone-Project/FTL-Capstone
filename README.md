@@ -1,26 +1,39 @@
-📝 `NOTE` Use this template repo to initialize the contents of your group's capstone repo project. As you work on your assignment over the course of the week, update the appropriate repo deliverables. All project planning should be included in the planning directory. (🚫 Remove this paragraph before submitting your assignment.)
-
 # SITE Capstone Project
 
-SITE Course Year: **20__**
+SITE Course Year: **2026**
 
-Cohort: **Add Company Sponsor Name**
+Team Name: **DOMinion**
 
-Team Member Names:**Insert Team Member Names**
+Project Name: **PIPbot**
 
-Mentors Names: **Insert Professional Mentor Names**
+Team Member Names: **Michael Jissa, Ozias Tumimana, David Gonzalez-Cesar**
+
+Mentors Names: **Sasha, Somal, Priyanshu**
 
 Project Code Repository Links
 
-* [Frontend Repo Link]()
-* [Backend Repo Link]()
+* [Frontend Repo Link]() <!-- TODO: add once frontend repo is created -->
+* [Backend Repo Link]() <!-- TODO: add once backend repo is created -->
 
 ## Project Overview
 
-Add a quick summary of what your project theme and objectives are. 
+PIPbot is an AI-assisted phishing-triage web app. A user submits a suspicious URL; PIPbot detonates it in a secure sandbox (urlscan.io), captures a screenshot, and uses Claude to return a plain-English danger verdict with a 0–100 risk score across multiple threat vectors — so no one has to open the link on their own machine.
+
+The product serves two roles from one codebase:
+
+- **Employees** get a lightweight "is this link safe?" page with a plain-language verdict and their own report history.
+- **Analysts** get a full triage dashboard: org-wide threat history, keyword search, campaign clustering, and a natural-language "ask-the-data" feature that turns plain-English questions into validated queries rendered as charts.
+
+**Objective:** make expert-level phishing triage faster for analysts and accessible to everyday employees, with AI features that explain *why* a link is dangerous and let analysts query the threat database without writing SQL.
 
 Deployment Website: **Add Link to Deployed Project**
 
 ### Open-source libraries used
 
-- Add any links to open-source libraries used in your project.
+- [React](https://react.dev/) — frontend UI
+- [Node.js](https://nodejs.org/) / [Express](https://expressjs.com/) — backend API
+- [PostgreSQL](https://www.postgresql.org/) — database
+- [D3.js](https://d3js.org/) — dashboard data visualization
+- [urlscan.io](https://urlscan.io/) — secure URL sandbox / detonation (external API)
+- [Claude API (Anthropic)](https://www.anthropic.com/api) — AI verdicts & natural-language querying
+- _Additional libraries will be added here as the project develops._
