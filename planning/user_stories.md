@@ -95,6 +95,6 @@ We drafted these stories as a pod, then ran them through Claude as a stress-test
 
 - **AI feature story: user benefit we landed on**: The benefit is getting an expert-level, trustworthy assessment in seconds without needing to understand the technical evidence, which reduces uncertainty and friction at the exact moment of risk. We deliberately removed earlier phrasing that leaned on outputs like "1 to 100 score" and "screenshot," because those are how the system delivers the benefit and belong in the API contract, not in the story. The story describes what the user experiences, not what the model or sandbox does.
 
-## Wireframe (Bonus)
+## Wireframe
 
 *To be added next week: low-fidelity mockups of the submission page, the individual and employee verdict report, and the analyst triage dashboard.*
