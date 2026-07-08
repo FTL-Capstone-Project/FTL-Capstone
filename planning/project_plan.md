@@ -12,15 +12,15 @@
 ## 1. Problem Statement and Solution Description
 
 **Problem.** Phishing is the most common entry point for organizational breaches. When an employee gets a
-suspicious link, the safe move is to report it and wait for an analyst — but analysts are buried in reports,
+suspicious link, the safe move is to report it and wait for an analyst, but analysts are buried in reports,
 and triaging each by hand (confirming a URL is malicious, understanding what it does, spotting whether it's
 part of a larger campaign) is slow, repetitive, and needs specialized expertise. Meanwhile the employee who
-reported it gets no quick answer, so many stop reporting and simply click. The people most targeted —
-students, individuals, and small companies without a security team — have the least help.
+reported it gets no quick answer. The people most targeted,
+students, individuals, and small companies without a security team, have the least help.
 
 **Solution.** PIPbot takes the slow, manual work out of phishing triage. A user submits a suspicious URL;
 PIPbot detonates it in a secure sandbox (urlscan.io), gathers evidence about what the page does, and returns
-a plain-English danger verdict with a 0–100 score and a screenshot — without anyone opening the link on their
+a plain-English danger verdict with a 0–100 score and a screenshot, without anyone opening the link on their
 own machine. One product serves two roles: **employees/individuals** get a lightweight "is this safe?" page
 and their own report history; **analysts** get a full triage dashboard (org-wide history, keyword search,
 campaign clustering, and natural-language querying of the threat database).
