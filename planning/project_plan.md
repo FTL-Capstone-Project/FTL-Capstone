@@ -198,21 +198,27 @@ and the team-setup flow are all drawn.
 | | source | text | `web` \| `email` — how it was submitted (email = forwarded to the Orbo inbox) |
 | | escalated | boolean | true when auto-routed to an analyst for review (all org-member submissions) |
 | | created_at | timestamp | submission time |
-| **indicators** | id | integer | primary key (the thing under judgment) |
-| | org_id | integer | FK → organizations.id, **nullable** — scopes the indicator + its verdict/campaign to one org (`NULL` = individual-owned) |
-| | canonical_key | text | dedup key (host + path + semantic params), unique **per owner scope** |
+| **indicators** | id | integer | primary key (the judged thing) — **GLOBAL / shared threat intel, one row per unique URL** |
+| | canonical_key | text | dedup key (host + path + semantic params), **unique globally** — the same URL is one indicator for everyone |
 | | domain | text | destination domain |
 | | status | text | `pending` \| `scanning` \| `done` \| `error` |
-| | ai_score | integer | 0–100 AI danger score |
-| | ai_verdict | text | Claude plain-English explanation |
+| | ai_score | integer | 0–100 AI danger score — shared by all who report this URL |
+| | ai_verdict | text | Claude plain-English explanation (shared) |
+| | ai_confidence | text | `low` \| `medium` \| `high` (nullable) |
+| | screenshot_url | text | from urlscan.io (shared) |
+| | urlscan_uuid | text | scan reference |
+| | domain_age_days | integer | signal (nullable) |
+| | report_count | integer | total submissions across all orgs + individuals — powers "seen before, reported N times" |
+| | created_at / updated_at | timestamp | first-seen / last re-scanned (enables TTL later) |
+| **org_reviews** | id | integer | primary key — an org's private authoritative review of a (global) indicator |
+| | org_id | integer | FK → organizations.id |
+| | indicator_id | integer | FK → indicators.id — **UNIQUE (org_id, indicator_id)** |
 | | human_score | integer | analyst's authoritative score (nullable) |
 | | human_verdict | text | analyst's written verdict (nullable) |
 | | review_status | text | `pending review` \| `investigating` \| `confirmed malicious` \| `confirmed safe` |
-| | screenshot_url | text | from urlscan.io |
-| | urlscan_uuid | text | scan reference |
-| | domain_age_days | integer | signal (nullable) |
-| | campaign_id | integer | FK → campaigns.id (nullable) |
-| | created_at / updated_at | timestamp | first-seen / last-updated |
+| | reviewed_by | integer | FK → users.id — which analyst (nullable) |
+| | campaign_id | integer | FK → campaigns.id (nullable) — per-org clustering |
+| | created_at / updated_at | timestamp | |
 | **campaigns** | id | integer | primary key (cluster of indicators) |
 | | org_id | integer | FK → organizations.id — campaigns are always org-scoped (analyst feature) |
 | | name | text | e.g. "Okta credential kit" |
@@ -226,29 +232,45 @@ and the team-setup flow are all drawn.
 | | is_read | boolean | has the user seen it |
 | | created_at | timestamp | when raised |
 
-**Relationships:** an organization has many users, indicators, and campaigns; a user has many submissions and
-notifications; an indicator has many submissions (this is the dedup — many reports, one judged thing); a
-campaign has many indicators. **Two-phase verdict:** `ai_*` fields are set instantly; `human_*` +
-`review_status` are set later by an analyst — both kept for the record.
+**Relationships:** an organization has many users, org_reviews, and campaigns; a user has many submissions and
+notifications; an **indicator (global) has many submissions** (this is the dedup — many reports across the whole
+platform, one judged thing) and many org_reviews (one per org that has reviewed it); a campaign groups many
+org_reviews. **Two layers, by design:** the **indicator** holds objective, shared threat intel (AI score,
+verdict, screenshot) computed **once for everyone**; an **org_review** holds one org's private authoritative
+call (`human_*`, `review_status`) on that shared indicator. **Two-phase verdict:** `ai_*` on the indicator is
+set instantly and globally; the `human_*` + `review_status` on an org_review are set later by that org's
+analyst — both kept for the record, and one org's review never touches another's.
 
 **Identity & orgs are managed by Clerk (auth provider).** Clerk is the source of truth for login, passwords,
 social login (Google/Apple), organizations, memberships, invites, and domain auto-join. We keep only **mirror**
 rows in Postgres — `users.clerk_user_id` and `organizations.clerk_org_id` — kept in sync by a Clerk webhook
 (see §6). This is why there is no `password_hash` and no local `invites` table anymore: we don't build auth or
-invites ourselves. Our tables foreign-key to the mirrored `users`/`organizations` so submissions, verdicts, and
-campaigns still belong to a person and an org.
+invites ourselves. Our tables foreign-key to the mirrored `users`/`organizations` so submissions, org_reviews,
+and campaigns still belong to a person and an org.
 
-**Organization-scoped isolation (story #12 — hard requirement).** Every org-scoped table carries `org_id`.
-Analyst-facing reads (`/history`, `/search`, `/campaigns`, `/nlp-query`) filter on `org_id = the analyst's
-org`, so one org can never see another's indicators, verdicts, or campaigns. Individuals have `org_id = NULL`
-and are scoped to their own `user_id`; they never receive analyst verdicts or campaigns, so there is no
-org data to leak. Within an org, the same `canonical_key` maps to **one** indicator — that is how 20 members
-reporting the same link collapse into a single investigation for the analyst.
+**Shared threat intel + per-org isolation (story #12 — hard requirement).** The split cleanly separates what is
+safe to share from what must stay private:
+- **Shared globally (indicators):** the objective facts about a URL — is it malicious, the AI reasoning, the
+  screenshot, and the platform-wide `report_count`. This is threat intelligence, not private data, so it is
+  scanned **once** and reused by everyone. This is what powers **"Orbo's seen this before — reported N times,
+  it's a known scam"** across *all* orgs and individuals, and means a URL is never scanned twice.
+- **Isolated per org (submissions, org_reviews, campaigns):** *who* reported a link (`submissions.org_id`), an
+  analyst's authoritative verdict (`org_reviews`), and campaign clustering. Analyst-facing reads (`/history`,
+  `/search`, `/campaigns`, `/nlp-query`) filter on `org_id = the analyst's org` and join org_reviews for that
+  org only — so an analyst sees the shared AI intel on the URLs **their** org reported, but never another org's
+  activity, verdicts, or campaigns. Individuals (`org_id = NULL` on their submissions) are scoped to their own
+  `user_id` and have no analyst review layer.
+
+Because `canonical_key` is **globally unique**, 20 members of one org reporting the same link collapse into a
+single indicator (one investigation for their analyst) **and** benefit from any scan already done for anyone
+else on the platform.
 
 **Auto-escalation to the analyst.** Anything an **org member** submits — whether pasted in the web chat or
-forwarded to the Orbo inbox — is automatically routed to their org's analyst for review (`escalated = true`,
-`review_status = 'pending review'`). Members never have to manually "send to security"; the worry they felt is
-enough. Individuals have no analyst, so their submissions are never escalated. (Stories #6, #8.)
+forwarded to the Orbo inbox — is automatically routed to their org's analyst for review: the submission sets
+`escalated = true`, and an `org_reviews` row is created (or reused) for that (org, indicator) with
+`review_status = 'pending review'`. Members never have to manually "send to security"; the worry they felt is
+enough. Individuals have no analyst and no org_review row, so their submissions are never escalated.
+(Stories #6, #8.)
 
 **Email forwarding is a backend-only pipeline (core interaction method — no dedicated UI screen).** We stand up
 a dedicated Orbo inbox address (e.g. `check@orbis...`). An inbound-email service (Microsoft Azure) receives the
@@ -271,17 +293,17 @@ and `org_id` from the verified Clerk session token (no hand-rolled JWTs).
 | Create | POST | `/api/webhooks/clerk` | Clerk → us: sync user/org mirror rows on create/update/delete | Clerk event (`user.*`, `organization.*`, `organizationMembership.*`) | `200 OK` | 400 bad signature (verified via Clerk signing secret) | 1, 4, 12 |
 | Create | POST | `/api/webhooks/inbound-email` | Azure email service → us: a message hit the Orbo inbox | `{ from, subject, body, links[] }` | `{ submissionId, indicatorId, status }` | 400 unparseable; 202 accepted-but-unknown-sender (ignored) | 4, 13 |
 | Create | POST | `/api/submissions` | Submit a URL for analysis (web chat) | `{ url, contextText? }` | `{ submissionId, indicatorId, status }` | 400 invalid/empty URL (→ Invalid Input screen); 401 unauthenticated | 1, 2, 3, 4, 5, 13 |
-| Read | GET | `/api/indicators/:id` | Get a verdict (polled until done) | — | `{ status, ai_score, ai_verdict, human_score, review_status, screenshot_url, ... }` | 401; 403 not in caller's scope; 404 not found | 1, 7, 12, 15 |
+| Read | GET | `/api/indicators/:id` | Get a verdict (polled until done); merges the global indicator with the caller's org_review if any | — | `{ status, ai_score, ai_verdict, screenshot_url, report_count, review?: { human_score, human_verdict, review_status }, ... }` | 401; 403 not in caller's scope; 404 not found | 1, 7, 12, 15 |
 | Read | GET | `/api/history?mine=1` | My reported links (individual/member) | — | `{ reports: [...] }` | 401 unauthenticated | 7, 14 |
 | Read | GET | `/api/history` | Org-wide history + stats (analyst) | — | `{ recent: [...], stats: {...} }` | 401; 403 non-analyst | 8, 12 |
 | Read | GET | `/api/search?q=` | Keyword search within org (analyst) | — | `{ results: [...] }` | 401; 403 non-analyst | 11, 14 |
-| Update | PATCH | `/api/indicators/:id/verdict` | Analyst records/overrides verdict (raises a notification) | `{ human_score, human_verdict, review_status }` | `{ indicator }` | 401; 403 non-analyst or wrong org; 404 not found; 400 invalid score | 7, 10 |
+| Update | PATCH | `/api/indicators/:id/review` | Analyst records/overrides their org's verdict — upserts the `org_reviews` row for (caller's org, indicator); raises a notification | `{ human_score, human_verdict, review_status }` | `{ review }` | 401; 403 non-analyst or wrong org; 404 not found; 400 invalid score | 7, 10 |
 | Read | GET | `/api/campaigns/:id` | Campaign detail: grouped indicators (analyst) | — | `{ campaign, indicators: [...], reportCount }` | 401; 403 non-analyst or wrong org; 404 not found | 9 |
 | Read | GET | `/api/notifications` | My notifications (closure alerts) | — | `{ notifications: [...] }` | 401 unauthenticated | 7 |
 | Create | POST | `/api/nlp-query` | English → validated filter → results + chart (analyst) ★AI | `{ question }` | `{ filter, results: [...], chartSpec }` | 401; 403 non-analyst; 422 unmappable question (→ "try rephrasing") | 11 |
 
 **Role & org enforcement (story #12):** org-wide reads (`/history`, `/search`, `/nlp-query`, `/campaigns/*`)
-and the verdict PATCH require the **analyst** role *and* are filtered to the analyst's own `org_id`;
+and the review PATCH (`/api/indicators/:id/review`) require the **analyst** role *and* are filtered/upserted to the analyst's own `org_id`;
 individuals/members are scoped to their own submissions (`?mine=1`). One server-side middleware verifies the
 Clerk session and checks role + org on every protected route, reused everywhere — so no org can ever read
 another org's data. (Role is stored in Clerk's user/org metadata and mirrored to `users.role`.)
