@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Orbis — Analyst Triage Dashboard</title>
+<style>
+  :root {
+    --blue: #3B4EF5;
+    --blue-dark: #2f3fd0;
+    --navy: #0D1B3E;
+    --ink: #0f1e3d;
+    --muted: #64748b;
+    --line: #e5e7eb;
+    --bg: #eef1fa;
+    --card: #ffffff;
+    --safe-t: #15803d;  --safe-b: #dcfce7;
+    --rev-t:  #b45309;  --rev-b:  #fef3c7;
+    --dang-t: #b91c1c;  --dang-b: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(180deg, #eef1fa 0%, #e7ebf7 100%);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  /* ---------- top nav ---------- */
+  .nav {
+    background: var(--navy);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-radius: 0 0 14px 14px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 22px; letter-spacing: .2px; }
+  .nav-right { display: flex; align-items: center; gap: 14px; font-weight: 600; font-size: 15px; }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: var(--blue); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px;
+  }
+  /* ---------- Orbo mascot ---------- */
+  .orbo { display: inline-block; }
+  /* ---------- layout ---------- */
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 32px 48px; }
+  .page-head { margin-bottom: 22px; }
+  .page-head h1 { margin: 0 0 4px; font-size: 26px; }
+  .org-scope {
+    display: inline-flex; align-items: center; gap: 7px;
+    color: var(--muted); font-size: 14px; font-weight: 500;
+  }
+  .lock { font-size: 13px; }
+  /* stat cards */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 26px; }
+  .stat {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px 20px; box-shadow: 0 1px 2px rgba(15,30,61,.04);
+  }
+  .stat .num { font-size: 30px; font-weight: 800; line-height: 1; }
+  .stat .lbl { color: var(--muted); font-size: 13px; margin-top: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+  .stat.alert .num { color: var(--dang-t); }
+  /* two-column */
+  .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 22px; align-items: start; }
+  .panel {
+    background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+    box-shadow: 0 1px 3px rgba(15,30,61,.05); overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 22px; border-bottom: 1px solid var(--line);
+  }
+  .panel-head h2 { margin: 0; font-size: 17px; }
+  .panel-head .sub { color: var(--muted); font-size: 13px; font-weight: 500; }
+  .panel-body { padding: 12px 14px 18px; }
+
+  /* score badge */
+  .score {
+    width: 46px; height: 46px; border-radius: 12px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums;
+  }
+  .score.hi  { background: var(--dang-b); color: var(--dang-t); }
+  .score.mid { background: var(--rev-b);  color: var(--rev-t); }
+  .score.lo  { background: var(--safe-b); color: var(--safe-t); }
+
+  /* pill */
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; font-size: 12.5px; padding: 3px 10px; border-radius: 999px; }
+  .pill.dang { background: var(--dang-b); color: var(--dang-t); }
+  .pill.rev  { background: var(--rev-b);  color: var(--rev-t); }
+  .pill.safe { background: var(--safe-b); color: var(--safe-t); }
+
+  /* campaign card */
+  .campaign {
+    border: 1px solid var(--line); border-radius: 14px; margin: 8px;
+    overflow: hidden;
+  }
+  .campaign-top {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 16px; background: #fbfbfe; cursor: pointer;
+  }
+  .campaign-top .caret { color: var(--muted); font-size: 13px; }
+  .campaign-info { flex: 1; }
+  .campaign-info .title { font-weight: 700; font-size: 15px; }
+  .campaign-info .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .count-badge {
+    background: var(--blue); color: #fff; font-weight: 800; font-size: 13px;
+    padding: 4px 11px; border-radius: 999px;
+  }
+  .campaign-children { border-top: 1px dashed var(--line); }
+  .child-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px 10px 40px; border-bottom: 1px solid #f1f2f6;
+    font-size: 13.5px; color: var(--muted);
+  }
+  .child-row:last-child { border-bottom: none; }
+  .child-row .u { color: var(--ink); font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+
+  /* queue row */
+  .row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px; margin: 6px 8px; border-radius: 12px;
+    border: 1px solid transparent;
+  }
+  .row:hover { background: #f7f8fd; border-color: var(--line); }
+  .row .main { flex: 1; min-width: 0; }
+  .row .url { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .sub { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .row .time { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .btn-review {
+    background: #fff; border: 1px solid var(--blue); color: var(--blue);
+    font-weight: 700; font-size: 13px; padding: 7px 14px; border-radius: 9px; cursor: pointer;
+  }
+  .section-label {
+    font-size: 12px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase;
+    color: var(--muted); padding: 12px 16px 4px;
+  }
+
+  /* ask-the-data */
+  .orbo-bubble {
+    display: flex; align-items: flex-start; gap: 10px; padding: 4px 6px 12px;
+  }
+  .bubble {
+    background: #f4f6fd; border-radius: 12px; padding: 10px 14px;
+    font-size: 14px; color: var(--ink);
+  }
+  .ask-input {
+    display: flex; align-items: center; gap: 8px;
+    border: 1.5px solid var(--blue); border-radius: 12px; padding: 11px 14px; margin: 4px 6px 14px;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 13.5px; color: var(--ink);
+  }
+  .ask-input .send { margin-left: auto; background: var(--blue); color: #fff; border: none; padding: 6px 12px; border-radius: 8px; font-weight: 700; font-size: 12.5px; cursor: pointer; }
+  .chart-title { font-weight: 700; font-size: 14px; padding: 2px 8px 10px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; }
+  .bar-lbl { width: 128px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12.5px; color: var(--ink); text-align: right; }
+  .bar-track { flex: 1; background: #eef1fa; border-radius: 6px; overflow: hidden; height: 22px; }
+  .bar-fill { height: 100%; background: var(--blue); border-radius: 6px; }
+  .bar-val { width: 28px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+  .chart-cap { color: var(--muted); font-size: 12px; padding: 10px 10px 2px; }
+
+  /* footer note */
+  .note { color: var(--muted); font-size: 12.5px; margin-top: 24px; line-height: 1.6; }
+  .note b { color: var(--ink); }
+</style>
+</head>
+<body>
+
+  <!-- ============ TOP NAV ============ -->
+  <div class="nav">
+    <div class="brand">
+      <svg class="orbo" width="30" height="30" viewBox="0 0 40 40" aria-hidden="true">
+        <ellipse cx="20" cy="20" rx="19" ry="7" transform="rotate(-20 20 20)" fill="none" stroke="#5ea9ff" stroke-width="2"/>
+        <circle cx="20" cy="20" r="11" fill="#2f6bff"/>
+        <circle cx="16" cy="20" r="2.4" fill="#fff"/>
+        <circle cx="24" cy="20" r="2.4" fill="#fff"/>
+      </svg>
+      Orbis
+    </div>
+    <div class="nav-right">
+      <span>Priya</span>
+      <div class="avatar">P</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- ============ PAGE HEAD ============ -->
+    <div class="page-head">
+      <h1>Triage queue</h1>
+      <span class="org-scope"><span class="lock">🔒</span> Northwind Labs — you're seeing your organization's reports only</span>
+    </div>
+
+    <!-- ============ STAT CARDS ============ -->
+    <div class="stats">
+      <div class="stat"><div class="num">38</div><div class="lbl">Open reports</div></div>
+      <div class="stat alert"><div class="num">6</div><div class="lbl">High risk</div></div>
+      <div class="stat"><div class="num">3</div><div class="lbl">Active campaigns</div></div>
+      <div class="stat"><div class="num">21</div><div class="lbl">Auto-resolved safe</div></div>
+    </div>
+
+    <!-- ============ TWO COLUMN ============ -->
+    <div class="grid">
+
+      <!-- LEFT: queue + campaigns -->
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Prioritized reports</h2>
+          <span class="sub">Sorted by risk score</span>
+        </div>
+        <div class="panel-body">
+
+          <div class="section-label">Grouped campaigns</div>
+
+          <!-- Campaign 1 (expanded) -->
+          <div class="campaign">
+            <div class="campaign-top">
+              <span class="caret">▾</span>
+              <div class="score hi">94</div>
+              <div class="campaign-info">
+                <div class="title">Fake DocuSign login family</div>
+                <div class="meta">docusign-secure-*.com &nbsp;·&nbsp; first seen 3h ago</div>
+              </div>
+              <span class="count-badge">12 reports</span>
+            </div>
+            <div class="campaign-children">
+              <div class="child-row"><span class="u">docusign-secure-04.com/login</span> — reported by 5 members</div>
+              <div class="child-row"><span class="u">docusign-secure-11.com/verify</span> — reported by 4 members</div>
+              <div class="child-row"><span class="u">docusign-secure-17.com/auth</span> — reported by 3 members</div>
+            </div>
+          </div>
+
+          <!-- Campaign 2 (collapsed) -->
+          <div class="campaign">
+            <div class="campaign-top">
+              <span class="caret">▸</span>
+              <div class="score mid">71</div>
+              <div class="campaign-info">
+                <div class="title">Payroll "update your direct deposit" wave</div>
+                <div class="meta">bit.ly redirects → hr-portal-*.net &nbsp;·&nbsp; first seen yesterday</div>
+              </div>
+              <span class="count-badge">7 reports</span>
+            </div>
+          </div>
+
+          <div class="section-label">Individual reports</div>
+
+          <div class="row">
+            <div class="score hi">88</div>
+            <div class="main">
+              <div class="url">account-appleid-verify.com/signin</div>
+              <div class="sub"><span class="pill dang">⛔ Danger</span> &nbsp; credential harvest · reported by 1 member</div>
+            </div>
+            <span class="time">8m ago</span>
+            <button class="btn-review">Review</button>
+          </div>
+
+          <div class="row">
+            <div class="score mid">63</div>
+            <div class="main">
+              <div class="url">tracking-usps-delivery.info/track</div>
+              <div class="sub"><span class="pill rev">⚠ Review</span> &nbsp; suspicious redirect chain · 2 members</div>
+            </div>
+            <span class="time">40m ago</span>
+            <button class="btn-review">Review</button>
+          </div>
+
+          <div class="row">
+            <div class="score lo">18</div>
+            <div class="main">
+              <div class="url">dropbox.com/s/shared-invoice</div>
+              <div class="sub"><span class="pill safe">✓ Safe</span> &nbsp; known-good domain · 1 member</div>
+            </div>
+            <span class="time">1h ago</span>
+            <button class="btn-review">Review</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- RIGHT: ask-the-data -->
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Ask the data</h2>
+          <span class="sub">plain English</span>
+        </div>
+        <div class="panel-body">
+
+          <div class="orbo-bubble">
+            <svg class="orbo" width="34" height="34" viewBox="0 0 40 40" aria-hidden="true" style="flex:0 0 auto">
+              <ellipse cx="20" cy="20" rx="19" ry="7" transform="rotate(-20 20 20)" fill="none" stroke="#5ea9ff" stroke-width="2"/>
+              <circle cx="20" cy="20" r="11" fill="#2f6bff"/>
+              <circle cx="16" cy="20" r="2.4" fill="#fff"/>
+              <circle cx="24" cy="20" r="2.4" fill="#fff"/>
+            </svg>
+            <div class="bubble">Ask me about your threat history — no SQL needed.</div>
+          </div>
+
+          <div class="ask-input">
+            <span>Show me the most reported domains this week</span>
+            <button class="send">Ask</button>
+          </div>
+
+          <div class="chart-title">Most reported domains — last 7 days</div>
+
+          <div class="bar-row"><div class="bar-lbl">docusign-secure-*</div><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><div class="bar-val">12</div></div>
+          <div class="bar-row"><div class="bar-lbl">hr-portal-*.net</div><div class="bar-track"><div class="bar-fill" style="width:58%"></div></div><div class="bar-val">7</div></div>
+          <div class="bar-row"><div class="bar-lbl">appleid-verify</div><div class="bar-track"><div class="bar-fill" style="width:42%"></div></div><div class="bar-val">5</div></div>
+          <div class="bar-row"><div class="bar-lbl">usps-delivery</div><div class="bar-track"><div class="bar-fill" style="width:25%"></div></div><div class="bar-val">3</div></div>
+
+          <div class="chart-cap">Generated from a safe, validated query — Orbo never runs raw SQL against your data.</div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============ COMPONENT / STORY NOTES ============ -->
+    <div class="note">
+      <b>Screen:</b> Analyst Triage Dashboard (Ozias). &nbsp;
+      <b>Serves:</b> #8 reports arrive pre-scored &amp; prioritized (risk badge + risk-sorted queue) ·
+      #9 duplicate/related reports auto-grouped into campaigns (the "12 reports" collapse) ·
+      #11 ask threat history in plain language, answer visualized (right panel) ·
+      #12 org-scoped isolation (the "Northwind Labs only" lock line).
+      <br>
+      <b>Components implied:</b> TopNav · OrgScopeBadge · StatCard ×4 · CampaignCard (expandable, with ScoreBadge + CountBadge + ChildReportRow) · ReportRow (ScoreBadge + StatusPill + ReviewButton) · AskDataPanel (OrboBubble + NLQueryInput + BarChart + SafetyCaption). Status is always <b>icon + word + color</b>, matching the submission screen.
+    </div>
+
+  </div>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 Team Name: **DOMinion**
 
-Project Name: **PIPbot**
+Project Name: **Orbis**
 
 Pod Members: **Michael Jissa, Ozias Tumimana, David Gonzalez-Cesar**
 
@@ -12,13 +12,13 @@ Phishing is the most common entry point for scams and breaches, and the moment s
 
 Even organizations that do have a security team struggle. Analysts are buried under a flood of reports, most of them harmless, and they re-investigate the same attack because duplicate reports are not grouped. Large enterprises have expensive, intricate tooling and big teams for this. Small companies and startups do not, so a single phishing wave can bury a one-person security team.
 
-PIPbot acts as a personal security analyst for anyone who needs one. A user submits a suspicious URL or forwards an email and gets an instant, plain-English safety report. That report includes a screenshot of the page detonated safely in an isolated sandbox and a safety score from 1 to 100, so the user never has to open the link themselves. For users backed by a security team, the report is forwarded to analysts whose authoritative human verdict is logged alongside the AI's. For everyone else, the instant AI verdict stands on its own. Analysts, especially at small organizations, get a lightweight triage workspace that auto-scores reports, groups related attacks into campaigns, and answers questions about the threat history in plain language.
+Orbis acts as a personal security analyst for anyone who needs one. A user submits a suspicious URL or forwards an email and gets an instant, plain-English safety report. That report includes a screenshot of the page detonated safely in an isolated sandbox and a safety score from 1 to 100, so the user never has to open the link themselves. For users backed by a security team, the report is forwarded to analysts whose authoritative human verdict is logged alongside the AI's. For everyone else, the instant AI verdict stands on its own. Analysts, especially at small organizations, get a lightweight triage workspace that auto-scores reports, groups related attacks into campaigns, and answers questions about the threat history in plain language.
 
 **Target audience:** individuals and students protecting themselves, organization members at companies of any size, and the security and IT analysts who triage reported threats.
 
 ## User Roles
 
-- **Individual**: a person using PIPbot on their own to vet suspicious links, messages, or webpages for themselves, with no organization or security team to fall back on.
+- **Individual**: a person using Orbis on their own to vet suspicious links, messages, or webpages for themselves, with no organization or security team to fall back on.
 - **Organization Member**: a person who receives suspicious links or emails as part of a company and wants to know whether they are safe before acting on them, where a bad click can put the wider organization at risk.
 - **Security Analyst**: a member of a security or IT team, often the only one at a small company or startup, who investigates reported threats, issues authoritative verdicts, and monitors the organization's threat landscape.
 

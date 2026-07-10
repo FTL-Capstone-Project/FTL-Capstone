@@ -1,7 +1,7 @@
-# Project Plan — PIPbot
+# Project Plan — Orbis
 
 **Team Name:** DOMinion  
-**Project Name:** PIPbot  
+**Project Name:** Orbis  
 **Pod Members:** Michael Jissa, Ozias Tumimana, David Gonzalez-Cesar
 
 > Master spec / source of truth. Before code is written, the relevant section here is updated first.
@@ -11,22 +11,23 @@
 
 ## 1. Problem Statement and Solution Description
 
-**Problem.** Phishing is the most common entry point for organizational breaches. When an employee gets a
+**Problem.** Phishing is the most common entry point for organizational breaches. When someone gets a
 suspicious link, the safe move is to report it and wait for an analyst, but analysts are buried in reports,
 and triaging each by hand (confirming a URL is malicious, understanding what it does, spotting whether it's
-part of a larger campaign) is slow, repetitive, and needs specialized expertise. Meanwhile the employee who
+part of a larger campaign) is slow, repetitive, and needs specialized expertise. Meanwhile the person who
 reported it gets no quick answer. The people most targeted,
 students, individuals, and small companies without a security team, have the least help.
 
-**Solution.** PIPbot takes the slow, manual work out of phishing triage. A user submits a suspicious URL;
-PIPbot detonates it in a secure sandbox (urlscan.io), gathers evidence about what the page does, and returns
+**Solution.** Orbis takes the slow, manual work out of phishing triage. A user submits a suspicious URL;
+Orbis detonates it in a secure sandbox (urlscan.io), gathers evidence about what the page does, and returns
 a plain-English danger verdict with a 0–100 score and a screenshot, without anyone opening the link on their
-own machine. One product serves two roles: **employees/individuals** get a lightweight "is this safe?" page
-and their own report history; **analysts** get a full triage dashboard (org-wide history, keyword search,
-campaign clustering, and natural-language querying of the threat database).
+own machine. One product serves three roles: **individuals** and **organization members** get a lightweight
+"is this safe?" page and their own report history; **analysts** get a full triage dashboard (org-wide history,
+keyword search, campaign clustering, and natural-language querying of the threat database). Each organization
+sees only its own data.
 
-**Target audience:** SOC/IT security analysts who triage suspicious URLs, and the everyday employees (and
-solo individuals) who encounter those links.
+**Target audience:** SOC/IT security analysts who triage suspicious URLs, and the everyday organization members
+(and solo individuals) who encounter those links.
 
 ---
 
@@ -34,8 +35,10 @@ solo individuals) who encounter those links.
 
 ### Roles
 - **Individual** — a person vetting suspicious links for themselves, with no organization or security team to fall back on.
-- **Employee** — a member of an organization who receives suspicious links/emails at work and wants to know if they're safe before acting.
+- **Organization Member** — a person who receives suspicious links/emails at work and wants to know if they're safe before acting, where a bad click can put the wider organization at risk.
 - **Security Analyst** — a member of a security/IT team (often the only one at a small company) who investigates reported threats, issues authoritative verdicts, and monitors the org's threat landscape.
+
+> Role rename (pod sync, Jul 1): "Employee" → **Organization Member**. See Decisions Log & `user_stories.md`.
 
 ### Personas
 **Individual — Sofia (targeted college student).** 20, Phoenix AZ, phone-first. Inbox full of scholarship/
@@ -47,12 +50,12 @@ couldn't be delivered" / "account locked" links; browses unfamiliar stores. Not 
 person, afraid of losing retirement savings. Wants a trustworthy second opinion; pain point: can't tell a real
 site from a convincing fake, and "just don't click" isn't practical.
 
-**Employee — Maria (cautious, has a security team).** 52, HR coordinator, Cleveland OH. Lives in her inbox
-(résumés, invoices from strangers). Careful but not techy. Wants peace of mind and an expert backstop; pain
+**Organization Member — Maria (cautious, has a security team).** 52, HR coordinator, Cleveland OH. Lives in her
+inbox (résumés, invoices from strangers). Careful but not techy. Wants peace of mind and an expert backstop; pain
 point: when she reports to IT she never hears back, so she never learns if she did the right thing.
 
-**Employee — Deshawn (fast, no security team).** 29, sales rep at a 30-person Austin startup with no security
-team. On the road, phone-first, dozens of links a day, clicks fast. Comfortable with tech, impatient. Wants
+**Organization Member — Deshawn (fast, no security team).** 29, sales rep at a 30-person Austin startup with no
+security team. On the road, phone-first, dozens of links a day, clicks fast. Comfortable with tech, impatient. Wants
 speed with a safety net; pain point: "report to security" isn't even an option where he works.
 
 **Security Analyst — Priya (startup's first security hire).** 34, the *only* security person at a 50-person
@@ -68,44 +71,107 @@ point: enterprise platforms are too costly/complex, and past incidents aren't or
 
 ## 3. User Stories
 
-### Individual
-1. As an individual, I want to check a suspicious link myself and get a clear verdict, so that I can protect myself even with no IT team to ask.
-2. As an individual, I want to safely preview what an unfamiliar webpage actually contains before I visit it, so that I can decide whether to trust a site I've never used.
-3. As a student, I want to verify whether a scholarship/internship/financial-aid link is legitimate, so that I don't hand my details to a scam that targets students.
+> Source of truth: [`user_stories.md`](./user_stories.md). Numbering here matches it exactly (used by the
+> "Stories" column in §6). 15 stories total.
 
-### Employee
-4. As an employee, I want to submit a suspicious work link and get a verdict, so that I don't have to guess whether an unfamiliar sender is safe.
-5. As an employee at a company with no security team, I want an instant expert-level verdict on my own, so that I'm still protected with no one to report to.
-6. As an employee, I want to be notified when my security team confirms a verdict on something I reported, so that I get real closure and know my report mattered.
-7. As a user, I want to see a history of links I've checked and their verdicts, so that I can revisit past results instead of re-checking.
+### Individual
+1. As an individual, I want to check a suspicious link myself and get a clear verdict, so that I can protect myself even though I have no IT department or security team to ask.
+2. As an individual, I want to safely preview what an unfamiliar webpage actually contains before I visit it, so that I can decide whether to shop on or trust a site I've never used.
+3. As a student, I want to verify whether a scholarship, internship, or financial-aid link is legitimate, so that I don't hand my personal or bank details to a scam that targets students like me.
+
+### Organization Member
+4. As an organization member, I want to check a link quickly without derailing what I'm working on, so that staying safe doesn't cost me my focus or my time.
+5. As an organization member at a company with no security team, I want an instant expert-level verdict on my own, so that I'm still protected even though there's no one at work to report to.
+6. As an organization member at a company that has a security team, I want to send a suspicious link to that team for an authoritative review, so that an expert makes the final call whenever the automated verdict leaves me unsure.
+7. As an organization member, I want to be notified when my company's security team confirms a verdict on something I reported, so that I get real closure and know my report actually mattered.
 
 ### Security Analyst
-8. As an analyst, I want incoming reports to arrive already scored and prioritized, so that even as a one-person team I can focus on the threats most likely to be real.
-9. As an analyst, I want duplicate/related reports automatically grouped into one campaign, so that a phishing wave becomes one investigation instead of twenty fires.
-10. As an analyst, I want to record my own authoritative verdict that overrides the automated one, so that my org has a trusted final decision on each threat.
-11. As an analyst, I want to search past reports by keyword, so that I can quickly find a specific domain or report.
+8. As a security analyst, I want incoming reports to arrive already scored and prioritized, so that even as a one-person team I can focus on the threats most likely to be real.
+9. As a security analyst, I want duplicate and related reports automatically grouped into a single campaign, so that a phishing wave becomes one investigation instead of twenty separate fires.
+10. As a security analyst, I want to record my own authoritative verdict that overrides the automated one, so that my organization has a trusted final decision on each threat.
+11. As a security analyst, I want to ask questions about our threat history in plain language and see the answer visualized, so that I can understand what we're being targeted with without buying expensive tooling or writing database queries.
+12. As a security analyst, I want the reports and threat history I can see to be limited to my own organization, so that another company can never view our sensitive security data.
 
-### AI Feature Stories
-12. As a user, I want an instant, plain-English safety verdict with a score and a screenshot of where a link leads, so that I get an expert-level assessment in seconds without understanding the technical evidence myself.
-13. As an analyst, I want to ask questions about our threat history in plain English and get back a chart, so that I can understand what we're being targeted with without writing database queries.
+### Shared / Cross-Role
+13. As any user, I want to add the message or email a link came from, so that the verdict accounts for the whole scam and not just the URL in isolation.
+14. As any user, I want to search past reports by pasting a link or message, so that I can instantly reuse an existing verdict instead of waiting on a fresh analysis of something already investigated.
+
+### AI Feature Story
+15. As a user, I want an instant, plain-English safety verdict that weighs everything known about a link and the context I submitted it with, so that I get an expert-level assessment in seconds without having to interpret the technical evidence myself.
 
 ---
 
 ## 4. Pages / Screens
 
-Wireframes for ≥3 of these are in **[link to wireframes — Figma / images, TODO]** (drafts in `../DOMinion_Wireframes.html`).
+Wireframes live in [`wireframes/Figma Wireframes PDF.pdf`](./wireframes/Figma%20Wireframes%20PDF.pdf) (4 pages,
+grouped by flow). The **Status** column marks what is drawn vs. planned-but-not-yet-drawn. Far more than the
+required 3 screens are wireframed.
 
-| Page | Role | Purpose | Key components (implied) |
-|---|---|---|---|
-| Login / Register | both | Auth; role stored on account | `AuthForm`, `RoleToggle` |
-| Submit a Link | both | Paste URL → kick off scan | `SubmitForm`, `StatusBadge` |
-| Verdict Detail | both | Score, screenshot, plain-English verdict (employee = friendly; analyst = full signals) | `ScoreGauge`, `Screenshot`, `EvidenceList` |
-| My Reports | employee/individual | The links *I* submitted | `ReportList`, `ReportCard` |
-| Dashboard (org-wide) | analyst | Recent activity + stats + NLP query bar | `StatTiles`, `NlpQueryBar`, `Chart` |
-| History / Search | analyst | Keyword search over submissions | `SearchBar`, `ResultsList`, `ResultCard` |
-| Campaign View | analyst | Grouped related attacks | `CampaignCard`, `IndicatorList` |
+### Onboarding & auth (PDF p.1)
+| Page | Role | Purpose | Key components (implied) | Status |
+|---|---|---|---|---|
+| Landing page | public | Marketing entry; explains Orbis, routes to sign up | `Hero`, `StatRow`, `FeatureCard`, `Footer` | ✅ drawn |
+| Login | both | Email + password **and** social login (Google/Apple) — Clerk `<SignIn>` | Clerk `<SignIn />` (styled) | ✅ drawn |
+| Register | both | Create account (email/password or social) — Clerk `<SignUp>` | Clerk `<SignUp />` (styled) | ✅ drawn |
+| Team setup — step 1 | member/analyst | Create an organization — Clerk org creation | Clerk `<CreateOrganization />` | ✅ drawn |
+| Team setup — step 2 | member/analyst | Invite teammates / domain auto-join — Clerk | Clerk `<OrganizationProfile />` (invites) | ✅ drawn |
+| Accept invite / join org | member/analyst | What an invited person sees — Clerk invite flow | Clerk invite/join UI | ✅ drawn |
 
-**≥3 wireframed screens (required):** Login, Submit a Link, Verdict Detail (minimum); ideally all 7.
+### Core "check a link" flow (PDF p.2)
+| Page | Role | Purpose | Key components (implied) | Status |
+|---|---|---|---|---|
+| Home — Individual | individual | Greeting + paste-a-link entry + quick prompts | `SubmitForm`, `OrboAvatar`, `RecentList` | ✅ drawn |
+| Home — Org | member | Same, scoped to the org ("Hi David · Acme") | `SubmitForm`, `OrboAvatar`, `RecentList` | ✅ drawn |
+| Check Link — Checking | both | Loading/analyzing state while sandbox runs | `StatusBadge`, `LoadingState` | ✅ drawn |
+| Check Link — Result | both | Verdict: score, screenshot, plain-English explanation, evidence | `ScoreGauge`, `Screenshot`, `EvidenceList`, `VerdictCard` | ✅ drawn |
+| Verdict states — Safe / Suspicious / Dangerous | both | Same card, three data-driven color/score states | `VerdictCard` (one component) | ✅ drawn |
+| Check Link — Invalid Input | both | Error state when input isn't a valid URL/email | `SubmitForm` (error) | ✅ drawn |
+
+### Reports (PDF p.4) — **tailored per role** (see note below)
+| Page | Role | Purpose | Key components (implied) | Status |
+|---|---|---|---|---|
+| Reports — Individual | individual | My checks only: verdict, score, re-open detail | `ReportList`, `ReportCard`, `VerdictFilter` | ✅ drawn |
+| Reports — Org (Personal) | member | My checks + escalation/closure status | `ReportList`, `ReportCard`, `StatusChip` | ✅ drawn |
+| Reports — Analyst | analyst | Org-wide triage queue: campaign-grouped, priority-sorted, pending-review filter | `TriageQueue`, `CampaignGroupRow`, `ReportCard`, `Filters` | ✅ drawn |
+| Report detail modal | all | Full analysis overlay (threat vectors, both scores; analyst can author a verdict) | `ReportModal`, `ScoreGauge`, `VectorBars`, `VerdictForm` (analyst) | ✅ drawn |
+
+### Analyst dashboard & Ask Orbo (PDF p.3)
+| Page | Role | Purpose | Key components (implied) | Status |
+|---|---|---|---|---|
+| Analyst dashboard | analyst | Stat tiles, submission trend, verdict distribution, pending-review queue, recent activity | `StatTiles`, `Chart`, `PendingReviewList`, `ActivityFeed` | ✅ drawn |
+| Ask Orbo (chat home) | analyst | Natural-language entry to the "ask-the-data" AI feature | `NlpQueryBar`, `OrboAvatar`, `PromptChips` | ✅ drawn |
+| Ask Orbo → visualization | analyst | AI answer rendered as a chart (weekly report, heatmap, trends, score distribution, **campaigns**) | `NlpQueryBar`, `Chart`, `ResultTable` | ✅ drawn (6 variants) |
+
+**Campaign view — reconciled.** Campaigns surface in **two** places, both wireframed: (1) as a **grouped view
+in the analyst Reports triage queue** (`CampaignGroupRow` — 20 duplicate reports collapse into one row with a
+count), and (2) as an **Ask Orbo chart** (`analyst-orbo-campaigns`). The earlier standalone "Campaign View"
+detail *page* is **deferred** — the grouped queue row + `GET /api/campaigns/:id` behind the report modal cover
+the MVP need without a separate page. (Decisions Log.)
+
+**Reports page, tailored per role (design decision).** The three reports variants are intentionally different,
+not one layout with columns toggled:
+- **Individual** — the lightest view. Just *my* checks, each verdict, score, and a verdict filter. No teammate
+  names, no analyst columns, no campaigns — a solo user has none of those, and showing them implies features
+  they don't have.
+- **Organization Member** — my checks **plus escalation/closure status** ("Pending review" → "Confirmed by
+  analyst"), which is the payoff for story #7. Still personal; no org-wide analytics or campaign clustering.
+- **Analyst** — a **triage queue**, not a flat list: campaign-grouped so a phishing wave is one row, sorted by
+  priority (score × recency × report count), with a pending-review filter front and center. The flat filterable
+  list is a secondary view. This is what makes the analyst's grouped information genuinely useful (story #9).
+
+**Ask Orbo scope:** 6 visualization variants are wireframed to show the vision; **MVP ships 1–2** (weekly
+report + one chart), the rest are fast-follow. (Decisions Log — avoids "boiling the ocean.")
+
+**Auth screens are Clerk components (design decision).** Login, Register, org creation, and invites are Clerk's
+prebuilt, themeable React components, not hand-built forms — so **social login (Google/Apple) is a core MVP
+feature** (Clerk provides it out of the box) and **domain auto-join** (a company email auto-joins its org) works
+in Clerk's dev mode for the demo. We style the components to match the wireframes. **Enterprise SSO/SAML** (the
+20k-employee "Sign in with SSO" scenario, e.g. via WorkOS AuthKit's test-IdP sandbox) is a **stretch** feature,
+easy to layer on later since auth is already provider-based. (Decisions Log.)
+
+**≥3 wireframed screens (required):** comfortably exceeded — Login, Register, Home, Check Link (Checking →
+Result → 3 verdict states → Invalid Input), Analyst Dashboard, Ask Orbo (6), Reports (3 role variants + modal),
+and the team-setup flow are all drawn.
 
 ---
 
@@ -113,20 +179,28 @@ Wireframes for ≥3 of these are in **[link to wireframes — Figma / images, TO
 
 | Table | Column | Type | Description |
 |---|---|---|---|
+| **organizations** | id | integer | primary key (one company/team) |
+| | clerk_org_id | text | unique — mirrors the Clerk Organization (source of truth for org + membership) |
+| | name | text | org display name (e.g. "Acme Inc.") |
+| | created_at | timestamp | org creation |
 | **users** | id | integer | primary key |
-| | email | text | unique login |
-| | password_hash | text | bcrypt hash |
+| | clerk_user_id | text | unique — mirrors the Clerk user (Clerk owns login, password, social) |
+| | org_id | integer | FK → organizations.id, **nullable** — `NULL` = individual (no org) |
+| | email | text | copied from Clerk (used to match forwarded emails) |
 | | name | text | display name |
-| | role | text | `individual` \| `employee` \| `analyst` — drives view + access |
+| | role | text | `individual` \| `member` \| `analyst` — drives view + access (`member` = Organization Member) |
 | | created_at | timestamp | account creation |
 | **submissions** | id | integer | primary key (one report event) |
 | | user_id | integer | FK → users.id (who submitted) |
 | | indicator_id | integer | FK → indicators.id (the judged thing) |
 | | raw_url | text | URL exactly as submitted |
 | | context_text | text | optional pasted email/message context |
+| | source | text | `web` \| `email` — how it was submitted (email = forwarded to the Orbo inbox) |
+| | escalated | boolean | true when auto-routed to an analyst for review (all org-member submissions) |
 | | created_at | timestamp | submission time |
 | **indicators** | id | integer | primary key (the thing under judgment) |
-| | canonical_key | text | unique dedup key (host + path + semantic params) |
+| | org_id | integer | FK → organizations.id, **nullable** — scopes the indicator + its verdict/campaign to one org (`NULL` = individual-owned) |
+| | canonical_key | text | dedup key (host + path + semantic params), unique **per owner scope** |
 | | domain | text | destination domain |
 | | status | text | `pending` \| `scanning` \| `done` \| `error` |
 | | ai_score | integer | 0–100 AI danger score |
@@ -140,34 +214,80 @@ Wireframes for ≥3 of these are in **[link to wireframes — Figma / images, TO
 | | campaign_id | integer | FK → campaigns.id (nullable) |
 | | created_at / updated_at | timestamp | first-seen / last-updated |
 | **campaigns** | id | integer | primary key (cluster of indicators) |
+| | org_id | integer | FK → organizations.id — campaigns are always org-scoped (analyst feature) |
 | | name | text | e.g. "Okta credential kit" |
 | | shared_signal | text | what links them (shared domain/pattern) |
 | | first_seen / last_seen | timestamp | campaign window |
+| **notifications** | id | integer | primary key (one alert to one user) |
+| | user_id | integer | FK → users.id (who to notify) |
+| | indicator_id | integer | FK → indicators.id (what it's about, nullable) |
+| | type | text | e.g. `verdict_confirmed` (analyst closed something I reported) |
+| | message | text | human-readable notification text |
+| | is_read | boolean | has the user seen it |
+| | created_at | timestamp | when raised |
 
-**Relationships:** a user has many submissions; an indicator has many submissions (this is the dedup — many
-reports, one judged thing); a campaign has many indicators. **Two-phase verdict:** `ai_*` fields are set
-instantly; `human_*` + `review_status` are set later by an analyst — both kept for the record.
+**Relationships:** an organization has many users, indicators, and campaigns; a user has many submissions and
+notifications; an indicator has many submissions (this is the dedup — many reports, one judged thing); a
+campaign has many indicators. **Two-phase verdict:** `ai_*` fields are set instantly; `human_*` +
+`review_status` are set later by an analyst — both kept for the record.
+
+**Identity & orgs are managed by Clerk (auth provider).** Clerk is the source of truth for login, passwords,
+social login (Google/Apple), organizations, memberships, invites, and domain auto-join. We keep only **mirror**
+rows in Postgres — `users.clerk_user_id` and `organizations.clerk_org_id` — kept in sync by a Clerk webhook
+(see §6). This is why there is no `password_hash` and no local `invites` table anymore: we don't build auth or
+invites ourselves. Our tables foreign-key to the mirrored `users`/`organizations` so submissions, verdicts, and
+campaigns still belong to a person and an org.
+
+**Organization-scoped isolation (story #12 — hard requirement).** Every org-scoped table carries `org_id`.
+Analyst-facing reads (`/history`, `/search`, `/campaigns`, `/nlp-query`) filter on `org_id = the analyst's
+org`, so one org can never see another's indicators, verdicts, or campaigns. Individuals have `org_id = NULL`
+and are scoped to their own `user_id`; they never receive analyst verdicts or campaigns, so there is no
+org data to leak. Within an org, the same `canonical_key` maps to **one** indicator — that is how 20 members
+reporting the same link collapse into a single investigation for the analyst.
+
+**Auto-escalation to the analyst.** Anything an **org member** submits — whether pasted in the web chat or
+forwarded to the Orbo inbox — is automatically routed to their org's analyst for review (`escalated = true`,
+`review_status = 'pending review'`). Members never have to manually "send to security"; the worry they felt is
+enough. Individuals have no analyst, so their submissions are never escalated. (Stories #6, #8.)
+
+**Email forwarding is a backend-only pipeline (core interaction method — no dedicated UI screen).** We stand up
+a dedicated Orbo inbox address (e.g. `check@orbis...`). An inbound-email service (Microsoft Azure) receives the
+message and calls our webhook; the backend matches the sender to a user by `From` address (`users.email`),
+extracts the URL/content, and writes a `submission` with `source = 'email'`. From there the flow is identical to
+a web submission — scan, AI verdict, and (for org members) auto-escalation. Because it has no screen of its own,
+**no wireframe is needed**; the results appear on the user's existing Reports page.
 
 ---
 
 ## 6. API Contracts
 
-| CRUD | Verb | Endpoint | Description | Request shape | Response shape |
-|---|---|---|---|---|---|
-| Create | POST | `/api/auth/register` | Create account | `{ email, password, name, role }` | `{ user, token }` |
-| Create | POST | `/api/auth/login` | Log in | `{ email, password }` | `{ user, token }` |
-| Create | POST | `/api/submissions` | Submit a URL for analysis | `{ url, contextText? }` | `{ submissionId, indicatorId, status }` |
-| Read | GET | `/api/indicators/:id` | Get a verdict (polled until done) | — | `{ status, ai_score, ai_verdict, human_score, review_status, screenshot_url, ... }` |
-| Read | GET | `/api/history?mine=1` | My reported links (employee/individual) | — | `{ reports: [...] }` |
-| Read | GET | `/api/history` | Org-wide history + stats (analyst) | — | `{ recent: [...], stats: {...} }` |
-| Read | GET | `/api/search?q=` | Keyword search (analyst) | — | `{ results: [...] }` |
-| Update | PATCH | `/api/indicators/:id/verdict` | Analyst records/overrides verdict | `{ human_score, human_verdict, review_status }` | `{ indicator }` |
-| Read | GET | `/api/campaigns/:id` | Campaign detail (analyst) | — | `{ campaign, indicators: [...], reportCount }` |
-| Create | POST | `/api/nlp-query` | English → validated filter → results + chart (analyst) ★AI | `{ question }` | `{ filter, results: [...], chartSpec }` |
+**Auth, orgs, and invites are handled by Clerk, not by our API.** Register/login/social-login, organization
+creation, teammate invites, and domain auto-join are all served by Clerk's prebuilt React components + backend.
+So the endpoints below are only the ones **we** build. Every protected route reads the caller's identity, role,
+and `org_id` from the verified Clerk session token (no hand-rolled JWTs).
 
-**Role enforcement:** org-wide `/history`, `/search`, `/nlp-query`, `/campaigns/*`, and the verdict PATCH
-require the analyst role; employees/individuals are scoped to their own submissions (`?mine=1`). One
-server-side middleware, reused everywhere.
+| CRUD | Verb | Endpoint | Description | Request shape | Response shape | Error cases | Stories |
+|---|---|---|---|---|---|---|---|
+| Create | POST | `/api/webhooks/clerk` | Clerk → us: sync user/org mirror rows on create/update/delete | Clerk event (`user.*`, `organization.*`, `organizationMembership.*`) | `200 OK` | 400 bad signature (verified via Clerk signing secret) | 1, 4, 12 |
+| Create | POST | `/api/webhooks/inbound-email` | Azure email service → us: a message hit the Orbo inbox | `{ from, subject, body, links[] }` | `{ submissionId, indicatorId, status }` | 400 unparseable; 202 accepted-but-unknown-sender (ignored) | 4, 13 |
+| Create | POST | `/api/submissions` | Submit a URL for analysis (web chat) | `{ url, contextText? }` | `{ submissionId, indicatorId, status }` | 400 invalid/empty URL (→ Invalid Input screen); 401 unauthenticated | 1, 2, 3, 4, 5, 13 |
+| Read | GET | `/api/indicators/:id` | Get a verdict (polled until done) | — | `{ status, ai_score, ai_verdict, human_score, review_status, screenshot_url, ... }` | 401; 403 not in caller's scope; 404 not found | 1, 7, 12, 15 |
+| Read | GET | `/api/history?mine=1` | My reported links (individual/member) | — | `{ reports: [...] }` | 401 unauthenticated | 7, 14 |
+| Read | GET | `/api/history` | Org-wide history + stats (analyst) | — | `{ recent: [...], stats: {...} }` | 401; 403 non-analyst | 8, 12 |
+| Read | GET | `/api/search?q=` | Keyword search within org (analyst) | — | `{ results: [...] }` | 401; 403 non-analyst | 11, 14 |
+| Update | PATCH | `/api/indicators/:id/verdict` | Analyst records/overrides verdict (raises a notification) | `{ human_score, human_verdict, review_status }` | `{ indicator }` | 401; 403 non-analyst or wrong org; 404 not found; 400 invalid score | 7, 10 |
+| Read | GET | `/api/campaigns/:id` | Campaign detail: grouped indicators (analyst) | — | `{ campaign, indicators: [...], reportCount }` | 401; 403 non-analyst or wrong org; 404 not found | 9 |
+| Read | GET | `/api/notifications` | My notifications (closure alerts) | — | `{ notifications: [...] }` | 401 unauthenticated | 7 |
+| Create | POST | `/api/nlp-query` | English → validated filter → results + chart (analyst) ★AI | `{ question }` | `{ filter, results: [...], chartSpec }` | 401; 403 non-analyst; 422 unmappable question (→ "try rephrasing") | 11 |
+
+**Role & org enforcement (story #12):** org-wide reads (`/history`, `/search`, `/nlp-query`, `/campaigns/*`)
+and the verdict PATCH require the **analyst** role *and* are filtered to the analyst's own `org_id`;
+individuals/members are scoped to their own submissions (`?mine=1`). One server-side middleware verifies the
+Clerk session and checks role + org on every protected route, reused everywhere — so no org can ever read
+another org's data. (Role is stored in Clerk's user/org metadata and mirrored to `users.role`.)
+
+**Note — endpoint count for the rubric:** even after handing auth/orgs/invites to Clerk, we still build 10
+first-party endpoints across full CRUD, comfortably past the "5 Node endpoints" bar.
 
 ---
 
@@ -175,30 +295,33 @@ server-side middleware, reused everywhere.
 
 | State variable | Type | Initial | Owner | Trigger |
 |---|---|---|---|---|
-| `currentUser` | object \| null | `null` | App (context) | successful login/logout |
-| `authToken` | string \| null | `null` | App (context) | login; cleared on logout |
-| `submissionStatus` | string | `"idle"` | SubmitPage | submit start → poll → done |
-| `currentVerdict` | object \| null | `null` | VerdictPage | `GET /indicators/:id` resolves |
-| `myReports` | array | `[]` | MyReportsPage | fetch on load |
+| `user` (Clerk) | object \| null | `null` | Clerk `<ClerkProvider>` / `useUser()` | Clerk manages login/logout; we read `role` from its metadata |
+| `organization` (Clerk) | object \| null | `null` | Clerk `useOrganization()` | Clerk manages the active org + membership |
+| `submissionStatus` | string | `"idle"` | HomePage | submit start → poll → done |
+| `currentVerdict` | object \| null | `null` | ResultPage | `GET /indicators/:id` resolves |
+| `myReports` | array | `[]` | ReportsPage | fetch on load (individual/member) |
 | `history` | array | `[]` | DashboardPage | fetch on load (analyst) |
 | `searchQuery` | string | `""` | SearchBar | user input |
-| `nlpQuestion` | string | `""` | NlpQueryBar | user input |
-| `nlpResult` | object \| null | `null` | DashboardPage | `POST /nlp-query` resolves |
+| `nlpQuestion` | string | `""` | AskOrboBar | user input |
+| `nlpResult` | object \| null | `null` | AskOrboPage | `POST /nlp-query` resolves |
+| `notifications` | array | `[]` | App (context) | fetch on load; new closure alerts (story #7) |
 | `isLoading` | boolean | `false` | App | any API call start/end |
 
-**Key decisions:** auth state (`currentUser` + `authToken`) lives in a top-level context so every page can
-gate on role. A submitted URL sets `submissionStatus` and the VerdictPage **polls** `GET /indicators/:id`
-until `status === "done"` (no queue system). State flows App → pages → components via props/context.
+**Key decisions:** **auth/org state comes from Clerk's hooks** (`useUser`, `useOrganization`), not a hand-rolled
+context — so there's no `authToken`/`currentUser`/`inviteDraft` for us to manage; we read `role` and `org_id`
+off the Clerk user/org and pass them down. A submitted URL sets `submissionStatus` and the ResultPage **polls**
+`GET /indicators/:id` until `status === "done"` (no queue system). `notifications` lives in our own top-level
+context so the closure badge shows on any screen. State flows App → pages → components via props/context.
 
 ---
 
 ## 8. AI Feature Specification
 
-PIPbot has **two** AI features (rubric requires one).
+Orbis has **two** AI features (rubric requires one).
 
 ### Feature A — Plain-English Danger Verdict (generation)
 - **What it does for the user:** turns raw sandbox evidence into a human-readable "is this safe?" verdict + score anyone can act on.
-- **Where it lives:** triggered server-side after a scan completes; shown on the Verdict Detail page.
+- **Where it lives:** triggered server-side after a scan completes; shown on the **Check Link — Result** screen and the report detail modal.
 - **Input:** distilled urlscan evidence (final domain, redirect chain, page resources, form/credential fields, domain age, cert info) + optional user-pasted context.
 - **Output:** structured JSON — `{ score: 0–100, verdict_text, confidence, evidence_summary }` (via structured outputs, so it's always valid JSON).
 - **Validation:** score within 0–100; verdict_text non-empty and references at least one concrete signal; a deterministic floor forces a high score on hard signals (e.g. credential form on a <7-day-old domain) regardless of model output.
@@ -207,7 +330,7 @@ PIPbot has **two** AI features (rubric requires one).
 
 ### Feature B — Ask-the-Data Dashboarding (conversation → visualization)
 - **What it does for the user:** an analyst asks a question in plain English and gets a chart — no SQL.
-- **Where it lives:** the NLP query bar on the analyst Dashboard.
+- **Where it lives:** the **Ask Orbo** query bar (reachable from the analyst Dashboard). Wireframes show 6 chart variants; MVP ships 1–2.
 - **Input:** the analyst's natural-language question + the allowed field/filter schema.
 - **Output:** a **validated, whitelisted filter object** (not raw SQL) + a `chartSpec` describing what to render.
 - **Validation:** the filter must match the allowlist (fields, operators, date ranges); anything off-list is rejected and the query is not run. Backend runs a parameterized query from the validated filter.
@@ -224,12 +347,20 @@ PIPbot has **two** AI features (rubric requires one).
 
 ## 9. Wireframes
 
-At least 3 screens required. **Status: to be sketched this week** (Figma or paper photos), split across the pod:
-- David: Login/Register · Employee "Submit / Check a link"
-- Michael: Verdict Detail · Analyst Triage Queue
-- Ozias: Analyst Dashboard (NLP) · Campaign View
+**Status: done** (Figma, exported to PDF). At least 3 required — we have far more. Full inventory with
+per-screen component hierarchy is in **§4 above**. File:
+[`wireframes/Figma Wireframes PDF.pdf`](./wireframes/Figma%20Wireframes%20PDF.pdf).
 
-Starting reference: `../DOMinion_Wireframes.html`. **Insert link/images here once done.**
+Coverage by flow (all drawn):
+- **Onboarding/auth** (p.1): landing, login, register, team setup (2 steps), accept-invite.
+- **Core check-a-link** (p.2): home (individual + org), checking, result, Safe/Suspicious/Dangerous verdict states, invalid input.
+- **Analyst dashboard & Ask Orbo** (p.3): dashboard, Ask Orbo chat, and 6 chart variants (weekly report, heatmap, trends, distribution, campaigns).
+- **Reports** (p.4): three role-tailored variants (individual, org/personal, analyst) + report detail modal.
+
+**No wireframe gap:** the **email-forwarding** path is a backend-only pipeline (Orbo inbox → Azure → DB) with no
+screen of its own — its results appear on the existing Reports page, so nothing new to sketch. (See §5/§6.)
+
+**Cognitive walkthrough:** run one quick outsider walkthrough of the core check-a-link flow before Sprint 1 (see `week6_board.md`, Issue #13).
 
 ---
 
@@ -243,7 +374,37 @@ Starting reference: `../DOMinion_Wireframes.html`. **Insert link/images here onc
 | Two-phase verdict (AI now, human later) | Analysts don't trust black-box auto-verdicts; makes the app two-sided | AI-only auto-verdict | More work (analyst role + authoring flow); big trust + rubric payoff |
 | NLP → validated whitelisted filter, not raw SQL | Security: raw model SQL is an injection risk | Model emits SQL directly | A bit more backend validation; removes the injection path |
 | Browser extension demoted to optional fast-follow stretch | Honors mentor adoption point; web app is the universal surface | Build extension in MVP | No extension at MVP; keeps the spine safe, still on the roadmap |
+| Product renamed PIPbot → **Orbis** (in-app assistant = **Orbo**); team stays **DOMinion** | Wireframes were built as "Orbis/Orbo"; docs still said "PIPbot" — mismatch would confuse mentors | Keep "PIPbot"; rename team too | One-time doc churn; docs and designs now match |
+| Added an **organizations** model (+ `org_id`, org-scoping middleware) | Team-setup wireframes and story #12 (org data isolation) both assume orgs, but the data model had none | Keep `role` as a lone text column | More schema + an org-scoping middleware; makes the isolation requirement real instead of implied |
+| ~~MVP auth = email + password; social/SSO → stretch~~ **(superseded below)** | — | — | Replaced by the Clerk decision once we realized we don't have to build auth ourselves |
+| **Use Clerk (managed auth provider) for auth, orgs, invites, domain auto-join** — so **social login (Google/Apple) is core**, and enterprise SSO/SAML (e.g. WorkOS) is the stretch | Building auth + orgs + invites by hand is a large lift; Clerk ships all of it with a free tier and drop-in React components, and covers the org/domain-auto-join flow we wireframed | Hand-rolled email+password (prior plan); build OAuth ourselves; WorkOS AuthKit as primary | We depend on a third-party service + store mirror rows synced by webhook; in exchange we get social login *and* orgs as core for near-zero auth code, and SSO becomes an easy stretch |
+| **Email forwarding is a backend-only pipeline** (dedicated Orbo inbox → Microsoft Azure inbound-email → webhook → DB → auto-review) | Committed to at the Jul 1 pod sync; central to the "no friction" value. It has no screen of its own | Move it to stretch; build a UI for it | No wireframe needed (no UI); results show on the existing Reports page; adds an inbound-email webhook + sender matching |
+| **Auto-escalate every org-member submission to their analyst** (web chat *or* Orbo email) | Members worry about scams but "report to security" is friction; the act of submitting *is* the report | Require an explicit "send to team" click | Analysts see more items (fine — they triage by priority); members get closure with zero extra steps (stories #6, #7) |
+| **Reports page tailored per role** (individual = minimal; member = personal + closure status; analyst = grouped triage queue) | One shared layout under- and over-served different roles | One unified reports table for all | 3 view variants to build; each role sees exactly what's useful (stories #7, #9, #12) |
+| **Campaign view = grouped queue row + Ask Orbo chart**; standalone campaign *page* deferred | Wireframes surface campaigns in the triage queue and in chat, not a dedicated page | Build a separate campaign detail page for MVP | Slightly less depth per campaign; matches mentors' build order (clustering last) |
+| **Ask Orbo ships 1–2 chart variants at MVP** (6 are wireframed) | Six visualizations is the full vision, not the MVP; mentors warned against "boiling the ocean" | Build all 6 | Some charts are fast-follow; keeps Sprint-2 MVP achievable |
+| **Responsive everywhere; deploy on free tiers; seed stand-in data** | Personas are phone-first; the app must be live and populated for the demo | Desktop-only MVP; skip deploy until later; empty dashboard | One responsive build (no separate mobile app); a bit of deploy + seed-script work up front; demo looks real and works on a phone |
 
 ---
 
-***Reminder: set up GitHub Issues, Milestones, and a Project Board — see `week6_board.md`.***
+## 11. Open Questions & Risks (beyond the rubric — for the pod sync)
+
+Things the assignment doesn't grade but that shape Sprints 1–4. Most were resolved with the team; the rest are
+flagged **OPEN** for the pod sync.
+
+| # | Item | Status | Decision / current lean |
+|---|---|---|---|
+| 1 | **urlscan.io reliability** — scans are asynchronous and can be slow or fail | **Resolved (scope):** we're not serving enterprises, so rate limits/quotas aren't a real concern; free tier + stand-in data is enough. | Poll with a timeout → `status: error` + "review manually" (never a false "safe"); cache by `canonical_key`. |
+| 2 | **Auth / orgs / invites** — how do users sign in, join an org, get invited? | **Resolved:** Clerk provides all of it (incl. social login core, domain auto-join); SSO/SAML is stretch. | See §5/§6 and Decisions Log. |
+| 3 | **Escalation & notifications** (stories #6, #7) | **Resolved:** org-member submissions auto-escalate to the analyst; closure delivered via **in-app** notifications. | Email/SMS notifications remain a stretch feature. |
+| 4 | **Email forwarding** — how does it work with no UI? | **Resolved:** backend pipeline — Orbo inbox → Azure inbound-email → webhook → DB → auto-review. | No wireframe needed; see §5/§6. |
+| 5 | **Seed/demo data** — dashboard shows thousands of checks, trends, campaigns | **Resolved:** we'll write a seed script of realistic stand-in threats + campaigns before the Sprint-2 demo. | Needed because we won't have real usage. |
+| 6 | **Mobile/responsive** — personas are phone-first, wireframes are desktop | **Resolved:** one responsive build across all screens; **no separate mobile MVP**. | Apply responsive layout as we build each screen, not as a retrofit. |
+| 7 | **Deployment** — frontend + backend + Postgres | **Resolved:** we will deploy, all on free hosting tiers. | Stand up a "hello world" deploy of both early in Sprint 1 before feature work (CORS, env vars, DB host). |
+| 8 | **Campaign clustering definition** — what makes two submissions "the same campaign"? | **OPEN** (for the pod sync) | Lean: a canonicalized key that strips per-victim tracking tokens (host + path + semantic params); refine once we see real/seed data. |
+| 9 | **Clerk ↔ Postgres sync edge cases** — webhook lag or a missed event could leave a submission with no mirrored user/org row | **OPEN** (raise with mentors) | Lean: create-or-fetch the mirror row lazily on first authenticated request as a backstop to the webhook. |
+
+---
+
+***Reminder: set up GitHub Issues, Milestones, and a Project Board — see `week6_board.md`. The board is a
+submission requirement and must be created on GitHub (not Trello) — this still needs a human before Fri 9 PM PDT.***

@@ -38,20 +38,26 @@ Every Issue references the spec section it touches (traceability). Owners are a 
 | 13 | Cognitive walkthrough of wireframes (1 outsider) | Ozias | §5 | Fast usability check; recommended. |
 | 14 | Final review + submit repo link | Michael | (submit) | All sections present, board live. Fri 9 PM PDT. |
 
-## Wireframe split (Issue #7) — 6 screens, 2 each, low-fidelity (Figma or paper photos)
+## Wireframe split (Issue #7) — ✅ DONE (Figma → PDF), far more than 6 screens
 | Screens | Owner |
 |---|---|
-| Login/Register · Employee "Submit / Check a link" | David |
-| Verdict Detail · Analyst Triage Queue | Michael |
-| Analyst Dashboard (NLP query) · Campaign View | Ozias |
-> Only **3** required to pass; 6 covers both roles + buffer. Starting reference: `../DOMinion_Wireframes.html`.
+| Login/Register · Org-member "Submit / Check a link" | David |
+| Verdict Detail (Result + 3 states) · Analyst Triage Queue (Reports) | Michael |
+| Analyst Dashboard (Ask Orbo) · Campaigns (grouped queue + Orbo chart) | Ozias |
+> Only **3** required to pass; we delivered onboarding, core check-a-link, dashboard/Ask-Orbo (6 charts), and
+> reports (3 role variants + modal). Wireframes: `wireframes/Figma Wireframes PDF.pdf`.
+> Email forwarding is a backend-only pipeline (no screen — see project_plan §5/§6), so no extra wireframe needed.
 
 ## Team norms
 - **Daily 10-min standup** (existing Meet): did / doing / blocked.
 - Nothing is **Done** until one teammate reviews it (that's the "Needs Review" column).
 - **Commit as you go** — CodePath wants to see the plan evolve.
 
-## Biggest risks this week
-1. **Wireframes are the critical path** — nothing sketched yet. Split Monday, done Thursday.
-2. `user_stories.md` is still a stub — Week 5's deliverable isn't in the repo. Fill it alongside §4.
-3. Everything else is paste-and-review from the drafted `project_plan.md`; the real work is the wireframes.
+## Biggest risks this week — updated
+1. ✅ **Wireframes** — done (Figma → PDF), well beyond the 3 required.
+2. ✅ `user_stories.md` — complete (15 stories, org-isolation added).
+3. ⚠️ **GitHub board still to create** — Issues + Milestones + Project Board on GitHub (not Trello) is a
+   submission requirement and isn't set up yet. A human needs to do this before Fri 9 PM PDT (`gh` CLI not
+   installed locally). Rows above are the copy-paste source.
+4. 📋 **Post-plan risks now tracked in `project_plan.md` §11** (urlscan limits, notifications, seed data,
+   mobile, deployment) — review at the pod sync, fold into Sprint 1 planning.
