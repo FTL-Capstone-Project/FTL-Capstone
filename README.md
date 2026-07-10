@@ -8,7 +8,7 @@ Project Name: **Orbis**
 
 Team Member Names: **Michael Jissa, Ozias Tumimana, David Gonzalez-Cesar**
 
-Mentors Names: **Sasha, Somal, Priyanshu**
+Mentors Names: **Sasha, Somal, Priyanshu, Archana, Raghu**
 
 Project Code Repository Links
 
