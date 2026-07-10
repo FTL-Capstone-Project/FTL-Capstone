@@ -267,12 +267,34 @@ Because `canonical_key` is **globally unique**, 20 members of one org reporting 
 single indicator (one investigation for their analyst) **and** benefit from any scan already done for anyone
 else on the platform.
 
-**Blacklist enrichment (Google Safe Browsing).** Alongside the urlscan sandbox, each new indicator is checked
-against the free Google Safe Browsing API — a fast yes/no lookup for URLs the security community has already
-confirmed as malware or phishing. The result is stored on the **global indicator** (`blacklist_hit`,
-`blacklist_source`) because "this URL is a known-bad site" is objective, shareable threat intel, not org-private
-data — so, like the AI verdict, it's computed once and reused for everyone. It's a strong, cheap signal fed into
-the AI verdict (see §8).
+**How `canonical_key` is computed (the dedup rule — agreed approach).** Phishers add per-victim tracking junk
+to URLs so every target gets a "unique" link (`.../verify?id=david&ref=email123` vs `.../verify?id=maria&ref=email456`),
+but it's the **same attack**. We normalize a submitted URL into a stable key so those collapse into one
+indicator, while genuinely different pages stay separate. The recipe (`POST /api/submissions`, before the
+indicator lookup):
+1. **Lowercase** scheme + host; treat `http`/`https` as the same and strip a leading `www.`.
+2. **Drop the fragment** (`#…` — never changes the server response).
+3. **Remove tracking/marketing query params** by name (denylist): `utm_*`, `ref`, `fbclid`, `gclid`, `id`,
+   `email`, `token`, `recipient`, `_hsenc`, `mc_eid`, etc. — adjustable as new ones appear.
+4. **Keep** any remaining (meaningful) query params and **sort them alphabetically** so param order can't create
+   false uniques.
+5. **Normalize the path** (strip a trailing slash).
+6. The result (e.g. `paypa1-secure.com/verify`) is the `canonical_key`. Both example URLs above collapse to it.
+
+We also store the untouched `submissions.raw_url` for the record. **Known limitations (accepted for MVP):** the
+denylist is heuristic and will be tuned over time; and URL **shorteners** (`bit.ly/xR3` → different codes, same
+destination) won't dedup on the submitted link — the refinement is to canonicalize on the **final resolved URL**
+after urlscan.io follows redirects (roadmap, not MVP).
+
+**Blacklist enrichment (Google Safe Browsing).** The `canonical_key` dedup answers "have *we* seen this before?";
+the blacklist answers the complementary question "has the wider security community *already* confirmed this as
+bad?" On each **new** indicator (i.e. one dedup didn't already resolve), alongside the urlscan sandbox we do a
+fast yes/no lookup against the free Google Safe Browsing API. The result is stored on the **global indicator**
+(`blacklist_hit`, `blacklist_source`) because "this URL is a known-bad site" is objective, shareable threat
+intel, not org-private data — so, like the AI verdict, it's computed once and reused for everyone. It's a strong,
+cheap signal fed into the AI verdict (see §8). Note the two are complementary, not redundant: Safe Browsing
+catches *already-famous* bad URLs instantly, while our dedup is what protects users against *brand-new, targeted*
+scams that no blacklist has seen yet — the case Orbis exists to cover.
 
 **Auto-escalation to the analyst.** Anything an **org member** submits — whether pasted in the web chat or
 forwarded to the Orbo inbox — is automatically routed to their org's analyst for review: the submission sets
@@ -307,8 +329,10 @@ and `org_id` from the verified Clerk session token (no hand-rolled JWTs).
 | Read | GET | `/api/history` | Org-wide history + stats (analyst) | — | `{ recent: [...], stats: {...} }` | 401; 403 non-analyst | 8, 12 |
 | Read | GET | `/api/search?q=` | Keyword search within org (analyst) | — | `{ results: [...] }` | 401; 403 non-analyst | 11, 14 |
 | Update | PATCH | `/api/indicators/:id/review` | Analyst records/overrides their org's verdict — upserts the `org_reviews` row for (caller's org, indicator); raises a notification | `{ human_score, human_verdict, review_status }` | `{ review }` | 401; 403 non-analyst or wrong org; 404 not found; 400 invalid score | 7, 10 |
+| Read | GET | `/api/campaigns` | List my org's campaigns (grouped triage queue) | — | `{ campaigns: [{ id, name, indicatorCount, reportCount, last_seen }] }` | 401; 403 non-analyst | 9 |
 | Read | GET | `/api/campaigns/:id` | Campaign detail: grouped indicators (analyst) | — | `{ campaign, indicators: [...], reportCount }` | 401; 403 non-analyst or wrong org; 404 not found | 9 |
-| Read | GET | `/api/notifications` | My notifications (closure alerts) | — | `{ notifications: [...] }` | 401 unauthenticated | 7 |
+| Read | GET | `/api/notifications` | My notifications (closure alerts) | — | `{ notifications: [...], unreadCount }` | 401 unauthenticated | 7 |
+| Update | PATCH | `/api/notifications/:id/read` | Mark a notification read (clears the bell badge) | `{}` | `{ id, is_read: true }` | 401; 403 not mine; 404 not found | 7 |
 | Create | POST | `/api/nlp-query` | English → validated filter → results + chart (analyst) ★AI | `{ question }` | `{ filter, results: [...], chartSpec }` | 401; 403 non-analyst; 422 unmappable question (→ "try rephrasing") | 11 |
 
 **Role & org enforcement (story #12):** org-wide reads (`/history`, `/search`, `/nlp-query`, `/campaigns/*`)
@@ -317,7 +341,7 @@ individuals/members are scoped to their own submissions (`?mine=1`). One server-
 Clerk session and checks role + org on every protected route, reused everywhere — so no org can ever read
 another org's data. (Role is stored in Clerk's user/org metadata and mirrored to `users.role`.)
 
-**Note — endpoint count for the rubric:** even after handing auth/orgs/invites to Clerk, we still build 10
+**Note — endpoint count for the rubric:** even after handing auth/orgs/invites to Clerk, we still build 12
 first-party endpoints across full CRUD, comfortably past the "5 Node endpoints" bar.
 
 ---
