@@ -36,7 +36,8 @@ Deployment Website: **Add Link to Deployed Project**
 - [PostgreSQL](https://www.postgresql.org/) — database
 - [Clerk](https://clerk.com/) — managed auth: email/password + social login (Google/Apple), organizations, invites, domain auto-join
 - [D3.js](https://d3js.org/) — dashboard data visualization
-- [urlscan.io](https://urlscan.io/) — secure URL sandbox / detonation (external API)
+- [urlscan.io](https://urlscan.io/) — secure URL sandbox / detonation + screenshot (external API)
+- [Google Safe Browsing](https://developers.google.com/safe-browsing) — free blacklist check for known malware/phishing URLs (non-commercial use)
 - [Microsoft Azure](https://azure.microsoft.com/) — inbound-email pipeline for the "forward to Orbo" submission path
 - [Claude API (Anthropic)](https://www.anthropic.com/api) — AI verdicts & natural-language querying
 - _Additional libraries will be added here as the project develops._

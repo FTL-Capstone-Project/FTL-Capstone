@@ -35,6 +35,7 @@ Individuals and organization members use Orbis to check links before clicking an
 - Suspicious URL submission via the web app **and** by forwarding an email to a dedicated Orbo inbox (two core interaction methods; the email path is a backend pipeline via Microsoft Azure)
 - Automatic escalation: anything an organization member submits is routed to their analyst for review
 - Secure sandbox detonation of submitted URLs (via urlscan.io) with a captured screenshot
+- Blacklist check against known malware/phishing URLs (via the free Google Safe Browsing API), fed into the AI verdict
 - AI-generated danger verdict: a score from 0 to 100 across multiple threat vectors, plus a plain-English explanation
 - Personal report history ("my reports") for individuals and organization members
 - Organization-wide threat history dashboard for analysts

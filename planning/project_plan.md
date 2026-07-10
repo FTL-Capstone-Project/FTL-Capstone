@@ -207,6 +207,8 @@ and the team-setup flow are all drawn.
 | | ai_confidence | text | `low` \| `medium` \| `high` (nullable) |
 | | screenshot_url | text | from urlscan.io (shared) |
 | | urlscan_uuid | text | scan reference |
+| | blacklist_hit | boolean | is the URL on a known-bad blacklist? (Google Safe Browsing) — shared signal |
+| | blacklist_source | text | which list flagged it, e.g. `google_safe_browsing:SOCIAL_ENGINEERING` (nullable) |
 | | domain_age_days | integer | signal (nullable) |
 | | report_count | integer | total submissions across all orgs + individuals — powers "seen before, reported N times" |
 | | created_at / updated_at | timestamp | first-seen / last re-scanned (enables TTL later) |
@@ -264,6 +266,13 @@ safe to share from what must stay private:
 Because `canonical_key` is **globally unique**, 20 members of one org reporting the same link collapse into a
 single indicator (one investigation for their analyst) **and** benefit from any scan already done for anyone
 else on the platform.
+
+**Blacklist enrichment (Google Safe Browsing).** Alongside the urlscan sandbox, each new indicator is checked
+against the free Google Safe Browsing API — a fast yes/no lookup for URLs the security community has already
+confirmed as malware or phishing. The result is stored on the **global indicator** (`blacklist_hit`,
+`blacklist_source`) because "this URL is a known-bad site" is objective, shareable threat intel, not org-private
+data — so, like the AI verdict, it's computed once and reused for everyone. It's a strong, cheap signal fed into
+the AI verdict (see §8).
 
 **Auto-escalation to the analyst.** Anything an **org member** submits — whether pasted in the web chat or
 forwarded to the Orbo inbox — is automatically routed to their org's analyst for review: the submission sets
@@ -344,10 +353,10 @@ Orbis has **two** AI features (rubric requires one).
 ### Feature A — Plain-English Danger Verdict (generation)
 - **What it does for the user:** turns raw sandbox evidence into a human-readable "is this safe?" verdict + score anyone can act on.
 - **Where it lives:** triggered server-side after a scan completes; shown on the **Check Link — Result** screen and the report detail modal.
-- **Input:** distilled urlscan evidence (final domain, redirect chain, page resources, form/credential fields, domain age, cert info) + optional user-pasted context.
+- **Input:** distilled urlscan evidence (final domain, redirect chain, page resources, form/credential fields, domain age, cert info) + **the Google Safe Browsing blacklist result** (`blacklist_hit`/`blacklist_source`) + optional user-pasted context.
 - **Output:** structured JSON — `{ score: 0–100, verdict_text, confidence, evidence_summary }` (via structured outputs, so it's always valid JSON).
-- **Validation:** score within 0–100; verdict_text non-empty and references at least one concrete signal; a deterministic floor forces a high score on hard signals (e.g. credential form on a <7-day-old domain) regardless of model output.
-- **Endpoint:** produced during the `/api/submissions` → scan → score flow; read via `GET /api/indicators/:id`.
+- **Validation:** score within 0–100; verdict_text non-empty and references at least one concrete signal; a deterministic floor forces a high score on hard signals (e.g. **a Google Safe Browsing blacklist hit**, or a credential form on a <7-day-old domain) regardless of model output — a confirmed known-bad URL can never be reported as "safe."
+- **Endpoint:** produced during the `/api/submissions` → scan → **blacklist check** → score flow; read via `GET /api/indicators/:id`.
 - **Fallback:** if the Claude call fails, show the raw evidence + a "verdict unavailable, review manually" state (score `null`, status `error`) — never a false "safe."
 
 ### Feature B — Ask-the-Data Dashboarding (conversation → visualization)
@@ -364,6 +373,7 @@ Orbis has **two** AI features (rubric requires one).
 |---|---|---|---|
 | _(seed)_ NLP emits a whitelisted filter object, not SQL | Sprint 0 (plan) | Architecture | Eliminates AI-driven SQL-injection risk; safer + simpler to validate |
 | _(seed)_ Verdict uses structured outputs | Sprint 0 (plan) | Output format | Guarantees valid JSON, no hand-rolled parsing |
+| _(seed)_ Feed Google Safe Browsing blacklist result into the verdict + as a deterministic high-score floor | Sprint 0 (plan) | Prompt input + validation | A confirmed known-bad URL is a decisive signal; the floor guarantees Orbo never calls a blacklisted URL "safe" |
 
 ---
 
@@ -406,6 +416,7 @@ screen of its own — its results appear on the existing Reports page, so nothin
 | **Campaign view = grouped queue row + Ask Orbo chart**; standalone campaign *page* deferred | Wireframes surface campaigns in the triage queue and in chat, not a dedicated page | Build a separate campaign detail page for MVP | Slightly less depth per campaign; matches mentors' build order (clustering last) |
 | **Ask Orbo ships 1–2 chart variants at MVP** (6 are wireframed) | Six visualizations is the full vision, not the MVP; mentors warned against "boiling the ocean" | Build all 6 | Some charts are fast-follow; keeps Sprint-2 MVP achievable |
 | **Responsive everywhere; deploy on free tiers; seed stand-in data** | Personas are phone-first; the app must be live and populated for the demo | Desktop-only MVP; skip deploy until later; empty dashboard | One responsive build (no separate mobile app); a bit of deploy + seed-script work up front; demo looks real and works on a phone |
+| **Add Google Safe Browsing as a free blacklist signal** (urlscan = sandbox/screenshot/evidence; Safe Browsing = known-bad blacklist; Claude = final verdict) | urlscan's free tier gives evidence + screenshot but its reputation/verdict data is largely Pro-gated; we still want a real "known-bad" check | urlscan-only (no blacklist); VirusTotal (4 req/min, no commercial use); PhishTank (phishing-only) | One extra free API call per new URL; big accuracy + demo payoff. **Caveat:** Safe Browsing is *non-commercial use only* — a real product would switch to Google Web Risk. Stored on the global indicator, so checked once and shared. |
 
 ---
 
