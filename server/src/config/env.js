@@ -16,7 +16,18 @@ export const env = {
   },
   urlscanApiKey: process.env.URLSCAN_API_KEY,
   safeBrowsingKey: process.env.GOOGLE_SAFE_BROWSING_KEY,
+
+  // Claude access. David's key is a Salesforce "LLM Gateway Express" key — an
+  // OpenAI-compatible proxy in front of Claude, NOT a direct Anthropic key.
+  // So we call the OpenAI /chat/completions format at a configurable base URL.
+  // (Key var kept as ANTHROPIC_API_KEY so existing .env files don't break.)
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  // Claude via the Salesforce "LLM Gateway Express" — an OpenAI-compatible proxy (NOT direct
+  // Anthropic). Configurable base URL + model; the key lives in ANTHROPIC_API_KEY above.
+  llmBaseUrl:
+    process.env.LLM_BASE_URL ||
+    "https://eng-ai-model-gateway.sfproxy.devx-preprod.aws-esvc1-useast2.aws.sfdc.cl",
+  llmModel: process.env.LLM_MODEL || "claude-sonnet-4-6",
   // True when Clerk backend creds are present; lets middleware fall back to a
   // dev stub locally (so David/Ozias can build without live Clerk) while using
   // real verification as soon as keys exist.
