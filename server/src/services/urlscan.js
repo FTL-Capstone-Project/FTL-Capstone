@@ -33,10 +33,12 @@ export async function scanUrl(rawUrl) {
   }
 
   // 1) Submit. `unlisted` keeps scans off the public feed but stays on the free tier.
+  // country: "us" → scan from a US vantage point so sites serve their English/US version
+  // (urlscan's default nodes are in the EU, which is why pages came back in German).
   const submitRes = await fetch(SUBMIT_URL, {
     method: "POST",
     headers: { "API-Key": env.urlscanApiKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ url: rawUrl, visibility: "unlisted" }),
+    body: JSON.stringify({ url: rawUrl, visibility: "unlisted", country: "us" }),
   });
   if (!submitRes.ok) {
     const err = await submitRes.json().catch(() => ({}));

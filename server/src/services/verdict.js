@@ -35,7 +35,8 @@ export async function generateVerdict({ evidence = [], blacklist_hit, blacklist_
       title: cleanTitle(ai.title) || fallbackTitle(raw, blacklist_source, score),
       description: cleanText(ai.description) || firstSentence(ai.verdict),
       tags: cleanTags(ai.tags, raw),
-      evidence_summary: evidence,
+      // Always exactly 3 "why Orbo flagged this" reasons (Claude's, padded from evidence if needed).
+      evidence_summary: exactlyThreeReasons(ai.reasons, evidence, score),
     };
   } catch (e) {
     console.warn("⚠ Claude verdict failed, using rule-based fallback:", e.message);
@@ -54,7 +55,10 @@ async function claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain
     '"description":"<ONE short plain-English sentence summarizing the result>",' +
     '"verdict":"<one or two plain-English sentences explaining WHY, for a non-technical person>",' +
     '"tags":["<1-3 short category chips, e.g. \\"Credential phishing\\", \\"Impersonation\\", \\"Safe\\">"],' +
+    '"reasons":[{"text":"<short reason Orbo reached this verdict>","severity":"safe|review|dangerous"}],' +
     '"confidence":"low|medium|high"}. ' +
+    "ALWAYS provide EXACTLY 3 items in reasons — the top 3 things that most drove your decision, each one short " +
+    "and concrete (based on the evidence). For a safe link, give 3 reassuring reasons; for a dangerous one, 3 red flags. " +
     "No markdown, no extra text. Higher score = more dangerous. Reference concrete evidence in the verdict. " +
     "If it is on a known-bad blacklist, it is confirmed malicious — score it near 100 and say so plainly.";
 
@@ -117,8 +121,37 @@ function ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_ag
     title: fallbackTitle(raw, blacklist_source, score),
     description: firstSentence(ai_verdict),
     tags: cleanTags(null, raw, bucket, blacklist_source),
-    evidence_summary: evidence,
+    evidence_summary: exactlyThreeReasons(null, evidence, score),
   };
+}
+
+// Always return EXACTLY 3 reason rows [{text, severity}]. Prefer the model's reasons,
+// fall back to the scan evidence, then pad with sensible generic lines so the UI
+// always shows three (per the design ask).
+function exactlyThreeReasons(modelReasons, evidence, score) {
+  const sev = (s) => (["safe", "review", "dangerous"].includes(s) ? s : "review");
+  let rows = [];
+  if (Array.isArray(modelReasons)) {
+    rows = modelReasons
+      .filter((r) => r && typeof r.text === "string" && r.text.trim())
+      .map((r) => ({ text: r.text.trim(), severity: sev(r.severity) }));
+  }
+  if (rows.length < 3 && Array.isArray(evidence)) {
+    for (const e of evidence) {
+      if (rows.length >= 3) break;
+      if (e?.text && !rows.some((r) => r.text === e.text)) rows.push({ text: e.text, severity: sev(e.severity) });
+    }
+  }
+  // pad with generic-but-honest lines matching the overall verdict
+  const safe = score < 35;
+  const pad = safe
+    ? ["No known-bad blacklist matches", "Reaches an established, reachable site", "No obvious credential-stealing signs"]
+    : ["Signals don't fully add up to a trusted site", "Treat unexpected requests with caution", "Double-check the real sender before acting"];
+  for (const p of pad) {
+    if (rows.length >= 3) break;
+    if (!rows.some((r) => r.text === p)) rows.push({ text: p, severity: safe ? "safe" : "review" });
+  }
+  return rows.slice(0, 3);
 }
 
 // ── helpers for the Reports-card fields (title / description / tags) ──

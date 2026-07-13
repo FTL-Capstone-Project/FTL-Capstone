@@ -30,6 +30,17 @@ async function chat({ messages, model = env.llmModel, maxTokens = 512, temperatu
   return content;
 }
 
+// Prompt → free text (e.g. interactive Q&A).
+export async function chatText({ system, user, model, maxTokens = 500, temperature = 0.3 }) {
+  return chat({
+    model, maxTokens, temperature,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  });
+}
+
 // Prompt → JSON object (defensive parse: strip ``` fences, else grab first {...}).
 export async function chatJSON({ system, user, model, maxTokens = 512, temperature = 0 }) {
   const content = await chat({
