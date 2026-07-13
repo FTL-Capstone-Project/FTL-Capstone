@@ -416,7 +416,7 @@ Coverage by flow (all drawn):
 **No wireframe gap:** the **email-forwarding** path is a backend-only pipeline (Orbo inbox → Azure → DB) with no
 screen of its own - its results appear on the existing Reports page, so nothing new to sketch. (See §5/§6.)
 
-**Cognitive walkthrough:** run one quick outsider walkthrough of the core check-a-link flow before Sprint 1 (see `week6_board.md`, Issue #13).
+**Cognitive walkthrough:** run one quick outsider walkthrough of the core check-a-link flow before Sprint 1.
 
 ---
 
@@ -462,4 +462,111 @@ flagged **OPEN** for the pod sync.
 | 9 | **Clerk ↔ Postgres sync edge cases** - webhook lag or a missed event could leave a submission with no mirrored user/org row | **OPEN** (raise with mentors) | Lean: create-or-fetch the mirror row lazily on first authenticated request as a backstop to the webhook. |
 
 ---
+
+## 12. Build Plan — Ownership & Scope
+
+> **How to read this section:** it says *who builds what* and *what we are building right now*. Each slice is a
+> **full vertical** — the same person owns the UI, the API route, and the logic for their feature end to end.
+> **This week's scope is deliberately narrow — see "MVP 0 scope" below.**
+
+### MVP 0 scope (this week) — Individual + Organization Member only
+This week we build **only** the Individual and Organization Member experience. The **Security Analyst** role is
+**out of scope this week** (its dashboard, triage queue, campaign clustering, and authoritative-review flow come
+later, once the data and submission flows exist). Concretely, this week covers:
+- **Individual:** sign in → paste a link on Home → see a verdict (score, screenshot, plain-English explanation) →
+  see it in their own Reports history.
+- **Organization Member:** the same check, plus their submission **auto-escalates** to their org's analyst
+  (a `pending review` `org_reviews` row is created) and their Reports page shows the **closure status**
+  ("Pending review" → "Confirmed by analyst") — even though the analyst-facing UI that flips that status is a
+  later slice.
+
+### Who does what (each = a full UI + API + logic vertical)
+| Person | Slice | End-to-end goal | Owns |
+|---|---|---|---|
+| 🟦 **David** | **Check-Link Core + Verdict AI** | Paste a link → urlscan sandbox → Claude plain-English verdict → "seen-before" dedup. This is **AI Feature A** and the demo centerpiece. | `Home`, `CheckResult`, `VerdictCard`, `POST /api/submissions`, `GET /api/indicators/:id`, `canonicalize.js`, `verdict.js` |
+| 🟩 **Michael** | **Auth + App Shell + Data Layer** | Clerk-protected skeleton + Prisma schema/seed that **unblocks everyone**. | `<ClerkProvider>`, `AppShell`, `middleware/auth.js`, `webhooks/clerk`, the DB (Prisma schema + seed) |
+| 🟪 **Ozias** | **Reports + Notifications + Escalation** | The **"closure loop"** — users see their history and get notified when a verdict is confirmed. | `Reports`, `NotificationBell`, `GET /api/history?mine=1`, notifications endpoints, the escalation write, the email-forward pipeline (later) |
+
+### Critical ordering (dependencies)
+1. **Michael scaffolds first** (monorepo + Clerk + Prisma schema/seed) — **auth is a day-1 dependency for
+   everyone**; no protected route or `req.user` exists until this lands.
+2. **David locks `canonical_key`** (the Option D recipe in §5) — dedup rests on it.
+3. **Agree the `GET /api/indicators/:id` response shape** — this is the **seam** between David's Result screen and
+   Ozias's Reports cards; both render the same score/verdict/status fields, so the field names must match.
+
+### Sprint sequence
+- **Wk 7:** skeleton (auth + app shell + schema) · submission + dedup · reports-list (individual + member).
+- **Wk 8:** real AI verdict end-to-end (the "money" demo).
+- **Wk 9:** email-forwarding pipeline · polish · deploy.
+
+### Shared seams (owned jointly — agree before coding)
+- **`escalateSubmission(user, indicator)` helper** (Ozias writes it, David calls it inside `POST /api/submissions`)
+  — sets `escalated = true` and upserts the `pending review` `org_reviews` row. Individuals skip it (no org).
+- **`createNotification(...)` helper** (Ozias writes it) — called when a verdict is confirmed, so the closure
+  badge is raised. Trigger to confirm as a team: fire on any `review_status` change, or only on
+  `confirmed malicious` / `confirmed safe`.
+- **The report object shape** returned by `GET /api/history?mine=1` and `GET /api/indicators/:id` — David + Ozias
+  agree the exact fields a report card/row needs.
+
+### Repository structure (agreed layout)
+A monorepo with npm workspaces. Two rules keep it beginner-friendly: **styling lives only in `client/src/theme/`**,
+and **every external API is wrapped in its own file under `server/src/services/`** so each is isolated and swappable.
+Code is grouped **by feature** (mirrored on client and server), not by file type.
+
+```
+FTL-Capstone/
+├── README.md                       # "start here" — how to run, where things are
+├── package.json                    # workspaces + scripts
+├── .env.example                    # every env var, documented
+│
+├── client/
+│   └── src/
+│       ├── theme/                  # ⭐ ALL colors/styling live HERE, nowhere else
+│       │   ├── tokens.css          #   THE colors: --primary #0F62FE, --navy, --safe...
+│       │   ├── theme.md            #   plain-English: "primary = buttons, safe = green verdicts"
+│       │   └── global.css          #   base resets
+│       │
+│       ├── config/
+│       │   └── constants.js        # API base URL, poll interval, status labels — one place
+│       │
+│       ├── lib/
+│       │   └── api.js              # ⭐ EVERY backend call goes through here, nowhere else
+│       │
+│       ├── features/               # ⭐ grouped by feature, not by file-type
+│       │   ├── auth/               #   Login, Register, ProtectedRoute + README.md
+│       │   ├── check-link/         #   Home, CheckResult, SubmitForm, VerdictCard,
+│       │   │                       #     ScoreGauge, EvidenceList + README.md
+│       │   └── reports/            #   Reports, ReportCard, StatusChip + README.md
+│       │
+│       ├── components/             # SHARED across features only (AppShell, OrboAvatar,
+│       │   └── README.md           #   StatusBadge, NotificationBell)
+│       │
+│       ├── assets/                 # Orbo PNGs, logo, emoji set
+│       ├── App.jsx                 # routes
+│       └── main.jsx                # ClerkProvider + root
+│
+└── server/
+    └── src/
+        ├── config/
+        │   └── env.js              # ⭐ reads/validates ALL env vars in ONE place
+        │
+        ├── features/               # grouped by feature (mirrors the client)
+        │   ├── submissions/        #   route + controller + README.md
+        │   ├── indicators/
+        │   ├── history/
+        │   ├── notifications/
+        │   └── webhooks/
+        │
+        ├── services/               # ⭐ external-API wrappers, each isolated
+        │   ├── urlscan.js          #   ALL urlscan logic here
+        │   ├── safeBrowsing.js     #   ALL Safe Browsing logic here
+        │   ├── verdict.js          #   ALL Claude logic here
+        │   ├── canonicalize.js     #   the dedup rule
+        │   └── README.md           #   "each file wraps one external API — swap freely"
+        │
+        ├── middleware/             # auth, role guards
+        ├── prisma/                 # schema + seed (the data layer, one home)
+        ├── db.js                   # PrismaClient singleton
+        └── index.js                # app + middleware order
+```
 
