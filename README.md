@@ -38,7 +38,7 @@ Deployment Website: **Add Link to Deployed Project**
 - [D3.js](https://d3js.org/) — dashboard data visualization
 - [urlscan.io](https://urlscan.io/) — secure URL sandbox / detonation + screenshot (external API)
 - [Google Safe Browsing](https://developers.google.com/safe-browsing) — free blacklist check for known malware/phishing URLs (non-commercial use)
-- [Microsoft Azure](https://azure.microsoft.com/) — inbound-email pipeline for the "forward to Orbo" submission path
+- [SendGrid Inbound Parse](https://www.twilio.com/docs/sendgrid/for-developers/parsing-email/setting-up-the-inbound-parse-webhook) — inbound-email pipeline for the "forward to Orbo" submission path (Azure was ruled out — send-only; the demo can also simulate this webhook with no external service)
 - [Claude API (Anthropic)](https://www.anthropic.com/api) — AI verdicts & natural-language querying
 - _Additional libraries will be added here as the project develops._
 - _Stretch:_ [WorkOS AuthKit](https://workos.com/) — enterprise SSO / SAML for large orgs

@@ -32,7 +32,7 @@ Individuals and organization members use Orbis to check links before clicking an
 - Account creation and login via a managed auth provider (Clerk): email + password **and** social login (Google / Apple), with distinct roles (individual, organization member, and analyst), each role seeing the appropriate view
 - Organization creation, teammate invites, and email-domain auto-join (Clerk Organizations), so members and analysts belong to the same org
 - Organization-scoped data isolation so a member or analyst can only see reports and threat history belonging to their own organization
-- Suspicious URL submission via the web app **and** by forwarding an email to a dedicated Orbo inbox (two core interaction methods; the email path is a backend pipeline via Microsoft Azure)
+- Suspicious URL submission via the web app **and** by forwarding an email to a dedicated Orbo inbox (two core interaction methods; the email path is a backend pipeline — inbound email received via SendGrid Inbound Parse, or a simulated webhook for the demo)
 - Automatic escalation: anything an organization member submits is routed to their analyst for review
 - Secure sandbox detonation of submitted URLs (via urlscan.io) with a captured screenshot
 - Blacklist check against known malware/phishing URLs (via the free Google Safe Browsing API), fed into the AI verdict

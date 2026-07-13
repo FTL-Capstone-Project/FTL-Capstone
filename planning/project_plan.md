@@ -303,12 +303,30 @@ forwarded to the Orbo inbox - is automatically routed to their org's analyst for
 enough. Individuals have no analyst and no org_review row, so their submissions are never escalated.
 (Stories #6, #8.)
 
-**Email forwarding is a backend-only pipeline (core interaction method - no dedicated UI screen).** We stand up
-a dedicated Orbo inbox address (e.g. `check@orbis...`). An inbound-email service (Microsoft Azure) receives the
-message and calls our webhook; the backend matches the sender to a user by `From` address (`users.email`),
-extracts the URL/content, and writes a `submission` with `source = 'email'`. From there the flow is identical to
-a web submission - scan, AI verdict, and (for org members) auto-escalation. Because it has no screen of its own,
-**no wireframe is needed**; the results appear on the user's existing Reports page.
+**Email forwarding is a backend-only pipeline (core interaction method - no dedicated UI screen).** A user
+forwards a suspicious email to a dedicated Orbo inbox; an inbound-email service receives it and calls our
+webhook (`POST /api/webhooks/inbound-email`); the backend matches the sender to a user by `From` address
+(`users.email`), extracts the URL/content, and writes a `submission` with `source = 'email'`. From there the
+flow is identical to a web submission - scan, AI verdict, and (for org members) auto-escalation. Because it has
+no screen of its own, **no wireframe is needed**; the results appear on the user's existing Reports page.
+
+**Inbound-email provider decision (Jul 13).** ~~Microsoft Azure~~ is **ruled out**: Azure Communication
+Services Email is a *send-only* product (transactional/bulk/marketing sending) — it cannot **receive** a
+forwarded email and hand it to a webhook, which is the only thing we need. The important insight: only the very
+first hop (an email physically arriving) needs any third party; everything after the webhook is our own code. So
+we have two viable, free paths (Wk 9, Michael's slice):
+1. **Simulate the webhook (chosen for the demo, $0, no domain).** Build the real webhook end-to-end (parse →
+   sender-match → submission → verdict → escalation → Reports) and demonstrate a "forward" by POSTing a realistic
+   email payload (`{ from, subject, body, links[] }`) to `/api/webhooks/inbound-email` — via a small "simulate a
+   forward" button or a saved request. The *entire pipeline is real*; only the SMTP delivery hop is stand-in.
+   Legitimate here because email is explicitly a backend-only pipeline and the app isn't publicly deployed.
+2. **Real forwarding via SendGrid Inbound Parse (optional, if a domain is free/available).** SendGrid's Inbound
+   Parse receives mail at a subdomain and POSTs it to our webhook; its payload (`from`, `subject`, `text`,
+   `attachments`) already matches our contract. **Setup:** point an MX record for a parse subdomain (e.g.
+   `parse.<ourdomain>`) at `mx.sendgrid.net`, then set the destination URL to our webhook in the SendGrid console.
+   **The one catch = a domain we control** (needed to set that MX record; Gmail can't be used because Google owns
+   it). Avoid paying: use the **GitHub Student Pack → Namecheap free-domain-for-a-year** offer, or a subdomain of a
+   domain a teammate already owns. The webhook from option 1 doesn't change — this just adds a real front door.
 
 ---
 
@@ -322,7 +340,7 @@ and `org_id` from the verified Clerk session token (no hand-rolled JWTs).
 | CRUD | Verb | Endpoint | Description | Request shape | Response shape | Error cases | Stories |
 |---|---|---|---|---|---|---|---|
 | Create | POST | `/api/webhooks/clerk` | Clerk → us: sync user/org mirror rows on create/update/delete | Clerk event (`user.*`, `organization.*`, `organizationMembership.*`) | `200 OK` | 400 bad signature (verified via Clerk signing secret) | 1, 4, 12 |
-| Create | POST | `/api/webhooks/inbound-email` | Azure email service → us: a message hit the Orbo inbox | `{ from, subject, body, links[] }` | `{ submissionId, indicatorId, status }` | 400 unparseable; 202 accepted-but-unknown-sender (ignored) | 4, 13 |
+| Create | POST | `/api/webhooks/inbound-email` | Inbound-email service (or a simulated forward) → us: a message hit the Orbo inbox | `{ from, subject, body, links[] }` | `{ submissionId, indicatorId, status }` | 400 unparseable; 202 accepted-but-unknown-sender (ignored) | 4, 13 |
 | Create | POST | `/api/submissions` | Submit a URL for analysis (web chat) | `{ url, contextText? }` | `{ submissionId, indicatorId, status }` | 400 invalid/empty URL (→ Invalid Input screen); 401 unauthenticated | 1, 2, 3, 4, 5, 13 |
 | Read | GET | `/api/indicators/:id` | Get a verdict (polled until done); merges the global indicator with the caller's org_review if any | - | `{ status, ai_score, ai_verdict, screenshot_url, report_count, review?: { human_score, human_verdict, review_status }, ... }` | 401; 403 not in caller's scope; 404 not found | 1, 7, 12, 15 |
 | Read | GET | `/api/history?mine=1` | My reported links (individual/member) | - | `{ reports: [...] }` | 401 unauthenticated | 7, 14 |
@@ -413,7 +431,7 @@ Coverage by flow (all drawn):
 - **Analyst dashboard & Ask Orbo** (p.3): dashboard, Ask Orbo chat, and 6 chart variants (weekly report, heatmap, trends, distribution, campaigns).
 - **Reports** (p.4): three role-tailored variants (individual, org/personal, analyst) + report detail modal.
 
-**No wireframe gap:** the **email-forwarding** path is a backend-only pipeline (Orbo inbox → Azure → DB) with no
+**No wireframe gap:** the **email-forwarding** path is a backend-only pipeline (Orbo inbox → webhook → DB) with no
 screen of its own - its results appear on the existing Reports page, so nothing new to sketch. (See §5/§6.)
 
 **Cognitive walkthrough:** run one quick outsider walkthrough of the core check-a-link flow before Sprint 1.
@@ -434,7 +452,8 @@ screen of its own - its results appear on the existing Reports page, so nothing 
 | Added an **organizations** model (+ `org_id`, org-scoping middleware) | Team-setup wireframes and story #12 (org data isolation) both assume orgs, but the data model had none | Keep `role` as a lone text column | More schema + an org-scoping middleware; makes the isolation requirement real instead of implied |
 | ~~MVP auth = email + password; social/SSO → stretch~~ **(superseded below)** | - | - | Replaced by the Clerk decision once we realized we don't have to build auth ourselves |
 | **Use Clerk (managed auth provider) for auth, orgs, invites, domain auto-join** - so **social login (Google/Apple) is core**, and enterprise SSO/SAML (e.g. WorkOS) is the stretch | Building auth + orgs + invites by hand is a large lift; Clerk ships all of it with a free tier and drop-in React components, and covers the org/domain-auto-join flow we wireframed | Hand-rolled email+password (prior plan); build OAuth ourselves; WorkOS AuthKit as primary | We depend on a third-party service + store mirror rows synced by webhook; in exchange we get social login *and* orgs as core for near-zero auth code, and SSO becomes an easy stretch |
-| **Email forwarding is a backend-only pipeline** (dedicated Orbo inbox → Microsoft Azure inbound-email → webhook → DB → auto-review) | Committed to at the Jul 1 pod sync; central to the "no friction" value. It has no screen of its own | Move it to stretch; build a UI for it | No wireframe needed (no UI); results show on the existing Reports page; adds an inbound-email webhook + sender matching |
+| **Email forwarding is a backend-only pipeline** (Orbo inbox → inbound-email webhook → DB → auto-review) | Committed to at the Jul 1 pod sync; central to the "no friction" value. It has no screen of its own | Move it to stretch; build a UI for it | No wireframe needed (no UI); results show on the existing Reports page; adds an inbound-email webhook + sender matching |
+| **Inbound-email provider: ~~Azure~~ → simulate-the-webhook for demo; SendGrid Inbound Parse as the real path** (Jul 13) | Azure email is send-only (can't receive to a webhook); the pipeline after the webhook is all our own code | Azure (send-only, ✗); Cloudflare Email Workers (needs domain on Cloudflare + you write the parse Worker); Mailparser (ugly address, 3rd-party) | Demo path costs $0 and needs no domain; real path (SendGrid) needs a team-owned domain — use a free student domain to avoid paying. See §5. |
 | **Auto-escalate every org-member submission to their analyst** (web chat *or* Orbo email) | Members worry about scams but "report to security" is friction; the act of submitting *is* the report | Require an explicit "send to team" click | Analysts see more items (fine - they triage by priority); members get closure with zero extra steps (stories #6, #7) |
 | **Reports page tailored per role** (individual = minimal; member = personal + closure status; analyst = grouped triage queue) | One shared layout under- and over-served different roles | One unified reports table for all | 3 view variants to build; each role sees exactly what's useful (stories #7, #9, #12) |
 | **Campaign view = grouped queue row + Ask Orbo chart**; standalone campaign *page* deferred | Wireframes surface campaigns in the triage queue and in chat, not a dedicated page | Build a separate campaign detail page for MVP | Slightly less depth per campaign; matches mentors' build order (clustering last) |
@@ -454,7 +473,7 @@ flagged **OPEN** for the pod sync.
 | 1 | **urlscan.io reliability** - scans are asynchronous and can be slow or fail | **Resolved (scope):** we're not serving enterprises, so rate limits/quotas aren't a real concern; free tier + stand-in data is enough. | Poll with a timeout → `status: error` + "review manually" (never a false "safe"); cache by `canonical_key`. |
 | 2 | **Auth / orgs / invites** - how do users sign in, join an org, get invited? | **Resolved:** Clerk provides all of it (incl. social login core, domain auto-join); SSO/SAML is stretch. | See §5/§6 and Decisions Log. |
 | 3 | **Escalation & notifications** (stories #6, #7) | **Resolved:** org-member submissions auto-escalate to the analyst; closure delivered via **in-app** notifications. | Email/SMS notifications remain a stretch feature. |
-| 4 | **Email forwarding** - how does it work with no UI? | **Resolved:** backend pipeline - Orbo inbox → Azure inbound-email → webhook → DB → auto-review. | No wireframe needed; see §5/§6. |
+| 4 | **Email forwarding** - how does it work with no UI, and which provider? | **Resolved:** backend pipeline. **Azure ruled out (send-only).** Demo = **simulate the webhook** ($0, no domain); optional real path = **SendGrid Inbound Parse** (needs a team-owned domain — use a free student domain). | No wireframe needed; see §5/§6 + Decisions Log. Wk 9, Michael's slice. |
 | 5 | **Seed/demo data** - dashboard shows thousands of checks, trends, campaigns | **Resolved:** we'll write a seed script of realistic stand-in threats + campaigns before the Sprint-2 demo. | Needed because we won't have real usage. |
 | 6 | **Mobile/responsive** - personas are phone-first, wireframes are desktop | **Resolved:** one responsive build across all screens; **no separate mobile MVP**. | Apply responsive layout as we build each screen, not as a retrofit. |
 | 7 | **Deployment** - frontend + backend + Postgres | **Resolved:** we will deploy, all on free hosting tiers. | Stand up a "hello world" deploy of both early in Sprint 1 before feature work (CORS, env vars, DB host). |
