@@ -14,19 +14,19 @@ submissionsRouter.post("/", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "A url is required" }); // → Invalid Input screen
   }
 
-  // Validate + normalize. Reject clearly-invalid input with a friendly 400.
-  let canonicalKey;
+  // Validate the URL up front so bad input gets a friendly 400 (→ Invalid Input screen)
+  // before we create anything. The store canonicalizes again internally for dedup.
   try {
-    canonicalKey = canonicalize(url);
+    canonicalize(url);
   } catch {
     return res.status(400).json({ error: "That doesn't look like a link or email address" });
   }
 
-  // STEP 1 (stub): create a pending indicator and let the client poll it.
-  // STEP 2 (TODO David): find-or-create the GLOBAL indicator by canonicalKey — if it exists
-  // and is done, return it instantly ("seen before"); else create it, kick off the real
-  // scan → blacklist → Claude-verdict pipeline (services/*), and increment report_count.
-  const indicatorId = createPending(url);
+  // Find-or-create the GLOBAL indicator by canonicalKey. If we've seen this URL before,
+  // reuse it (the "seen before" dedup + report_count bump); if new, the store kicks off the
+  // real scan → blacklist → verdict pipeline in the background and the client polls for it.
+  // (Still in-memory until Prisma lands — see _devStore.js.)
+  const { id: indicatorId, seenBefore } = createPending(url);
 
-  return res.status(201).json({ submissionId: indicatorId, indicatorId, status: "pending" });
+  return res.status(201).json({ submissionId: indicatorId, indicatorId, status: "pending", seenBefore });
 });
