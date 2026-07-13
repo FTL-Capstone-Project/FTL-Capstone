@@ -44,7 +44,7 @@ export default function CheckResult() {
   if (error || indicator?.status === "error") {
     return (
       <div style={{ display: "grid", placeItems: "center", gap: 12, paddingTop: 100, textAlign: "center" }}>
-        <OrboAvatar size={64} />
+        <OrboAvatar pose="caution" size={96} />
         <p style={{ color: "var(--danger)" }}>{error || "Orbo couldn't finish this check."}</p>
         <Link to="/home">← Try another link</Link>
       </div>
@@ -55,7 +55,7 @@ export default function CheckResult() {
   if (!indicator || indicator.status === "pending" || indicator.status === "scanning") {
     return (
       <div style={{ display: "grid", placeItems: "center", gap: 16, paddingTop: 100 }}>
-        <OrboAvatar size={64} />
+        <OrboAvatar pose="thinking" size={110} />
         <p style={{ color: "var(--text-dim)" }}>Orbo is checking this link…</p>
       </div>
     );

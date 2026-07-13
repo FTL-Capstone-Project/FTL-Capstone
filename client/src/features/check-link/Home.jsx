@@ -32,7 +32,7 @@ export default function Home() {
 
   return (
     <div style={{ display: "grid", placeItems: "center", gap: 20, paddingTop: 80 }}>
-      <OrboAvatar size={72} />
+      <OrboAvatar pose={submitting ? "thinking" : "wave"} size={120} />
       <h1 style={{ color: "var(--navy)", textAlign: "center", maxWidth: 560 }}>
         Hi {firstName} — paste anything suspicious and I'll check it.
       </h1>

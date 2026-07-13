@@ -1,14 +1,36 @@
-// Orbo mascot. Lightweight SVG placeholder so the app renders without asset files;
-// TODO: swap for the real Orbo PNG in assets/ once exported.
-export default function OrboAvatar({ size = 48 }) {
+// ============================================================
+// Orbo mascot. Renders the right pose image for the app state.
+// Poses live in ../assets/orbo/ (transparent PNGs). We import them so
+// Vite bundles + fingerprints each file (works in dev AND production build);
+// hardcoding a "/src/..." path would 404 once built.
+// ============================================================
+import orboWave from "../assets/orbo/orbo-wave.png";
+import orboThinking from "../assets/orbo/orbo-thinking.png";
+import orboSafe from "../assets/orbo/orbo-safe.png";
+import orboCaution from "../assets/orbo/orbo-caution.png";
+import orboDanger from "../assets/orbo/orbo-danger.png";
+import orboHappy from "../assets/orbo/orbo-happy.png";
+
+// pose name → image + the alt text a screen reader announces.
+const POSES = {
+  wave:     { src: orboWave,     alt: "Orbo waving hello" },
+  thinking: { src: orboThinking, alt: "Orbo thinking while it checks your link" },
+  safe:     { src: orboSafe,     alt: "Orbo giving a thumbs-up — this link looks safe" },
+  caution:  { src: orboCaution,  alt: "Orbo raising a cautious hand — review this link" },
+  danger:   { src: orboDanger,   alt: "Orbo holding up a stop sign — this link looks dangerous" },
+  happy:    { src: orboHappy,    alt: "Orbo smiling" },
+};
+
+// <OrboAvatar pose="thinking" size={64} />  — pose defaults to "wave".
+export default function OrboAvatar({ pose = "wave", size = 48 }) {
+  const { src, alt } = POSES[pose] ?? POSES.wave;
   return (
-    <svg width={size} height={size} viewBox="0 0 80 80" aria-label="Orbo" role="img">
-      <ellipse cx="40" cy="44" rx="34" ry="12" fill="none" stroke="var(--ring)" strokeWidth="3"
-        transform="rotate(-18 40 44)" />
-      <circle cx="40" cy="40" r="24" fill="var(--primary)" stroke="var(--navy)" strokeWidth="3" />
-      <rect x="24" y="30" width="32" height="22" rx="11" fill="var(--navy)" />
-      <circle cx="34" cy="41" r="3.4" fill="#8FE9FF" />
-      <circle cx="46" cy="41" r="3.4" fill="#8FE9FF" />
-    </svg>
+    <img
+      src={src}
+      alt={alt}
+      width={size}
+      height={size}
+      style={{ objectFit: "contain", display: "block" }}
+    />
   );
 }

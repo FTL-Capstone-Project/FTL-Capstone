@@ -2,6 +2,7 @@ import { VERDICT_STYLES } from "../../config/constants.js";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import ScoreGauge from "./ScoreGauge.jsx";
 import EvidenceList from "./EvidenceList.jsx";
+import OrboAvatar from "../../components/OrboAvatar.jsx";
 
 // Maps a 0–100 score to a verdict bucket. TODO(David): confirm thresholds with the team.
 function bucket(score) {
@@ -10,6 +11,9 @@ function bucket(score) {
   if (score >= 35) return "review";
   return "safe";
 }
+
+// Verdict bucket → the Orbo pose that matches the mood.
+const VERDICT_POSE = { safe: "safe", review: "caution", dangerous: "danger" };
 
 // The result card: badge + score + Orbo's plain-English verdict + screenshot + evidence.
 export default function VerdictCard({ indicator }) {
@@ -20,8 +24,11 @@ export default function VerdictCard({ indicator }) {
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)",
       borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 20, maxWidth: 560, width: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <StatusBadge kind={kind} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <OrboAvatar pose={VERDICT_POSE[kind]} size={72} />
+          <StatusBadge kind={kind} />
+        </div>
         <ScoreGauge score={ai_score} color={style.color} />
       </div>
 
