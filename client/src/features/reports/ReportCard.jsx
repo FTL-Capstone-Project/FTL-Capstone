@@ -11,7 +11,11 @@ import StatusChip from "./StatusChip.jsx";
 // The score-direction and title/tags fields depend on David's data (flagged
 // in mockReports.js). If David hasn't added a field yet, we fall back so the
 // card still renders instead of breaking.
-export default function ReportCard({ report }) {
+//
+// `showReviewStatus` — off by default = the INDIVIDUAL view (no analyst/closure
+// chip, because a solo user has no security team). The org-member variant (O3)
+// passes showReviewStatus={true} to reveal the closure chip.
+export default function ReportCard({ report, showReviewStatus = false }) {
   return (
     <div style={{ display: "flex", gap: 14, background: "var(--surface)",
       border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 16 }}>
@@ -60,7 +64,7 @@ export default function ReportCard({ report }) {
         <div style={{ fontSize: "1.5em", fontWeight: 800, color: `var(--${scoreColor(report.kind)})` }}>
           {report.ai_score ?? "—"}<span style={{ fontSize: "0.5em", color: "var(--text-dim)" }}>/100</span>
         </div>
-        {report.review?.review_status && (
+        {showReviewStatus && report.review?.review_status && (
           <div style={{ marginTop: 6 }}>
             <StatusChip status={report.review.review_status} />
           </div>
