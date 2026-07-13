@@ -10,9 +10,11 @@ export default function VerdictMessage({ indicatorId, onAskMore }) {
   const status = indicator?.status;
 
   if (error || status === "error") {
+    // Prefer Orbo's specific server-side explanation (e.g. "internal/private link I can't reach").
+    const msg = indicator?.ai_verdict || error || "I couldn't finish this check — please review the link manually.";
     return (
       <ChatMessage role="orbo" pose="caution">
-        <OrboBubble>{error || "I couldn't finish this check — please review the link manually."}</OrboBubble>
+        <OrboBubble>{msg}</OrboBubble>
       </ChatMessage>
     );
   }

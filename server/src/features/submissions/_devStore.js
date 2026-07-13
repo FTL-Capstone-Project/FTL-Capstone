@@ -72,9 +72,21 @@ async function runPipeline(id, rawUrl) {
       evidence: verdict.evidence_summary,
     });
   } catch (e) {
-    // Never fake a "safe" — mark error so the UI shows "review manually".
+    // Never fake a "safe" — mark error. Give a SPECIFIC reason when we know it.
     console.warn(`⚠ pipeline failed for indicator ${id}:`, e.message);
-    Object.assign(row, { status: "error", ai_verdict: "Orbo couldn't finish this check — please review manually." });
+    Object.assign(row, { status: "error", error_reason: e.reason ?? "failed", ai_verdict: errorMessage(e.reason) });
+  }
+}
+
+// Friendly, specific explanation for why a scan couldn't complete.
+function errorMessage(reason) {
+  switch (reason) {
+    case "unreachable":
+      return "I couldn't reach that link to check it. It looks like an internal, private, or non-existent address — I can only scan links that are reachable on the public internet. If it's an internal company link, check with your IT/security team.";
+    case "blocked":
+      return "I wasn't able to scan that link — the sandbox declined to open it (it may be private, restricted, or on a block list). Please treat it with caution and review it manually.";
+    default:
+      return "I couldn't finish this check right now. Please try again in a moment, or review the link manually.";
   }
 }
 
@@ -84,7 +96,9 @@ export function readIndicator(id) {
   if (!row) return null;
 
   const base = { status: row.status, screenshot_url: row.screenshot_url, review: row.review };
-  if (row.status !== "done") return base; // pending / scanning / error → no verdict yet
+  // On error, pass Orbo's specific explanation through so the chat can show it.
+  if (row.status === "error") return { ...base, error_reason: row.error_reason, ai_verdict: row.ai_verdict };
+  if (row.status !== "done") return base; // pending / scanning → no verdict yet
 
   return {
     ...base,
