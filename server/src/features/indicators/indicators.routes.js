@@ -3,24 +3,16 @@
 // with the caller's org_review (if any). §6.
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
+import { readIndicator } from "../submissions/_devStore.js"; // ⚠️ dev-only; removed in Step 2
 // import { prisma } from "../../db.js";
 
 export const indicatorsRouter = Router();
 
 indicatorsRouter.get("/:id", requireAuth, async (req, res) => {
-  // TODO(David): load indicator by id; merge caller-org's org_review; 404 if missing.
-  // Stub "done" verdict so the client's poll + VerdictCard render end-to-end.
-  return res.json({
-    status: "done",
-    ai_score: 88,
-    ai_verdict: "This link looks dangerous — the domain is brand new and it asks for your password. I'd recommend not clicking it.",
-    ai_confidence: "medium",
-    screenshot_url: null,
-    report_count: 3,
-    evidence: [
-      { text: "Domain registered 3 days ago", severity: "dangerous" },
-      { text: "Page asks for your password", severity: "dangerous" },
-    ],
-    review: null, // { human_score, human_verdict, review_status } when the caller's org reviewed it
-  });
+  // STEP 1 (stub): read the in-memory indicator; advances pending → scanning → done over ~2s.
+  // STEP 2 (TODO David): load the real global indicator by id, merge the caller-org's org_review,
+  // 404 if missing / 403 if out of scope.
+  const indicator = readIndicator(Number(req.params.id));
+  if (!indicator) return res.status(404).json({ error: "Not found" });
+  return res.json(indicator);
 });

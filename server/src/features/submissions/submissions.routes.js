@@ -4,42 +4,29 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { canonicalize } from "../../services/canonicalize.js";
-import { scanUrl } from "../../services/urlscan.js";
-import { checkBlacklist } from "../../services/safeBrowsing.js";
-import { generateVerdict } from "../../services/verdict.js";
-// import { prisma } from "../../db.js"; // TODO(David): enable once schema is migrated
+import { createPending } from "./_devStore.js"; // ⚠️ dev-only; removed in Step 2 (Prisma)
 
 export const submissionsRouter = Router();
 
 submissionsRouter.post("/", requireAuth, async (req, res) => {
-  const { url, contextText } = req.body ?? {};
-  if (!url || typeof url !== "string") {
+  const { url } = req.body ?? {};
+  if (!url || typeof url !== "string" || !url.trim()) {
     return res.status(400).json({ error: "A url is required" }); // → Invalid Input screen
   }
 
+  // Validate + normalize. Reject clearly-invalid input with a friendly 400.
   let canonicalKey;
   try {
     canonicalKey = canonicalize(url);
   } catch {
-    return res.status(400).json({ error: "That doesn't look like a valid link" });
+    return res.status(400).json({ error: "That doesn't look like a link or email address" });
   }
 
-  // TODO(David): find-or-create indicator by canonicalKey; if found+done → return instantly
-  // (this is the "seen before" dedup). If new → run the pipeline below and persist.
-  const scan = await scanUrl(url);
-  const bl = await checkBlacklist(url);
-  const verdict = await generateVerdict({
-    evidence: scan.evidence,
-    blacklist_hit: bl.blacklist_hit,
-    domain_age_days: scan.domain_age_days,
-    contextText,
-  });
+  // STEP 1 (stub): create a pending indicator and let the client poll it.
+  // STEP 2 (TODO David): find-or-create the GLOBAL indicator by canonicalKey — if it exists
+  // and is done, return it instantly ("seen before"); else create it, kick off the real
+  // scan → blacklist → Claude-verdict pipeline (services/*), and increment report_count.
+  const indicatorId = createPending(url);
 
-  // Stub response shape (matches §6). Replace with real DB ids once Prisma is wired.
-  return res.status(201).json({
-    submissionId: 1,
-    indicatorId: 1,
-    status: "done",
-    _debug: { canonicalKey, ...scan, ...bl, ...verdict },
-  });
+  return res.status(201).json({ submissionId: indicatorId, indicatorId, status: "pending" });
 });
