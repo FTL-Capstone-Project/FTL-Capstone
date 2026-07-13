@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# env / secrets (never commit real keys — see .env.example)
+.env
+.env.local
+**/.env
+**/.env.local
+
+# build output
+dist/
+build/
+client/dist/
+
+# prisma
+server/src/prisma/*.db
+
+# misc
+.DS_Store
+*.log
+npm-debug.log*

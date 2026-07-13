@@ -1,0 +1,19 @@
+{
+  "name": "orbis",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Orbis — AI-assisted phishing-triage web app (monorepo: client + server)",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,magenta \"npm -w server run dev\" \"npm -w client run dev\"",
+    "dev:client": "npm -w client run dev",
+    "dev:server": "npm -w server run dev",
+    "install:all": "npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

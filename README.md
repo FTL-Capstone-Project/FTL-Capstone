@@ -42,3 +42,39 @@ Deployment Website: **Add Link to Deployed Project**
 - [Claude API (Anthropic)](https://www.anthropic.com/api) — AI verdicts & natural-language querying
 - _Additional libraries will be added here as the project develops._
 - _Stretch:_ [WorkOS AuthKit](https://workos.com/) — enterprise SSO / SAML for large orgs
+
+## Getting started (local dev)
+
+```bash
+npm run install:all            # install client + server (workspaces)
+cp .env.example .env           # fill in keys (client also needs client/.env.local)
+npm -w server run prisma:migrate   # set up the database (needs Postgres running)
+npm run dev                    # runs client (:5173) + server (:3001) together
+```
+
+> All external services (urlscan, Safe Browsing, Claude) are **stubbed** until their keys are set,
+> so the app runs end-to-end with no credentials — great for building UI/flows first.
+
+## Repo structure — where does X live?
+
+This is a **monorepo**: `client/` (React) + `server/` (Express), grouped **by feature** so each
+person owns a couple of folders. Every major folder has its own `README.md`.
+
+| I want to change… | Go to |
+|---|---|
+| A **color** / the theme | `client/src/theme/tokens.css` (guide: `theme/theme.md`) |
+| How the client **calls the backend** | `client/src/lib/api.js` |
+| Anything about **"check a link"** | `client/src/features/check-link/` |
+| **Auth / login** | `client/src/features/auth/` |
+| **My reports / notifications** | `client/src/features/reports/`, `client/src/components/NotificationBell.jsx` |
+| Shared UI (shell, badge, mascot) | `client/src/components/` |
+| An **API route** | `server/src/features/<name>/` |
+| The **dedup rule** | `server/src/services/canonicalize.js` |
+| An **external API** (urlscan / Safe Browsing / Claude) | `server/src/services/` |
+| The **database shape** | `server/src/prisma/schema.prisma` |
+| An **env var / secret** | `.env.example` (root) + `client/.env.example` |
+
+### Ownership (personal side, weeks 7–9)
+- 🟦 **David** — `features/check-link/` + `services/canonicalize|urlscan|safeBrowsing|verdict.js` (submit → scan → AI verdict → dedup)
+- 🟩 **Michael** — `features/auth/`, `middleware/`, `prisma/`, `webhooks/clerk` (auth + data foundation)
+- 🟪 **Ozias** — `features/reports/`, `features/notifications/`, escalation, `webhooks/inbound-email` (history + closure loop)

@@ -1,0 +1,35 @@
+/* ============================================================
+   ORBIS THEME TOKENS — the single source of truth for colors.
+   Change a color HERE and it updates everywhere in the app.
+   Never hard-code a hex value in a component; use var(--name).
+   Plain-English guide to each token: see theme.md (next to this file).
+   ============================================================ */
+
+:root {
+  /* ── Brand (Trust Blue) ── */
+  --primary: #0F62FE;        /* buttons, links, active nav, primary actions */
+  --primary-dark: #0A4FD6;   /* hover state for primary */
+  --navy: #0A2540;           /* headings, top bar, sidebar text */
+
+  /* ── Surfaces / neutrals ── */
+  --canvas: #F4F6F8;         /* app background */
+  --surface: #FFFFFF;        /* cards, panels, inputs */
+  --border: #E2E8F0;         /* dividers, card edges */
+  --text: #1A2230;           /* body text */
+  --text-dim: #556070;       /* labels, timestamps, secondary text */
+
+  /* ── Status (verdicts) — always paired with an icon + word, never color alone ── */
+  --safe: #198038;           /* ✓ Safe verdict */
+  --safe-bg: #E6F4EA;
+  --review: #B9860B;         /* ⚠ Review / Suspicious (darkened amber for WCAG contrast) */
+  --review-bg: #FCF3D6;
+  --danger: #DA1E28;         /* ⛔ Danger / confirmed threat */
+  --danger-bg: #FBE7E8;
+
+  /* ── Orbo accent ── */
+  --ring: #21C7E6;           /* Orbo's orbital glow / cyan accents */
+
+  /* ── Shape ── */
+  --radius: 12px;
+  --shadow: 0 6px 22px rgba(10, 37, 64, 0.08);
+}

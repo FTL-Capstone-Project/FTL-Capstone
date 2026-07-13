@@ -1,0 +1,120 @@
+// Orbis data model — mirrors project_plan.md §5.
+// Global indicators (shared threat intel) + per-org reviews (private verdicts).
+// Owner: Michael (schema/migrations); shape agreed with David (§5).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id          Int      @id @default(autoincrement())
+  clerkOrgId  String   @unique
+  name        String
+  createdAt   DateTime @default(now())
+
+  users       User[]
+  orgReviews  OrgReview[]
+  campaigns   Campaign[]
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  clerkUserId   String   @unique
+  orgId         Int?     // null = individual
+  email         String   @unique
+  name          String?
+  role          String   @default("individual") // individual | member | analyst
+  createdAt     DateTime @default(now())
+
+  organization  Organization? @relation(fields: [orgId], references: [id])
+  submissions   Submission[]
+  notifications Notification[]
+}
+
+model Submission {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  orgId        Int?     // null = reported as an individual
+  indicatorId  Int
+  rawUrl       String
+  contextText  String?
+  source       String   @default("web") // web | email
+  escalated    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  user         User      @relation(fields: [userId], references: [id])
+  indicator    Indicator @relation(fields: [indicatorId], references: [id])
+}
+
+// GLOBAL — one row per unique URL, scanned once, shared by everyone.
+model Indicator {
+  id             Int      @id @default(autoincrement())
+  canonicalKey   String   @unique
+  domain         String
+  status         String   @default("pending") // pending | scanning | done | error
+  aiScore        Int?
+  aiVerdict      String?
+  aiConfidence   String?
+  screenshotUrl  String?
+  urlscanUuid    String?
+  domainAgeDays  Int?
+  blacklistHit   Boolean  @default(false)
+  blacklistSource String?
+  reportCount    Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  submissions    Submission[]
+  orgReviews     OrgReview[]
+  notifications  Notification[]
+}
+
+// PER-ORG overlay — each org's private authoritative verdict on a global indicator.
+model OrgReview {
+  id            Int      @id @default(autoincrement())
+  orgId         Int
+  indicatorId   Int
+  humanScore    Int?
+  humanVerdict  String?
+  reviewStatus  String   @default("pending review") // pending review | investigating | confirmed malicious | confirmed safe
+  reviewedBy    Int?
+  campaignId    Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  organization  Organization @relation(fields: [orgId], references: [id])
+  indicator     Indicator    @relation(fields: [indicatorId], references: [id])
+  campaign      Campaign?    @relation(fields: [campaignId], references: [id])
+
+  @@unique([orgId, indicatorId])
+}
+
+model Campaign {
+  id           Int      @id @default(autoincrement())
+  orgId        Int
+  name         String
+  sharedSignal String?
+  firstSeen    DateTime @default(now())
+  lastSeen     DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgReviews   OrgReview[]
+}
+
+model Notification {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  indicatorId  Int?
+  type         String   // e.g. verdict_confirmed
+  message      String
+  isRead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  user         User       @relation(fields: [userId], references: [id])
+  indicator    Indicator? @relation(fields: [indicatorId], references: [id])
+}
