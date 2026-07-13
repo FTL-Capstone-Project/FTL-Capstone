@@ -68,6 +68,35 @@ export default function Home() {
     add({ role: "orbo", kind: "text", pose: "wave", text: chip.reply });
   }
 
+  // Paperclip upload: show the image, ask Claude to read it, then scan any URL it finds.
+  async function handleUploadImage(dataUrl, fileName) {
+    add({ role: "user", kind: "image", src: dataUrl, text: fileName });
+    setBusy(true);
+    try {
+      const { urls, emails, summary } = await api.post("/api/vision/extract", { imageDataUrl: dataUrl }, { getToken });
+
+      if (urls.length > 0) {
+        // Found a link → run it through the real scan pipeline (same as a pasted link).
+        add({ role: "orbo", kind: "text", pose: "thinking",
+          text: `I read your image${summary ? ` — ${summary}` : ""}. I found this link: ${urls[0]} — checking it now…` });
+        const { indicatorId } = await api.post("/api/submissions", { url: urls[0] }, { getToken });
+        add({ role: "orbo", kind: "verdict", indicatorId });
+      } else if (emails.length > 0) {
+        // Only an email address, no link to sandbox.
+        add({ role: "orbo", kind: "text", pose: "caution",
+          text: `I read your image and found the sender ${emails[0]}, but no link to open in the sandbox. Paste a link from the message if there is one, and I'll check it.` });
+      } else {
+        add({ role: "orbo", kind: "text", pose: "caution",
+          text: `I looked at your image${summary ? ` — ${summary}` : ""}, but couldn't find a link or email address to check. If there's a link, try pasting it directly.` });
+      }
+    } catch (err) {
+      add({ role: "orbo", kind: "text", pose: "caution",
+        text: "I couldn't read that image just now. Please try again, or paste the link directly." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const empty = messages.length === 0;
 
   return (
@@ -80,6 +109,11 @@ export default function Home() {
             messages.map((m) =>
               m.kind === "verdict" ? (
                 <VerdictMessage key={m.id} indicatorId={m.indicatorId} onAskMore={() => {}} />
+              ) : m.kind === "image" ? (
+                <ChatMessage key={m.id} role="user">
+                  <img src={m.src} alt={m.text || "uploaded image"}
+                    style={{ maxWidth: 220, maxHeight: 220, borderRadius: 12, display: "block" }} />
+                </ChatMessage>
               ) : (
                 <ChatMessage key={m.id} role={m.role} pose={m.pose}>
                   {m.role === "orbo" ? <OrboBubble>{m.text}</OrboBubble> : m.text}
@@ -89,7 +123,7 @@ export default function Home() {
           )}
         </div>
       </div>
-      <Composer onSend={handleSend} disabled={busy} />
+      <Composer onSend={handleSend} onUploadImage={handleUploadImage} disabled={busy} />
     </div>
   );
 }
