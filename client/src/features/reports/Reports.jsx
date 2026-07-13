@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth, useUser } from "@clerk/clerk-react";
 import { api } from "../../lib/api.js";
 import ReportCard from "./ReportCard.jsx";
 import { mockReports } from "./mockReports.js"; // TEMP (O1) — remove when the real API returns data
@@ -14,12 +14,27 @@ const FILTERS = [
   { value: "dangerous", label: "Dangerous" },
 ];
 
-// My checks — Individual variant (O2). Fetches my reports, lets me filter by verdict.
-// Individuals see NO analyst/closure status (that's the org-member variant, O3).
+// While Clerk isn't fully wired yet (Michael's slice), fall back to this role so
+// we can build + see BOTH variants locally. Flip to "member" to preview the
+// org-member view; set back to "individual" for the solo view. TODO(Ozias):
+// remove the fallback once Clerk provides the real role.
+const MOCK_ROLE = "member";
+
+// My checks — adapts to the signed-in user's role (O2 + O3).
+//  • individual: my checks + verdict filter, NO analyst/closure status.
+//  • member:     same, PLUS the closure StatusChip on each card (story #7 payoff).
+// One page, two variants (they differ only by that chip) — not two routes.
 export default function Reports() {
   const { getToken } = useAuth();
+  const { user } = useUser(); // Clerk's signed-in user (null until Clerk is wired)
   const [reports, setReports] = useState([]);
   const [filter, setFilter] = useState("all"); // which verdict is selected; "all" = show everything
+
+  // Role decides whether closure status is shown. Read it from Clerk when
+  // available, else use the mock. FRONTEND role = what to SHOW only; the real
+  // security is the backend filtering data by the verified session (story #12).
+  const role = user?.publicMetadata?.role ?? MOCK_ROLE;
+  const isMember = role === "member";
 
   useEffect(() => {
     api.get("/api/history?mine=1", { getToken })
@@ -71,7 +86,9 @@ export default function Reports() {
         <p style={{ color: "var(--text-dim)" }}>No {filter} reports.</p>
       ) : (
         <div style={{ display: "grid", gap: 8 }}>
-          {visibleReports.map((r) => <ReportCard key={r.indicator_id} report={r} />)}
+          {visibleReports.map((r) => (
+            <ReportCard key={r.indicator_id} report={r} showReviewStatus={isMember} />
+          ))}
         </div>
       )}
     </div>
