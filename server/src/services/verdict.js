@@ -30,6 +30,11 @@ export async function generateVerdict({ evidence = [], blacklist_hit, blacklist_
       ai_score: score,
       ai_verdict: ai.verdict,
       ai_confidence: hardSignal ? "high" : (ai.confidence ?? "medium"),
+      // Fields Ozias's Reports card renders (title/description/tags). Fall back if the
+      // model omitted them so the card is never blank.
+      title: cleanTitle(ai.title) || fallbackTitle(raw, blacklist_source, score),
+      description: cleanText(ai.description) || firstSentence(ai.verdict),
+      tags: cleanTags(ai.tags, raw),
       evidence_summary: evidence,
     };
   } catch (e) {
@@ -43,7 +48,13 @@ async function claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain
   const system =
     "You are Orbo, a friendly phishing-triage assistant that explains link safety to non-experts. " +
     "Given technical evidence about a URL, decide how dangerous it is. " +
-    'Reply with ONLY minified JSON: {"score":<0-100 integer>,"verdict":"<one or two plain-English sentences a non-technical person understands, explaining WHY>","confidence":"low|medium|high"}. ' +
+    "Reply with ONLY minified JSON with these fields: " +
+    '{"score":<0-100 integer>,' +
+    '"title":"<a short 2-5 word headline for this check, e.g. \\"Fake PayPal login\\" or \\"Legit LinkedIn page\\">",' +
+    '"description":"<ONE short plain-English sentence summarizing the result>",' +
+    '"verdict":"<one or two plain-English sentences explaining WHY, for a non-technical person>",' +
+    '"tags":["<1-3 short category chips, e.g. \\"Credential phishing\\", \\"Impersonation\\", \\"Safe\\">"],' +
+    '"confidence":"low|medium|high"}. ' +
     "No markdown, no extra text. Higher score = more dangerous. Reference concrete evidence in the verdict. " +
     "If it is on a known-bad blacklist, it is confirmed malicious — score it near 100 and say so plainly.";
 
@@ -62,7 +73,7 @@ async function claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain
 
   const user = `Here is the evidence gathered by the sandbox and blacklist check:\n${JSON.stringify(facts, null, 2)}\n\nGive your verdict as JSON.`;
 
-  const out = await chatJSON({ system, user, maxTokens: 400, temperature: 0 });
+  const out = await chatJSON({ system, user, maxTokens: 500, temperature: 0 });
   // validate the shape; throw (→ fallback) if it's not usable
   if (typeof out?.score !== "number" || typeof out?.verdict !== "string" || !out.verdict.trim()) {
     throw new Error("verdict JSON missing score/verdict");
@@ -103,8 +114,47 @@ function ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_ag
     ai_score: score,
     ai_verdict,
     ai_confidence: hardSignal ? "high" : evidence.length >= 3 ? "medium" : "low",
+    title: fallbackTitle(raw, blacklist_source, score),
+    description: firstSentence(ai_verdict),
+    tags: cleanTags(null, raw, bucket, blacklist_source),
     evidence_summary: evidence,
   };
+}
+
+// ── helpers for the Reports-card fields (title / description / tags) ──
+function cleanTitle(t) {
+  if (typeof t !== "string") return null;
+  const s = t.trim().replace(/^["']|["']$/g, "");
+  return s && s.length <= 60 ? s : (s ? s.slice(0, 57) + "…" : null);
+}
+function cleanText(t) {
+  return typeof t === "string" && t.trim() ? t.trim() : null;
+}
+function firstSentence(text) {
+  if (!text) return "";
+  const m = text.match(/^.*?[.!?](\s|$)/);
+  return (m ? m[0] : text).trim();
+}
+// Build a sensible title when the model didn't give one.
+function fallbackTitle(raw = {}, blacklist_source, score) {
+  const brand = (raw.brands ?? [])[0];
+  if (blacklist_source) return brand ? `Known ${brand} scam` : "Known bad link";
+  if (score >= 70) return brand ? `Fake ${brand} page` : "Dangerous link";
+  if (score >= 35) return brand ? `Suspicious ${brand} lookalike` : "Suspicious link";
+  return "Looks safe";
+}
+// Normalize tags: use the model's if valid, else derive from evidence/brand/bucket.
+function cleanTags(modelTags, raw = {}, bucket, blacklist_source) {
+  if (Array.isArray(modelTags)) {
+    const t = modelTags.map((x) => String(x).trim()).filter(Boolean).slice(0, 3);
+    if (t.length) return t;
+  }
+  const tags = [];
+  if (blacklist_source) tags.push("Known threat");
+  if ((raw.categories ?? []).length) tags.push(...raw.categories.slice(0, 2));
+  if ((raw.brands ?? []).length) tags.push("Impersonation");
+  if (!tags.length) tags.push(bucket === "safe" ? "Safe" : bucket === "dangerous" ? "Dangerous" : "Review");
+  return [...new Set(tags)].slice(0, 3);
 }
 
 function prettySource(src) {

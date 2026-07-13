@@ -69,6 +69,10 @@ async function runPipeline(id, rawUrl) {
       ai_score: verdict.ai_score,
       ai_verdict: verdict.ai_verdict,
       ai_confidence: verdict.ai_confidence,
+      // Reports-card fields (consumed by Ozias's ReportCard via GET /indicators & /history)
+      title: verdict.title,
+      description: verdict.description,
+      tags: verdict.tags ?? [],
       evidence: verdict.evidence_summary,
     });
   } catch (e) {
@@ -105,6 +109,9 @@ export function readIndicator(id) {
     ai_score: row.ai_score,
     ai_verdict: row.ai_verdict,
     ai_confidence: row.ai_confidence,
+    title: row.title,
+    description: row.description,
+    tags: row.tags ?? [],
     report_count: row.report_count,
     evidence: row.evidence,
   };
