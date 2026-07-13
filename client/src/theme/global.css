@@ -23,3 +23,9 @@ a:hover { text-decoration: underline; }
   .report-card { flex-direction: column; }
   .report-card__score { text-align: left; }
 }
+
+/* Orbo's "thinking" typing dots (used by ThinkingBubble). */
+@keyframes orboDot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-3px); }
+}

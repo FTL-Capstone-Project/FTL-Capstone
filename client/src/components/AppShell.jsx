@@ -1,14 +1,26 @@
 import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { UserButton, OrganizationSwitcher } from "@clerk/clerk-react";
+import { Plus, Search, Home as HomeIcon, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit } from "lucide-react";
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
+import OrbisLogo from "./OrbisLogo.jsx";
 import { NAV_BY_ROLE } from "../config/constants.js";
 import { useOrbisRole } from "../lib/useOrbisRole.js";
 
-// Sidebar + top bar around every signed-in page. <Outlet/> renders the active route.
-// Sidebar is collapsible (toggled by the Orbis logo, per the wireframes) and its
-// nav items are role-aware (individuals/members lead with Home; analysts with Dashboard).
+// NOTE: SHARED COMPONENT (app frame). Merged: David's wireframe styling + real Orbis logo +
+// lucide icons, layered with Michael's role-aware nav (useOrbisRole + NAV_BY_ROLE), collapsible
+// sidebar, and Clerk OrganizationSwitcher. Nav is role-aware: individuals/members lead with Home
+// (chat); analysts lead with Dashboard / Ask Orbo.
+
+// Map a nav path → its lucide icon (we render these, not the emoji in NAV_BY_ROLE data).
+const NAV_ICON = {
+  "/home": HomeIcon,
+  "/dashboard": LayoutGrid,
+  "/reports": FileText,
+  "/ask-orbo": Sparkles,
+};
+
 export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const { role, orgName } = useOrbisRole();
@@ -18,126 +30,112 @@ export default function AppShell() {
 
   return (
     <NotificationsProvider>
-      <div style={{ display: "flex", minHeight: "100vh", background: "var(--canvas)" }}>
+      <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         {/* ── Sidebar ── */}
-        <aside
-          style={{
-            width: collapsed ? 64 : 260,
-            background: "var(--surface)",
-            borderRight: "1px solid var(--border)",
-            padding: collapsed ? "16px 10px" : 20,
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            transition: "width .15s ease",
-          }}
-        >
-          {/* Logo toggles the sidebar */}
-          <button
-            onClick={() => setCollapsed((c) => !c)}
+        <aside style={{ width: collapsed ? 68 : 250, background: "var(--surface)",
+          borderRight: "1px solid var(--border)", padding: collapsed ? "18px 12px" : 18,
+          display: "flex", flexDirection: "column", gap: 14, flexShrink: 0, transition: "width .15s ease" }}>
+
+          {/* Logo — click to collapse/expand (compact planet mark when collapsed) */}
+          <button onClick={() => setCollapsed((c) => !c)} aria-label="Toggle sidebar"
             title={collapsed ? "Expand" : "Collapse"}
-            aria-label="Toggle sidebar"
-            style={{
-              display: "flex", alignItems: "center", gap: 8, background: "none", border: "none",
-              cursor: "pointer", fontWeight: 800, color: "var(--navy)", fontSize: "1.3em", padding: 0,
-            }}
-          >
-            🪐 {!collapsed && <span>Orbis</span>}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px 6px",
+              display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start" }}>
+            {collapsed ? <Orbit size={26} color="var(--navy)" /> : <OrbisLogo height={32} />}
           </button>
 
           {inOrg && !collapsed && (
-            <div style={{ margin: "6px 0" }}>
+            <div style={{ margin: "2px 0" }}>
               <OrganizationSwitcher hidePersonal={false} />
             </div>
           )}
 
-          {/* + New check → starts a fresh chat (Home). */}
-          <button
-            onClick={() => navigate("/home?new=1")}
-            style={{
-              background: "var(--primary)", color: "#fff", border: "none", borderRadius: 10,
-              padding: collapsed ? "10px 0" : "10px 14px", fontWeight: 700, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            }}
-          >
-            ＋ {!collapsed && "New check"}
+          <button onClick={() => navigate("/home?new=1")} style={{ display: "flex", alignItems: "center",
+            justifyContent: "center", gap: 8, background: "var(--primary)", color: "#fff", border: "none",
+            borderRadius: 12, padding: collapsed ? "11px 0" : "11px 14px", fontWeight: 700, cursor: "pointer", fontSize: "0.95em" }}>
+            <Plus size={18} /> {!collapsed && "New check"}
           </button>
 
           {!collapsed && (
-            <input
-              placeholder="Search your past checks…"
-              style={{
-                border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px",
-                fontSize: ".9em", background: "var(--surface)", color: "var(--text)",
-              }}
-            />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--border)",
+              borderRadius: 10, padding: "8px 12px", color: "var(--text-dim)" }}>
+              <Search size={16} />
+              <input placeholder="Search your past checks…" disabled
+                style={{ border: "none", outline: "none", background: "transparent", fontSize: "0.85em", width: "100%" }} />
+            </div>
           )}
 
           {/* Role-aware nav */}
-          <nav style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+          <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {nav.map((item) => (
               <NavItem key={item.to} item={item} collapsed={collapsed} />
             ))}
           </nav>
 
+          {/* Recents — chat history; static placeholders until wired (David's slice / DB) */}
           {!collapsed && (
-            <div style={{ marginTop: 14, fontSize: ".72em", fontWeight: 700, letterSpacing: ".04em", color: "var(--text-dim)" }}>
-              RECENTS
+            <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: "0.68em", fontWeight: 700, color: "var(--text-dim)",
+                textTransform: "uppercase", letterSpacing: "0.06em", padding: "0 8px 6px" }}>Recents</div>
+              {["Is this PayPal email real?", "Check bit.ly link", "Suspicious invoice PDF"].map((r) => (
+                <div key={r} style={{ padding: "6px 8px", color: "var(--text-dim)", fontSize: "0.85em",
+                  cursor: "default", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r}</div>
+              ))}
             </div>
           )}
-          {/* RECENTS list is chat history — populated once conversations land (David's slice). */}
 
-          <div style={{ marginTop: "auto" }}>
-            <NavLink to="/settings" style={navLinkStyle(collapsed)}>
-              ⚙ {!collapsed && "Settings"}
-            </NavLink>
-          </div>
+          <NavLink to="/settings" style={navLinkStyle(collapsed)}>
+            <Settings size={16} /> {!collapsed && "Settings"}
+          </NavLink>
         </aside>
 
         {/* ── Main column ── */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <header
-            style={{
-              height: 60, borderBottom: "1px solid var(--border)", background: "var(--surface)",
-              display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, padding: "0 22px",
-            }}
-          >
-            {orgName && (
-              <span style={{ marginRight: "auto", color: "var(--text-dim)", fontSize: ".9em" }}>{orgName}</span>
-            )}
-            <button title="Inbox" aria-label="Inbox" style={iconBtn}>📥</button>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <header style={{ height: 56, borderBottom: "1px solid var(--border)", background: "var(--surface)",
+            display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, padding: "0 22px", flexShrink: 0 }}>
+            {orgName && <span style={{ marginRight: "auto", color: "var(--text-dim)", fontSize: "0.9em" }}>{orgName}</span>}
+            <button title="Inbox" aria-label="Inbox"
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
+              <Inbox size={20} />
+            </button>
             <NotificationBell />
             <UserButton afterSignOutUrl="/" />
           </header>
-          <main style={{ flex: 1 }}>
-            <Outlet />
-          </main>
+          <main style={{ flex: 1, minHeight: 0, background: "var(--canvas)" }}><Outlet /></main>
         </div>
       </div>
     </NotificationsProvider>
   );
 }
 
-const iconBtn = { background: "none", border: "none", cursor: "pointer", fontSize: "1.1em" };
-
 function navLinkStyle(collapsed) {
   return ({ isActive }) => ({
-    display: "flex", alignItems: "center", gap: 10, padding: collapsed ? "10px 0" : "9px 12px",
-    justifyContent: collapsed ? "center" : "flex-start", borderRadius: 10, textDecoration: "none",
-    fontWeight: 600, color: isActive ? "var(--primary)" : "var(--navy)",
-    background: isActive ? "var(--canvas)" : "transparent",
+    marginTop: "auto", display: "flex", alignItems: "center", gap: 8,
+    padding: collapsed ? "8px 0" : "8px 12px", justifyContent: collapsed ? "center" : "flex-start",
+    borderRadius: 10, textDecoration: "none", fontSize: "0.9em",
+    color: isActive ? "var(--primary)" : "var(--text-dim)",
   });
 }
 
 function NavItem({ item, collapsed }) {
+  const Icon = NAV_ICON[item.to] ?? HomeIcon;
   return (
-    <NavLink to={item.to} title={item.label} style={navLinkStyle(collapsed)}>
-      <span aria-hidden>{item.icon}</span>
-      {!collapsed && (
-        <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
-          <span>{item.label}</span>
-          <span style={{ fontSize: ".72em", fontWeight: 500, color: "var(--text-dim)" }}>{item.sub}</span>
-        </span>
+    <NavLink to={item.to} title={item.label} style={({ isActive }) => ({
+      display: "flex", alignItems: "center", gap: 10, padding: collapsed ? "8px 0" : "8px 12px",
+      justifyContent: collapsed ? "center" : "flex-start", borderRadius: 10, textDecoration: "none",
+      background: isActive ? "var(--canvas)" : "transparent",
+      border: isActive ? "1px solid var(--border)" : "1px solid transparent",
+    })}>
+      {({ isActive }) => (
+        <>
+          <Icon size={18} style={{ flexShrink: 0, color: isActive ? "var(--primary)" : "var(--navy)" }} />
+          {!collapsed && (
+            <div>
+              <div style={{ fontWeight: 700, fontSize: "0.92em", color: isActive ? "var(--primary)" : "var(--navy)" }}>{item.label}</div>
+              <div style={{ fontSize: "0.75em", color: "var(--text-dim)" }}>{item.sub}</div>
+            </div>
+          )}
+        </>
       )}
     </NavLink>
   );

@@ -1,44 +1,115 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { api } from "../../lib/api.js";
-import SubmitForm from "./SubmitForm.jsx";
 import OrboAvatar from "../../components/OrboAvatar.jsx";
+import Composer from "./Composer.jsx";
+import ChatMessage, { OrboBubble } from "./ChatMessage.jsx";
+import VerdictMessage from "./VerdictMessage.jsx";
 
-// Home: Orbo greeting + submit bar. On submit, create a submission then go to the result page.
+// Looks like a URL or an email address? (client-side gate so obvious junk gets a
+// friendly conversational reply instead of a round-trip + error.)
+function looksCheckable(text) {
+  const t = text.trim();
+  const urlish = /^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+.*$/i.test(t);
+  const emailish = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
+  return urlish || emailish;
+}
+
+// Prompt chips are conversation starters (not checkable input): each opens with a
+// user bubble, then Orbo invites you to paste the thing it should look at.
+const PROMPT_CHIPS = [
+  { label: "Check a link", reply: "Sure! Paste the link you want me to check and I'll take a look." },
+  { label: "Is this email a scam?", reply: "I can help with that. Paste the sender's email address or the suspicious link from the message." },
+  { label: "Verify a sender", reply: "Go ahead and paste the sender's email address — I'll tell you if it looks legit." },
+];
+
+// Home = the chat with Orbo. Empty state shows the greeting + prompt chips; once you
+// send something, it becomes a conversation (your bubble → Orbo's checking → verdict card).
 export default function Home() {
-  const navigate = useNavigate();
   const { getToken } = useAuth();
   const { user } = useUser();
   const firstName = user?.firstName ?? "there";
 
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [messages, setMessages] = useState([]); // { id, role: 'user'|'orbo', kind, text?, indicatorId? }
+  const [busy, setBusy] = useState(false);
+  const scrollRef = useRef(null);
+  const nextId = useRef(1);
+  const add = (m) => setMessages((prev) => [...prev, { id: nextId.current++, ...m }]);
 
-  async function handleSubmit(url) {
-    setSubmitting(true);
-    setError("");
+  // auto-scroll to newest message
+  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
+
+  async function handleSend(text) {
+    add({ role: "user", kind: "text", text });
+
+    if (!looksCheckable(text)) {
+      add({ role: "orbo", kind: "text", pose: "caution",
+        text: "Hmm, that doesn't look like a link or email address. Paste the full link (like https://…) or the sender's email, and I'll check it for you." });
+      return;
+    }
+
+    setBusy(true);
     try {
-      const { indicatorId } = await api.post("/api/submissions", { url }, { getToken });
-      navigate(`/check/${indicatorId}`);
+      const { indicatorId } = await api.post("/api/submissions", { url: text }, { getToken });
+      add({ role: "orbo", kind: "verdict", indicatorId });
     } catch (err) {
-      // 400 = bad/invalid input (friendly message); anything else = generic failure.
-      setError(err.status === 400
-        ? (err.body?.error ?? "That doesn't look like a link or email address.")
-        : "Something went wrong reaching Orbo. Please try again.");
-      setSubmitting(false);
+      add({ role: "orbo", kind: "text", pose: "caution",
+        text: err.status === 400
+          ? (err.body?.error ?? "That doesn't look like something I can check.")
+          : "Something went wrong reaching me just now. Please try again." });
+    } finally {
+      setBusy(false);
     }
   }
 
+  // A prompt chip: show it as the user's message, then Orbo's invitation to paste.
+  function handleChip(chip) {
+    add({ role: "user", kind: "text", text: chip.label });
+    add({ role: "orbo", kind: "text", pose: "wave", text: chip.reply });
+  }
+
+  const empty = messages.length === 0;
+
   return (
-    <div style={{ display: "grid", placeItems: "center", gap: 20, paddingTop: 80 }}>
-      <OrboAvatar pose={submitting ? "thinking" : "wave"} size={120} />
-      <h1 style={{ color: "var(--navy)", textAlign: "center", maxWidth: 560 }}>
-        Hi {firstName} — paste anything suspicious and I'll check it.
-      </h1>
-      <SubmitForm onSubmit={handleSubmit} disabled={submitting} />
-      {submitting && <p style={{ color: "var(--text-dim)" }}>Sending to Orbo…</p>}
-      {error && <p style={{ color: "var(--danger)", fontSize: "0.9em" }}>⚠ {error}</p>}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "24px 20px 8px" }}>
+        <div style={{ maxWidth: 780, margin: "0 auto" }}>
+          {empty ? (
+            <EmptyState firstName={firstName} onChip={handleChip} />
+          ) : (
+            messages.map((m) =>
+              m.kind === "verdict" ? (
+                <VerdictMessage key={m.id} indicatorId={m.indicatorId} onAskMore={() => {}} />
+              ) : (
+                <ChatMessage key={m.id} role={m.role} pose={m.pose}>
+                  {m.role === "orbo" ? <OrboBubble>{m.text}</OrboBubble> : m.text}
+                </ChatMessage>
+              )
+            )
+          )}
+        </div>
+      </div>
+      <Composer onSend={handleSend} disabled={busy} />
+    </div>
+  );
+}
+
+// Centered greeting + prompt chips (wireframe empty Home).
+function EmptyState({ firstName, onChip }) {
+  return (
+    <div style={{ display: "grid", placeItems: "center", gap: 14, paddingTop: "12vh", textAlign: "center" }}>
+      <OrboAvatar pose="wave" size={110} />
+      <h1 style={{ color: "var(--navy)", fontSize: "1.9em" }}>Hi {firstName} 👋</h1>
+      <p style={{ color: "var(--text-dim)" }}>Paste anything suspicious and I'll check it for you.</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 4 }}>
+        {PROMPT_CHIPS.map((c) => (
+          <button key={c.label} onClick={() => onChip(c)}
+            style={{ padding: "8px 16px", borderRadius: 20, border: "1px solid var(--border)",
+              background: "var(--surface)", color: "var(--navy)", fontSize: "0.9em", cursor: "pointer" }}>
+            {c.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
