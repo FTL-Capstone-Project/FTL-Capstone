@@ -508,65 +508,60 @@ later, once the data and submission flows exist). Concretely, this week covers:
 - **The report object shape** returned by `GET /api/history?mine=1` and `GET /api/indicators/:id` — David + Ozias
   agree the exact fields a report card/row needs.
 
-### Repository structure (agreed layout)
-A monorepo with npm workspaces. Two rules keep it beginner-friendly: **styling lives only in `client/src/theme/`**,
-and **every external API is wrapped in its own file under `server/src/services/`** so each is isolated and swappable.
-Code is grouped **by feature** (mirrored on client and server), not by file type.
+### Repository structure (as built — this is the source of truth)
+The monorepo skeleton is **scaffolded and on `main`** (npm workspaces). Two rules keep it beginner-friendly:
+**styling lives only in `client/src/theme/`**, and **every external API is wrapped in its own file under
+`server/src/services/`** so each is isolated and swappable. Code is grouped **by feature** (mirrored on client
+and server), not by file type. Every major folder has its own `README.md`, and the root `README.md` has a
+"where does X live?" table. All external services are **stubbed** so the app runs end-to-end with no keys.
 
 ```
 FTL-Capstone/
-├── README.md                       # "start here" — how to run, where things are
-├── package.json                    # workspaces + scripts
-├── .env.example                    # every env var, documented
+├── README.md                       # "start here" — run steps + "where does X live?" table
+├── package.json                    # workspaces + scripts (npm run dev = client + server)
+├── .gitignore                      # node_modules, .env, dist
+├── .env.example                    # every env var, documented (real .env is gitignored)
 │
-├── client/
+├── client/                         # React + Vite
+│   ├── package.json  vite.config.js  index.html  .env.example
 │   └── src/
-│       ├── theme/                  # ⭐ ALL colors/styling live HERE, nowhere else
-│       │   ├── tokens.css          #   THE colors: --primary #0F62FE, --navy, --safe...
-│       │   ├── theme.md            #   plain-English: "primary = buttons, safe = green verdicts"
-│       │   └── global.css          #   base resets
-│       │
-│       ├── config/
-│       │   └── constants.js        # API base URL, poll interval, status labels — one place
-│       │
-│       ├── lib/
-│       │   └── api.js              # ⭐ EVERY backend call goes through here, nowhere else
-│       │
-│       ├── features/               # ⭐ grouped by feature, not by file-type
-│       │   ├── auth/               #   Login, Register, ProtectedRoute + README.md
+│       ├── main.jsx                # ClerkProvider + BrowserRouter + root
+│       ├── App.jsx                 # <Routes>: public + protected (AppShell)
+│       ├── theme/                  # ⭐ ALL colors live HERE, nowhere else
+│       │   ├── tokens.css          #   the color variables (--primary #0F62FE, --safe, …)
+│       │   ├── theme.md            #   plain-English guide to every token
+│       │   └── global.css          #   base resets (imports tokens.css)
+│       ├── config/constants.js     # API_URL, POLL_INTERVAL_MS, VERDICT_STYLES
+│       ├── lib/api.js              # ⭐ EVERY backend call goes through here (adds Clerk token)
+│       ├── context/NotificationsContext.jsx
+│       ├── features/               # ⭐ grouped by feature (+ README + owner in each)
+│       │   ├── auth/               #   Landing, Login, Register, ProtectedRoute   (Michael)
 │       │   ├── check-link/         #   Home, CheckResult, SubmitForm, VerdictCard,
-│       │   │                       #     ScoreGauge, EvidenceList + README.md
-│       │   └── reports/            #   Reports, ReportCard, StatusChip + README.md
-│       │
-│       ├── components/             # SHARED across features only (AppShell, OrboAvatar,
-│       │   └── README.md           #   StatusBadge, NotificationBell)
-│       │
-│       ├── assets/                 # Orbo PNGs, logo, emoji set
-│       ├── App.jsx                 # routes
-│       └── main.jsx                # ClerkProvider + root
+│       │   │                       #     ScoreGauge, EvidenceList                 (David)
+│       │   └── reports/            #   Reports, ReportCard, StatusChip            (Ozias)
+│       └── components/             # SHARED only: AppShell, StatusBadge, OrboAvatar, NotificationBell
 │
-└── server/
+└── server/                         # Node + Express
+    ├── package.json
     └── src/
-        ├── config/
-        │   └── env.js              # ⭐ reads/validates ALL env vars in ONE place
-        │
-        ├── features/               # grouped by feature (mirrors the client)
-        │   ├── submissions/        #   route + controller + README.md
-        │   ├── indicators/
-        │   ├── history/
-        │   ├── notifications/
-        │   └── webhooks/
-        │
-        ├── services/               # ⭐ external-API wrappers, each isolated
-        │   ├── urlscan.js          #   ALL urlscan logic here
-        │   ├── safeBrowsing.js     #   ALL Safe Browsing logic here
-        │   ├── verdict.js          #   ALL Claude logic here
-        │   ├── canonicalize.js     #   the dedup rule
-        │   └── README.md           #   "each file wraps one external API — swap freely"
-        │
-        ├── middleware/             # auth, role guards
-        ├── prisma/                 # schema + seed (the data layer, one home)
+        ├── index.js                # express app; middleware order: json → (auth per route) → routers
         ├── db.js                   # PrismaClient singleton
-        └── index.js                # app + middleware order
+        ├── config/env.js           # ⭐ reads/validates ALL env vars in ONE place
+        ├── middleware/             # auth.js (Clerk → req.user, stubbed) · requireAnalyst.js
+        ├── features/               # route file per feature (mirrors the client)
+        │   ├── submissions/        #   submissions.routes.js  (David)
+        │   ├── indicators/         #   indicators.routes.js   (David)
+        │   ├── history/            #   history.routes.js      (Ozias / analyst later)
+        │   ├── notifications/      #   notifications.routes.js (Ozias)
+        │   └── webhooks/           #   webhooks.routes.js     (Michael clerk / Ozias email)
+        ├── services/               # ⭐ external-API wrappers, each isolated (+ README)
+        │   ├── canonicalize.js     #   dedup rule (§5 Option D) — real, tested logic
+        │   ├── urlscan.js          #   urlscan.io sandbox            (stubbed)
+        │   ├── safeBrowsing.js     #   Google Safe Browsing lookup   (stubbed)
+        │   └── verdict.js          #   Claude verdict, AI Feature A  (stubbed)
+        └── prisma/                 # schema.prisma (7 tables, §5) + seed.js
 ```
+
+> **Assets:** the Orbo mascot renders from an inline SVG placeholder (`components/OrboAvatar.jsx`) so the app
+> works with no image files; swap in real PNGs under `client/src/assets/` when exported.
 
