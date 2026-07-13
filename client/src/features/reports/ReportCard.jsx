@@ -17,7 +17,7 @@ import StatusChip from "./StatusChip.jsx";
 // passes showReviewStatus={true} to reveal the closure chip.
 export default function ReportCard({ report, showReviewStatus = false }) {
   return (
-    <div style={{ display: "flex", gap: 14, background: "var(--surface)",
+    <div className="report-card" style={{ display: "flex", gap: 14, background: "var(--surface)",
       border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 16 }}>
 
       {/* Thumbnail of the detonated page. Grey placeholder until urlscan gives us one. */}
@@ -58,7 +58,7 @@ export default function ReportCard({ report, showReviewStatus = false }) {
       </div>
 
       {/* Right: the Orbo score, and (org members) the analyst closure status */}
-      <div style={{ flexShrink: 0, textAlign: "right", minWidth: 84 }}>
+      <div className="report-card__score" style={{ flexShrink: 0, textAlign: "right", minWidth: 84 }}>
         <div style={{ fontSize: "0.68em", fontWeight: 700, color: "var(--text-dim)",
           letterSpacing: "0.04em" }}>SAFETY SCORE</div>
         <div style={{ fontSize: "1.5em", fontWeight: 800, color: `var(--${scoreColor(report.kind)})` }}>

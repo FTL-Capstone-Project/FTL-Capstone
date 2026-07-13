@@ -13,3 +13,13 @@ body {
 
 a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+/* ── Responsive (O4) ──
+   Inline styles can't contain @media rules, so screen-width breakpoints live here.
+   On narrow phones, stack the report card vertically so the thumbnail, text, and
+   score don't get squeezed side-by-side. (flex-direction isn't set inline on the
+   card, so this override applies cleanly.) */
+@media (max-width: 560px) {
+  .report-card { flex-direction: column; }
+  .report-card__score { text-align: left; }
+}
