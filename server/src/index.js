@@ -22,6 +22,8 @@ import { indicatorsRouter } from "./features/indicators/indicators.routes.js";
 import { historyRouter } from "./features/history/history.routes.js";
 import { notificationsRouter } from "./features/notifications/notifications.routes.js";
 import { webhooksRouter } from "./features/webhooks/webhooks.routes.js";
+import { visionRouter } from "./features/vision/vision.routes.js";
+import { askOrboRouter } from "./features/askOrbo/askOrbo.routes.js";
 
 warnMissingEnv();
 
@@ -31,8 +33,8 @@ export function createApp() {
   // 1) RAW body for the Clerk webhook (svix signature verification needs it).
   app.use("/api/webhooks/clerk", express.raw({ type: "*/*" }));
 
-  // 2) JSON for everything else.
-  app.use(express.json());
+  // 2) JSON for everything else. 12mb: uploaded screenshots arrive as base64 (vision feature).
+  app.use(express.json({ limit: "12mb" }));
 
   // 3) CORS for the Vite client.
   app.use(
@@ -59,6 +61,8 @@ export function createApp() {
   app.use("/api/history", historyRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/webhooks", webhooksRouter);
+  app.use("/api/vision", visionRouter);        // David: screenshot read + image-upload extract
+  app.use("/api/ask-orbo", askOrboRouter);     // David: interactive follow-up Q&A
 
   // 6) Central error handler.
   // eslint-disable-next-line no-unused-vars

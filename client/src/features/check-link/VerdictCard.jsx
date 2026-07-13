@@ -3,6 +3,7 @@ import { VERDICT_STYLES } from "../../config/constants.js";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import ScoreGauge from "./ScoreGauge.jsx";
 import EvidenceList from "./EvidenceList.jsx";
+import ScreenshotReader from "./ScreenshotReader.jsx";
 
 // Maps a 0–100 score to a verdict bucket. TODO(David): confirm thresholds with the team.
 function bucket(score) {
@@ -62,6 +63,7 @@ export default function VerdictCard({ indicator, onAskMore, onAction }) {
             <figcaption style={{ fontSize: "0.78em", color: "var(--text-dim)", marginTop: 6 }}>
               🛡 Preview of the page, opened safely in a sandbox — you never had to visit it.
             </figcaption>
+            <ScreenshotReader screenshotUrl={screenshot_url} />
           </figure>
         )}
 

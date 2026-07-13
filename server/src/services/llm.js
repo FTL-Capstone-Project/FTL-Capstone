@@ -1,59 +1,73 @@
 // ============================================================
-// LLM client — talks to Claude via the Salesforce LLM Gateway Express, which is an
-// OpenAI-compatible proxy (Authorization: Bearer, /chat/completions, `messages` array).
-// This is the ONE place that knows the wire format; verdict.js (Feature A) and the future
-// NLP feature (Feature B) both call chatJSON() and get a parsed object back.
+// LLM client — talks to Claude via the Salesforce LLM Gateway Express, an
+// OpenAI-compatible proxy (Authorization: Bearer, /chat/completions, `messages`).
+// The ONE place that knows the wire format. Supports text AND image (vision) inputs.
+//   chatJSON()    — prompt → parsed JSON (verdict, NLP)
+//   visionText()  — prompt + image → free text (read/translate a screenshot)
+//   visionJSON()  — prompt + image → parsed JSON (extract url/email from an upload)
+// Vision confirmed working through the gateway (Claude sees data:image base64).
 // Owner: David.
 // ============================================================
 import { env } from "../config/env.js";
 
-/**
- * Send a system+user prompt, expect a JSON object back, and parse it defensively.
- * The gateway doesn't guarantee native structured-outputs, so we PROMPT for JSON,
- * strip any accidental markdown fence, and JSON.parse. Throws on transport/parse failure
- * so the caller can fall back (never fake a "safe").
- *
- * @returns {Promise<object>} the parsed JSON the model returned
- */
-export async function chatJSON({ system, user, model = env.llmModel, maxTokens = 512, temperature = 0 }) {
+// Low-level call. `messages` is the OpenAI messages array (content may be a string
+// or an array of {type:text|image_url} parts). Returns the raw assistant string.
+async function chat({ messages, model = env.llmModel, maxTokens = 512, temperature = 0 }) {
   if (!env.anthropicApiKey) throw new Error("LLM key not set");
 
   const res = await fetch(`${env.llmBaseUrl}/chat/completions`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.anthropicApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      temperature,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
+    headers: { Authorization: `Bearer ${env.anthropicApiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model, max_tokens: maxTokens, temperature, messages }),
   });
-
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`LLM gateway ${res.status}: ${body.slice(0, 200)}`);
   }
-
   const data = await res.json();
   const content = data?.choices?.[0]?.message?.content;
   if (!content) throw new Error("LLM returned no content");
+  return content;
+}
 
+// Prompt → JSON object (defensive parse: strip ``` fences, else grab first {...}).
+export async function chatJSON({ system, user, model, maxTokens = 512, temperature = 0 }) {
+  const content = await chat({
+    model, maxTokens, temperature,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  });
   return parseJsonLoose(content);
 }
 
-// Models sometimes wrap JSON in ```json fences or add stray text. Extract the object.
+// Image + prompt → free text (e.g. "read this screenshot and translate it").
+// imageDataUrl = "data:image/png;base64,...."
+export async function visionText({ prompt, imageDataUrl, model, maxTokens = 700 }) {
+  return chat({
+    model, maxTokens, temperature: 0,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "text", text: prompt },
+        { type: "image_url", image_url: { url: imageDataUrl } },
+      ],
+    }],
+  });
+}
+
+// Image + prompt → JSON (e.g. extract {urls, emails, summary} from an uploaded image).
+export async function visionJSON({ prompt, imageDataUrl, model, maxTokens = 700 }) {
+  const content = await visionText({ prompt, imageDataUrl, model, maxTokens });
+  return parseJsonLoose(content);
+}
+
 function parseJsonLoose(text) {
   const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   try {
     return JSON.parse(cleaned);
   } catch {
-    // last resort: grab the first {...} block
     const m = cleaned.match(/\{[\s\S]*\}/);
     if (m) return JSON.parse(m[0]);
     throw new Error("LLM did not return valid JSON");
