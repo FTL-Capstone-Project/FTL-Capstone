@@ -32,7 +32,10 @@ askOrboRouter.post("/", requireAuth, async (req, res) => {
     "specific link/email being discussed. If the user asks something OFF-TOPIC (weather, jokes, coding help, " +
     "general trivia, personal chat), politely decline in one sentence and steer back — e.g. " +
     "\"I'm just your security helper, so I stick to scams and online safety — want me to explain anything about this link?\" " +
-    "Keep answers concise, plain-English, and reassuring. Never give a definitive 'safe' for something the scan flagged.";
+    "Keep answers concise, plain-English, and reassuring. Never give a definitive 'safe' for something the scan flagged. " +
+    "FORMATTING: this shows in a small chat bubble, so keep it SHORT (2-4 sentences or a few bullet points). " +
+    "Do NOT use big markdown headings (#, ##). You may use **bold** for a key term and simple '- ' bullets. " +
+    "No section headers, no long documents — talk like a helpful person in a chat.";
 
   const ctxText = context
     ? `Context — the check the user is asking about:\n${JSON.stringify(context, null, 2)}\n\n`

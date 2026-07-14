@@ -4,8 +4,9 @@ import { api } from "../../lib/api.js";
 import { Link2, Mail } from "lucide-react";
 import OrboAvatar from "../../components/OrboAvatar.jsx";
 import Composer from "./Composer.jsx";
-import ChatMessage, { OrboBubble } from "./ChatMessage.jsx";
+import ChatMessage, { OrboBubble, ThinkingBubble } from "./ChatMessage.jsx";
 import VerdictMessage from "./VerdictMessage.jsx";
+import Markdown from "./Markdown.jsx";
 
 // Looks like a URL or an email address? (so we know whether to SCAN it vs treat it as
 // a question for Orbo.)
@@ -165,6 +166,9 @@ export default function Home() {
   }
 
   const empty = messages.length === 0;
+  // A verdict message runs its OWN polling animation, so don't stack a second
+  // "thinking" bubble under it; only show the standalone one for chat/image replies.
+  const lastKind = messages[messages.length - 1]?.kind;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -198,10 +202,16 @@ export default function Home() {
               );
               return (
                 <ChatMessage key={m.id} role={m.role} pose={m.pose}>
-                  {m.role === "orbo" ? <OrboBubble>{m.text}</OrboBubble> : m.text}
+                  {m.role === "orbo" ? <OrboBubble><Markdown text={m.text} /></OrboBubble> : m.text}
                 </ChatMessage>
               );
             })
+          )}
+          {/* Orbo is thinking (chat questions / image reads) — the animated dots. */}
+          {busy && !empty && lastKind !== "verdict" && (
+            <ChatMessage role="orbo" pose="thinking">
+              <ThinkingBubble label="Orbo is thinking…" />
+            </ChatMessage>
           )}
         </div>
       </div>
