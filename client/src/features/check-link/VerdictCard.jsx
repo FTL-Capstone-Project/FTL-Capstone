@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Eye, ShieldCheck } from "lucide-react";
 import { VERDICT_STYLES } from "../../config/constants.js";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import ScoreGauge from "./ScoreGauge.jsx";
@@ -51,8 +52,8 @@ export default function VerdictCard({ indicator, onAskMore, onAction }) {
         </p>
 
         {report_count > 1 && (
-          <p style={{ fontSize: "0.85em", color: "var(--text-dim)" }}>
-            👁 Orbo has seen this before — reported {report_count} times.
+          <p style={{ fontSize: "0.85em", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }}>
+            <Eye size={14} /> Orbo has seen this before — reported {report_count} times.
           </p>
         )}
 
@@ -60,8 +61,9 @@ export default function VerdictCard({ indicator, onAskMore, onAction }) {
           <figure style={{ margin: "12px 0 0" }}>
             <img src={shotSrc} alt="Screenshot of where this link leads" loading="lazy" onError={handleShotError}
               style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
-            <figcaption style={{ fontSize: "0.78em", color: "var(--text-dim)", marginTop: 6 }}>
-              🛡 Preview of the page, opened safely in a sandbox — you never had to visit it.
+            <figcaption style={{ fontSize: "0.78em", color: "var(--text-dim)", marginTop: 6,
+              display: "flex", alignItems: "center", gap: 6 }}>
+              <ShieldCheck size={14} style={{ flexShrink: 0 }} /> Preview of the page, opened safely in a sandbox — you never had to visit it.
             </figcaption>
             <ScreenshotReader screenshotUrl={screenshot_url} />
           </figure>

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { api } from "../../lib/api.js";
+import { Link2, Mail } from "lucide-react";
 import OrboAvatar from "../../components/OrboAvatar.jsx";
 import Composer from "./Composer.jsx";
 import ChatMessage, { OrboBubble } from "./ChatMessage.jsx";
@@ -118,8 +119,8 @@ export default function Home() {
 
       // No clear instruction: if exactly one target, just check it; if both, ask which.
       const choices = [
-        ...urls.map((u) => ({ label: `🔗 Check this link: ${shorten(u)}`, value: u })),
-        ...emails.map((e) => ({ label: `✉️ Check this sender: ${e}`, value: e })),
+        ...urls.map((u) => ({ icon: "link", label: `Check this link: ${shorten(u)}`, value: u })),
+        ...emails.map((e) => ({ icon: "mail", label: `Check this sender: ${e}`, value: e })),
       ];
       if (choices.length === 1) {
         await scanWithNote(choices[0].value, summary);
@@ -153,7 +154,7 @@ export default function Home() {
 
   // User picked one of the upload choices → check it (and drop the buttons).
   async function handleChoice(msgId, choice) {
-    add({ role: "user", kind: "text", text: choice.label.replace(/^.*?:\s*/, "") });
+    add({ role: "user", kind: "text", text: choice.value });
     setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, choices: null } : m)));
     await checkTarget(choice.value);
   }
@@ -182,6 +183,7 @@ export default function Home() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
                       {(m.choices ?? []).map((c) => (
                         <button key={c.value} onClick={() => handleChoice(m.id, c)} disabled={busy} style={choiceBtn}>
+                          {c.icon === "mail" ? <Mail size={15} /> : <Link2 size={15} />}
                           {c.label}
                         </button>
                       ))}
@@ -206,21 +208,26 @@ export default function Home() {
 function shorten(u) { return u.length > 48 ? u.slice(0, 45) + "…" : u; }
 
 const choiceBtn = {
-  textAlign: "left", padding: "8px 12px", borderRadius: 10, border: "1px solid var(--primary)",
-  background: "var(--surface)", color: "var(--primary)", fontWeight: 600, fontSize: "0.88em", cursor: "pointer",
+  display: "flex", alignItems: "center", gap: 8, textAlign: "left", padding: "8px 12px", borderRadius: 10,
+  border: "1px solid var(--primary)", background: "var(--surface)", color: "var(--primary)",
+  fontWeight: 600, fontSize: "0.88em", cursor: "pointer",
 };
 
+// Empty Home = the wireframe's greeting: centered planet-Orbo, "Hi {name}", subtitle,
+// and the three prompt-chip pills. No emojis (per design) — clean lucide icons only.
 function EmptyState({ firstName, onChip }) {
   return (
-    <div style={{ display: "grid", placeItems: "center", gap: 14, paddingTop: "12vh", textAlign: "center" }}>
-      <OrboAvatar pose="wave" size={110} />
-      <h1 style={{ color: "var(--navy)", fontSize: "1.9em" }}>Hi {firstName} 👋</h1>
-      <p style={{ color: "var(--text-dim)" }}>Paste anything suspicious and I'll check it for you.</p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 4 }}>
+    <div style={{ minHeight: "100%", display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", gap: 14, textAlign: "center", paddingBottom: "8vh" }}>
+      <OrboAvatar pose="happy" size={120} />
+      <h1 style={{ color: "var(--navy)", fontSize: "1.8em", fontWeight: 800 }}>Hi {firstName}</h1>
+      <p style={{ color: "var(--text-dim)", marginTop: -6 }}>Paste anything suspicious and I'll check it for you.</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 6 }}>
         {PROMPT_CHIPS.map((c) => (
           <button key={c.label} onClick={() => onChip(c)}
-            style={{ padding: "8px 16px", borderRadius: 20, border: "1px solid var(--border)",
-              background: "var(--surface)", color: "var(--navy)", fontSize: "0.9em", cursor: "pointer" }}>
+            style={{ padding: "9px 18px", borderRadius: 22, border: "1px solid var(--border)",
+              background: "var(--surface)", color: "var(--navy)", fontSize: "0.9em", cursor: "pointer",
+              boxShadow: "var(--shadow)" }}>
             {c.label}
           </button>
         ))}

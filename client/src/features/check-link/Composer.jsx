@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { Paperclip, ArrowUp, X, AlertCircle } from "lucide-react";
 
 // The persistent bottom chat input (wireframe: 📎 · "Paste a link or email address…" · ⬆ send).
 // Images (paperclip OR clipboard paste) are STAGED as a preview chip — nothing happens until
@@ -66,7 +67,7 @@ export default function Composer({ onSend, onSendImage, disabled }) {
   const canSend = !disabled && (value.trim() || pendingImage);
   const placeholder = pendingImage
     ? "Add a note — e.g. “check the link” or “is this sender legit?” (optional)"
-    : "Paste a link, email, or a screenshot (⌘V), or 📎 upload…";
+    : "Paste a link, email, or a screenshot — or attach one…";
 
   return (
     <form onSubmit={submit} style={{ padding: "12px 20px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
@@ -83,8 +84,9 @@ export default function Composer({ onSend, onSendImage, disabled }) {
             <span style={{ fontSize: "0.82em", color: "var(--text-dim)", maxWidth: 220, overflow: "hidden",
               textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pendingImage.fileName}</span>
             <button type="button" onClick={() => setPendingImage(null)} aria-label="Remove image"
-              style={{ border: "none", background: "none", cursor: "pointer", color: "var(--text-dim)", fontSize: "1.1em", padding: "0 4px" }}>
-              ✕
+              style={{ border: "none", background: "none", cursor: "pointer", color: "var(--text-dim)",
+                padding: "0 4px", display: "grid", placeItems: "center" }}>
+              <X size={16} />
             </button>
           </div>
         )}
@@ -94,8 +96,8 @@ export default function Composer({ onSend, onSendImage, disabled }) {
           <button type="button" onClick={pickFile} disabled={disabled} aria-label="Upload an image"
             title="Attach a screenshot"
             style={{ flexShrink: 0, background: "none", border: "none", cursor: disabled ? "default" : "pointer",
-              fontSize: "1.2em", color: "var(--text-dim)", padding: "4px 6px" }}>
-            📎
+              color: "var(--text-dim)", padding: "4px 6px", display: "grid", placeItems: "center" }}>
+            <Paperclip size={20} />
           </button>
           <input ref={fileRef} type="file" accept="image/*" onChange={onFileChosen} style={{ display: "none" }} />
 
@@ -111,12 +113,16 @@ export default function Composer({ onSend, onSendImage, disabled }) {
             style={{ flexShrink: 0, width: 40, height: 40, borderRadius: "50%", border: "none",
               background: canSend ? "var(--primary)" : "var(--border)",
               color: "#fff", cursor: canSend ? "pointer" : "default",
-              fontSize: "1.2em", display: "grid", placeItems: "center", transition: "background 0.15s" }}>
-            ↑
+              display: "grid", placeItems: "center", transition: "background 0.15s" }}>
+            <ArrowUp size={20} />
           </button>
         </div>
       </div>
-      {fileError && <p style={{ color: "var(--danger)", fontSize: "0.8em" }}>⚠ {fileError}</p>}
+      {fileError && (
+        <p style={{ color: "var(--danger)", fontSize: "0.8em", display: "flex", alignItems: "center", gap: 5 }}>
+          <AlertCircle size={13} /> {fileError}
+        </p>
+      )}
     </form>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@clerk/clerk-react";
+import { ScanText } from "lucide-react";
 import { api } from "../../lib/api.js";
 
 // "What does this say?" — sends the sandbox screenshot to Claude vision (server-side)
@@ -23,7 +24,7 @@ export default function ScreenshotReader({ screenshotUrl }) {
   if (state === "idle") {
     return (
       <button onClick={read} style={link}>
-        🔍 What does this say? <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>(read &amp; translate)</span>
+        <ScanText size={15} /> What does this say? <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>(read &amp; translate)</span>
       </button>
     );
   }
@@ -48,4 +49,5 @@ export default function ScreenshotReader({ screenshotUrl }) {
 const link = {
   marginTop: 8, background: "none", border: "none", padding: 0, cursor: "pointer",
   color: "var(--primary)", fontWeight: 700, fontSize: "0.85em",
+  display: "inline-flex", alignItems: "center", gap: 6,
 };
