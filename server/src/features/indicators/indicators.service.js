@@ -210,6 +210,8 @@ function errorMessage(reason) {
   switch (reason) {
     case "unreachable":
       return "I couldn't reach that link to check it. It looks like an internal, private, or non-existent address — I can only scan links that are reachable on the public internet.";
+    case "opted_out":
+      return "This site's owner has asked scanners like ours not to inspect it, so I can't run a sandbox check here. That's common for big, well-known companies (e.g. openai.com, google.com) and is usually a good sign — but I can't independently verify it. Only visit it if you trust the source.";
     case "blocked":
       return "I wasn't able to scan that link — the sandbox declined to open it. Please treat it with caution and review it manually.";
     default:

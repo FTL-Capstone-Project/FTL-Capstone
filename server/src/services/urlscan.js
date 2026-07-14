@@ -46,6 +46,7 @@ export async function scanUrl(rawUrl) {
     // Classify WHY so the UI can explain it (not just "review manually").
     let reason = "submit_failed";
     if (/could not be resolved|resolve|DNS/i.test(detail)) reason = "unreachable"; // internal/typo/dead domain
+    else if (/prevent scanning|owner of this infrastructure|opted out/i.test(detail)) reason = "opted_out"; // domain owner blocked urlscan
     else if (/blocked|not allowed|private|blacklist/i.test(detail)) reason = "blocked"; // urlscan won't scan it
     throw Object.assign(new Error(`urlscan submit ${submitRes.status}: ${detail}`), { reason });
   }
