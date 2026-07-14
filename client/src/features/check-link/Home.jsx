@@ -21,6 +21,10 @@ function looksCheckable(text) {
   return urlish || emailish;
 }
 
+// Module-level (survives Home unmount/remount as you navigate around the app): the id of the
+// last conversation the user was in, so returning to /ask-orbo with no ?c= resumes it.
+let lastActiveConvoId = null;
+
 // A webmail/inbox URL (the mail client's own address bar in a screenshot), not the suspicious
 // link — filtered out of "Get report" candidates.
 function isWebmailUrl(u = "") {
@@ -57,26 +61,39 @@ export default function Home() {
   const convoId = useRef(null);          // active conversation id (persisted in localStorage)
   const add = (m) => setMessages((prev) => [...prev, { id: nextId.current++, ...m }]);
 
-  // Resolve which conversation to show: ?c=<id> reopens one; ?new=1 (or nothing) starts fresh.
-  // Runs on mount and whenever the URL params change (e.g. clicking a Recent, or "New check").
+  // Resolve which conversation to show, in priority order:
+  //   1) ?new=1  → always start a fresh chat (the "New check" button)
+  //   2) ?c=<id> → reopen that specific conversation (clicking a Recent)
+  //   3) nothing → resume the LAST active chat (so navigating away to Reports and back
+  //      keeps your conversation instead of wiping it). Only "New check" starts over.
   useEffect(() => {
     const wantNew = params.get("new") === "1";
-    const cid = params.get("c");
-    if (cid && !wantNew) {
+    if (wantNew) {
+      convoId.current = null;
+      lastActiveConvoId = null;
+      nextId.current = 1;
+      setMessages([]);
+      const p = new URLSearchParams(params); p.delete("new"); setParams(p, { replace: true });
+      return;
+    }
+    const cid = params.get("c") || lastActiveConvoId; // fall back to the last chat we were in
+    if (cid) {
       const convo = getConversation(cid);
       if (convo) {
         convoId.current = cid;
+        lastActiveConvoId = cid;
         const msgs = convo.messages || [];
         nextId.current = Math.max(0, ...msgs.map((m) => m.id || 0)) + 1;
         setMessages(msgs);
+        // reflect it in the URL so a refresh/deep-link still works
+        if (params.get("c") !== cid) { const p = new URLSearchParams(params); p.set("c", cid); setParams(p, { replace: true }); }
         return;
       }
     }
-    // fresh conversation (id created lazily on first message so empty chats aren't saved)
+    // truly fresh (no history yet). id created lazily on first message so empty chats aren't saved.
     convoId.current = null;
     nextId.current = 1;
     setMessages([]);
-    if (wantNew) { const p = new URLSearchParams(params); p.delete("new"); setParams(p, { replace: true }); }
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist the thread whenever it changes (creating the conversation on first message).
@@ -86,6 +103,7 @@ export default function Home() {
       convoId.current = newConversationId();
       const p = new URLSearchParams(params); p.set("c", convoId.current); setParams(p, { replace: true });
     }
+    lastActiveConvoId = convoId.current; // remember for when we come back without a ?c=
     saveConversation({ id: convoId.current, messages });
   }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
