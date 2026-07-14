@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { api } from "../../lib/api.js";
 import { Link2, Mail, FileSearch } from "lucide-react";
@@ -7,6 +8,7 @@ import Composer from "./Composer.jsx";
 import ChatMessage, { OrboBubble, ThinkingBubble } from "./ChatMessage.jsx";
 import VerdictMessage from "./VerdictMessage.jsx";
 import Markdown from "./Markdown.jsx";
+import { getConversation, saveConversation, newConversationId } from "../../lib/conversations.js";
 
 // Looks like a URL or an email address? (so we know whether to SCAN it vs treat it as
 // a question for Orbo.)
@@ -38,13 +40,47 @@ export default function Home() {
   const { getToken } = useAuth();
   const { user } = useUser();
   const firstName = user?.firstName ?? "there";
+  const [params, setParams] = useSearchParams();
 
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef(null);
   const nextId = useRef(1);
   const lastIndicatorId = useRef(null); // context for follow-up "ask Orbo" questions
+  const convoId = useRef(null);          // active conversation id (persisted in localStorage)
   const add = (m) => setMessages((prev) => [...prev, { id: nextId.current++, ...m }]);
+
+  // Resolve which conversation to show: ?c=<id> reopens one; ?new=1 (or nothing) starts fresh.
+  // Runs on mount and whenever the URL params change (e.g. clicking a Recent, or "New check").
+  useEffect(() => {
+    const wantNew = params.get("new") === "1";
+    const cid = params.get("c");
+    if (cid && !wantNew) {
+      const convo = getConversation(cid);
+      if (convo) {
+        convoId.current = cid;
+        const msgs = convo.messages || [];
+        nextId.current = Math.max(0, ...msgs.map((m) => m.id || 0)) + 1;
+        setMessages(msgs);
+        return;
+      }
+    }
+    // fresh conversation (id created lazily on first message so empty chats aren't saved)
+    convoId.current = null;
+    nextId.current = 1;
+    setMessages([]);
+    if (wantNew) { const p = new URLSearchParams(params); p.delete("new"); setParams(p, { replace: true }); }
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist the thread whenever it changes (creating the conversation on first message).
+  useEffect(() => {
+    if (messages.length === 0) return;
+    if (!convoId.current) {
+      convoId.current = newConversationId();
+      const p = new URLSearchParams(params); p.set("c", convoId.current); setParams(p, { replace: true });
+    }
+    saveConversation({ id: convoId.current, messages });
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
 

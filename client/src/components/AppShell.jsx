@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { UserButton, OrganizationSwitcher } from "@clerk/clerk-react";
-import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, PanelLeftClose, PanelLeft, Clock, X } from "lucide-react";
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import OrbisLogo from "./OrbisLogo.jsx";
 import { NAV_BY_ROLE } from "../config/constants.js";
 import { useOrbisRole } from "../lib/useOrbisRole.js";
+import { listConversations, searchConversations, subscribe, deleteConversation } from "../lib/conversations.js";
 
 // NOTE: SHARED COMPONENT (app frame). Merged: David's wireframe styling + real Orbis logo +
 // lucide icons, layered with Michael's role-aware nav (useOrbisRole + NAV_BY_ROLE), collapsible
@@ -22,10 +23,16 @@ const NAV_ICON = {
 
 export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
+  const [search, setSearch] = useState("");
+  const [recents, setRecents] = useState(() => listConversations());
   const { role, orgName } = useOrbisRole();
   const navigate = useNavigate();
   const nav = NAV_BY_ROLE[role] ?? NAV_BY_ROLE.individual;
   const inOrg = role === "member" || role === "analyst";
+
+  // Keep Recents live: re-read when the conversation store changes (chat saved/deleted).
+  useEffect(() => subscribe(() => setRecents(listConversations())), []);
+  const shownRecents = search.trim() ? searchConversations(search) : recents;
 
   return (
     <NotificationsProvider>
@@ -71,7 +78,8 @@ export default function AppShell() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--border)",
               borderRadius: 10, padding: "8px 12px", color: "var(--text-dim)" }}>
               <Search size={16} />
-              <input placeholder="Search your past checks…" disabled
+              <input value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search your past chats…"
                 style={{ border: "none", outline: "none", background: "transparent", fontSize: "0.85em", width: "100%" }} />
             </div>
           )}
@@ -83,15 +91,22 @@ export default function AppShell() {
             ))}
           </nav>
 
-          {/* Recents — chat history; static placeholders until wired (David's slice / DB) */}
+          {/* Recents — real past chat threads (localStorage). Click to reopen; hover to delete. */}
           {!collapsed && (
-            <div style={{ marginTop: 4 }}>
+            <div style={{ marginTop: 4, overflowY: "auto", flex: 1, minHeight: 0 }}>
               <div style={{ fontSize: "0.68em", fontWeight: 700, color: "var(--text-dim)",
                 textTransform: "uppercase", letterSpacing: "0.06em", padding: "0 8px 6px" }}>Recents</div>
-              {["Is this PayPal email real?", "Check bit.ly link", "Suspicious invoice PDF"].map((r) => (
-                <div key={r} style={{ padding: "6px 8px", color: "var(--text-dim)", fontSize: "0.85em",
-                  cursor: "default", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r}</div>
-              ))}
+              {shownRecents.length === 0 ? (
+                <div style={{ padding: "6px 8px", color: "var(--text-dim)", fontSize: "0.8em", fontStyle: "italic" }}>
+                  {search.trim() ? "No matching chats" : "Your past chats show up here"}
+                </div>
+              ) : (
+                shownRecents.map((c) => (
+                  <RecentItem key={c.id} convo={c}
+                    onOpen={() => navigate(`/ask-orbo?c=${c.id}`)}
+                    onDelete={() => { deleteConversation(c.id); }} />
+                ))
+              )}
             </div>
           )}
 
@@ -126,6 +141,27 @@ function navLinkStyle(collapsed) {
     borderRadius: 10, textDecoration: "none", fontSize: "0.9em",
     color: isActive ? "var(--primary)" : "var(--text-dim)",
   });
+}
+
+// One past-chat row: clock icon + auto-title, click to reopen, hover reveals a delete ✕.
+function RecentItem({ convo, onOpen, onDelete }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      onClick={onOpen} title={convo.title}
+      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 8,
+        cursor: "pointer", color: "var(--text-dim)", fontSize: "0.85em",
+        background: hover ? "var(--canvas)" : "transparent" }}>
+      <Clock size={14} style={{ flexShrink: 0 }} />
+      <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{convo.title}</span>
+      {hover && (
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} aria-label="Delete chat"
+          style={{ border: "none", background: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center", padding: 0 }}>
+          <X size={14} />
+        </button>
+      )}
+    </div>
+  );
 }
 
 function NavItem({ item, collapsed }) {
