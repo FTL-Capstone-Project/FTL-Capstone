@@ -27,7 +27,8 @@ export default function VerdictMessage({ indicatorId, onAskMore }) {
     );
   }
 
-  const pose = indicator.ai_score >= 70 ? "danger" : indicator.ai_score >= 35 ? "caution" : "safe";
+  // SAFETY score: high = safe → happy Orbo; low = dangerous → stop Orbo.
+  const pose = indicator.ai_score >= 70 ? "safe" : indicator.ai_score >= 35 ? "caution" : "danger";
   return (
     <ChatMessage role="orbo" pose={pose}>
       <VerdictCard indicator={indicator} onAskMore={() => onAskMore?.(indicatorId)} />

@@ -6,12 +6,13 @@ import ScoreGauge from "./ScoreGauge.jsx";
 import EvidenceList from "./EvidenceList.jsx";
 import ScreenshotReader from "./ScreenshotReader.jsx";
 
-// Maps a 0–100 score to a verdict bucket. TODO(David): confirm thresholds with the team.
+// Maps a 0–100 SAFETY score to a verdict bucket (100 = safe, matches the DB/whole app).
+// High score = safe; low = dangerous.
 function bucket(score) {
   if (score == null) return "review";
-  if (score >= 70) return "dangerous";
+  if (score >= 70) return "safe";
   if (score >= 35) return "review";
-  return "safe";
+  return "dangerous";
 }
 
 // The verdict card, rendered INSIDE the chat as Orbo's response (wireframe: Report_Response).

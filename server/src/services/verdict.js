@@ -1,13 +1,16 @@
 // ============================================================
-// AI Feature A — plain-English danger verdict. Takes distilled evidence
+// AI Feature A — plain-English safety verdict. Takes distilled evidence
 // (urlscan + Safe Browsing) → { ai_score 0-100, ai_verdict, ai_confidence, evidence_summary }.
+//
+// SCORE DIRECTION: ai_score is a 0-100 SAFETY score, 100 = SAFE (matches the DB / whole app).
+// Higher = safer. A confirmed known-bad URL scores LOW.
 //
 // Claude (via the Salesforce LLM gateway — services/llm.js) reasons over the evidence and
 // writes the score + human explanation. TWO guardrails make it safe:
-//   1) DETERMINISTIC FLOOR — a hard signal (blacklist hit / cred-form on a <7-day domain)
-//      forces score >= 80 regardless of what the model says. A known-bad URL can never be "safe".
+//   1) DETERMINISTIC CEILING — a hard signal (blacklist hit / cred-form on a <7-day domain)
+//      forces score <= 20 regardless of what the model says. A known-bad URL can never look "safe".
 //   2) FALLBACK — if the Claude call fails or returns junk, we use a rule-based verdict.
-//      We never fabricate a "safe" from an error.
+//      We never fabricate a high (safe) score from an error.
 // Owner: David.
 // ============================================================
 import { chatJSON } from "./llm.js";
@@ -15,7 +18,7 @@ import { chatJSON } from "./llm.js";
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 
 export async function generateVerdict({ evidence = [], blacklist_hit, blacklist_source, domain_age_days, raw = {}, contextText }) {
-  // ── Hard-signal floor (computed regardless of who writes the verdict) ──
+  // ── Hard-signal ceiling (computed regardless of who writes the verdict) ──
   const credFormOnNewDomain =
     evidence.some((e) => /password|credential|login form/i.test(e.text)) &&
     domain_age_days != null && domain_age_days < 7;
@@ -25,7 +28,7 @@ export async function generateVerdict({ evidence = [], blacklist_hit, blacklist_
   try {
     const ai = await claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, contextText });
     let score = clamp(ai.score);
-    if (hardSignal) score = Math.max(score, 80); // floor
+    if (hardSignal) score = Math.min(score, 20); // ceiling: known-bad can't score "safe"
     return {
       ai_score: score,
       ai_verdict: ai.verdict,
@@ -48,9 +51,9 @@ export async function generateVerdict({ evidence = [], blacklist_hit, blacklist_
 async function claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, contextText }) {
   const system =
     "You are Orbo, a friendly phishing-triage assistant that explains link safety to non-experts. " +
-    "Given technical evidence about a URL, decide how dangerous it is. " +
+    "Given technical evidence about a URL, decide how SAFE it is. " +
     "Reply with ONLY minified JSON with these fields: " +
-    '{"score":<0-100 integer>,' +
+    '{"score":<0-100 integer, a SAFETY score where 100 = completely safe and 0 = definitely malicious>,' +
     '"title":"<a short 2-5 word headline for this check, e.g. \\"Fake PayPal login\\" or \\"Legit LinkedIn page\\">",' +
     '"description":"<ONE short plain-English sentence summarizing the result>",' +
     '"verdict":"<one or two plain-English sentences explaining WHY, for a non-technical person>",' +
@@ -59,8 +62,8 @@ async function claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain
     '"confidence":"low|medium|high"}. ' +
     "ALWAYS provide EXACTLY 3 items in reasons — the top 3 things that most drove your decision, each one short " +
     "and concrete (based on the evidence). For a safe link, give 3 reassuring reasons; for a dangerous one, 3 red flags. " +
-    "No markdown, no extra text. Higher score = more dangerous. Reference concrete evidence in the verdict. " +
-    "If it is on a known-bad blacklist, it is confirmed malicious — score it near 100 and say so plainly.";
+    "No markdown, no extra text. REMEMBER: higher score = SAFER (100 = safe, 0 = malicious). " +
+    "If it is on a known-bad blacklist, it is confirmed malicious — score it near 0 and say so plainly.";
 
   const facts = {
     on_known_bad_blacklist: !!blacklist_hit,
@@ -86,23 +89,25 @@ async function claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain
 }
 
 // ── Rule-based fallback (also used before a key exists / on Claude errors) ──
+// Compute a DANGER score internally, then convert to a SAFETY score (100 - danger).
 function ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal }) {
-  let score = 10;
-  if (raw.malicious) score += 55;
-  if (typeof raw.score === "number") score += Math.max(0, raw.score) * 0.4;
+  let danger = 10;
+  if (raw.malicious) danger += 55;
+  if (typeof raw.score === "number") danger += Math.max(0, raw.score) * 0.4;
   if (domain_age_days != null) {
-    if (domain_age_days < 7) score += 35;
-    else if (domain_age_days < 30) score += 20;
-    else if (domain_age_days < 90) score += 8;
+    if (domain_age_days < 7) danger += 35;
+    else if (domain_age_days < 30) danger += 20;
+    else if (domain_age_days < 90) danger += 8;
   }
   const dangers = evidence.filter((e) => e.severity === "dangerous").length;
   const reviews = evidence.filter((e) => e.severity === "review").length;
-  score += dangers * 15 + reviews * 5;
-  if ((raw.brands ?? []).length > 0) score += 20;
-  if (hardSignal) score = Math.max(score, 80);
-  score = clamp(score);
+  danger += dangers * 15 + reviews * 5;
+  if ((raw.brands ?? []).length > 0) danger += 20;
 
-  const bucket = score >= 70 ? "dangerous" : score >= 35 ? "review" : "safe";
+  let score = clamp(100 - danger); // → SAFETY score
+  if (hardSignal) score = Math.min(score, 20); // ceiling: known-bad can't look safe
+
+  const bucket = scoreBucket(score);
   let ai_verdict;
   if (blacklist_hit) {
     ai_verdict = `This link is on a known-bad list (${prettySource(blacklist_source)}) — it has already been confirmed as a scam. Do not click it.`;
@@ -125,6 +130,14 @@ function ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_ag
   };
 }
 
+// SAFETY-score → bucket. 100 = safe, so HIGH score = safe. (Single source of truth.)
+export function scoreBucket(score) {
+  if (score == null) return "review";
+  if (score >= 70) return "safe";
+  if (score >= 35) return "review";
+  return "dangerous";
+}
+
 // Always return EXACTLY 3 reason rows [{text, severity}]. Prefer the model's reasons,
 // fall back to the scan evidence, then pad with sensible generic lines so the UI
 // always shows three (per the design ask).
@@ -142,14 +155,14 @@ function exactlyThreeReasons(modelReasons, evidence, score) {
       if (e?.text && !rows.some((r) => r.text === e.text)) rows.push({ text: e.text, severity: sev(e.severity) });
     }
   }
-  // pad with generic-but-honest lines matching the overall verdict
-  const safe = score < 35;
-  const pad = safe
+  // pad with generic-but-honest lines matching the overall verdict (high score = safe)
+  const isSafe = score >= 70;
+  const pad = isSafe
     ? ["No known-bad blacklist matches", "Reaches an established, reachable site", "No obvious credential-stealing signs"]
     : ["Signals don't fully add up to a trusted site", "Treat unexpected requests with caution", "Double-check the real sender before acting"];
   for (const p of pad) {
     if (rows.length >= 3) break;
-    if (!rows.some((r) => r.text === p)) rows.push({ text: p, severity: safe ? "safe" : "review" });
+    if (!rows.some((r) => r.text === p)) rows.push({ text: p, severity: isSafe ? "safe" : "review" });
   }
   return rows.slice(0, 3);
 }
@@ -168,12 +181,12 @@ function firstSentence(text) {
   const m = text.match(/^.*?[.!?](\s|$)/);
   return (m ? m[0] : text).trim();
 }
-// Build a sensible title when the model didn't give one.
+// Build a sensible title when the model didn't give one. (score = SAFETY: low = dangerous)
 function fallbackTitle(raw = {}, blacklist_source, score) {
   const brand = (raw.brands ?? [])[0];
   if (blacklist_source) return brand ? `Known ${brand} scam` : "Known bad link";
-  if (score >= 70) return brand ? `Fake ${brand} page` : "Dangerous link";
-  if (score >= 35) return brand ? `Suspicious ${brand} lookalike` : "Suspicious link";
+  if (score < 35) return brand ? `Fake ${brand} page` : "Dangerous link";
+  if (score < 70) return brand ? `Suspicious ${brand} lookalike` : "Suspicious link";
   return "Looks safe";
 }
 // Normalize tags: use the model's if valid, else derive from evidence/brand/bucket.
