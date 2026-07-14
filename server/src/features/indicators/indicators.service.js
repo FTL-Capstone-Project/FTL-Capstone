@@ -16,6 +16,7 @@ import { canonicalize } from "../../services/canonicalize.js";
 import { scanUrl } from "../../services/urlscan.js";
 import { checkBlacklist } from "../../services/safeBrowsing.js";
 import { generateVerdict, scoreBucket } from "../../services/verdict.js";
+import { escalateSubmission } from "../submissions/submissions.service.js";
 
 // In dev-stub auth mode, req.user is a fake { id: 1, ... } that may not exist in the DB,
 // so a submission FK would fail. Resolve a REAL mirror row for it (upsert by a stable
@@ -75,12 +76,24 @@ export async function submitUrl({ rawUrl, user, contextText = null, source = "we
     }),
   ]);
 
+  // Auto-escalate org-member submissions to their analyst (O9 seam — Ozias's helper).
+  // Individuals (orgId null) have no analyst, so they're never escalated.
+  let escalated = false;
+  if (orgId != null) {
+    try {
+      await escalateSubmission(prisma, { submissionId: submission.id, orgId, indicatorId: indicator.id });
+      escalated = true;
+    } catch (e) {
+      console.warn("⚠ escalateSubmission failed (non-fatal):", e.message);
+    }
+  }
+
   // Run the pipeline for a NEW indicator, OR re-kick a stale one (stuck pending/error from
   // a prior crash). A "done"/"scanning" indicator is left alone — that's the dedup win.
   const needsScan = !seenBefore || indicator.status === "pending" || indicator.status === "error";
   if (needsScan) runPipeline(indicator.id, rawUrl, contextText);
 
-  return { indicatorId: indicator.id, submissionId: submission.id, status: indicator.status, seenBefore };
+  return { indicatorId: indicator.id, submissionId: submission.id, status: indicator.status, seenBefore, escalated };
 }
 
 // The real pipeline: scanning → urlscan + Safe Browsing → verdict → done. Writes each phase.
