@@ -22,14 +22,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function scanUrl(rawUrl) {
   if (!env.urlscanApiKey) {
-    // Stub result so the pipeline is demoable before a key exists.
-    return {
-      screenshot_url: null,
-      urlscan_uuid: "stub-uuid",
-      final_url: rawUrl,
-      domain_age_days: 3,
-      evidence: [{ text: "Domain registered 3 days ago", severity: "dangerous" }],
-    };
+    // No key → we genuinely cannot scan. Do NOT fabricate danger signals (that falsely
+    // accused apple.com of being "3 days old"). Throw so the pipeline marks it "error"
+    // ("couldn't check — review manually") instead of storing a fake verdict.
+    throw Object.assign(new Error("urlscan not configured (no API key)"), { reason: "not_configured" });
   }
 
   // 1) Submit. `unlisted` keeps scans off the public feed but stays on the free tier.
