@@ -129,9 +129,14 @@ export default function Home() {
           text: `I read your image${summary ? ` — ${summary}` : ""}. I found a few things — which would you like me to check?`,
           choices });
       }
-    } catch {
+    } catch (err) {
+      // A network/2xx failure (server down or unreachable) reads differently from a
+      // genuine "couldn't parse the image" — be honest about which.
+      const unreachable = err?.status == null || err.status >= 500 || err.status === 503;
       add({ role: "orbo", kind: "text", pose: "caution",
-        text: "I couldn't read that image just now. Please try again, or paste the link directly." });
+        text: unreachable
+          ? "I couldn't reach my analysis service just now — it may be starting up or offline. Please try again in a moment."
+          : "I couldn't read that image. Try a clearer screenshot, or paste the link/sender directly." });
     } finally {
       setBusy(false);
     }
