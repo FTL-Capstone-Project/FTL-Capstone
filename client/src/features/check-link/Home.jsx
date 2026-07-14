@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { api } from "../../lib/api.js";
-import { Link2, Mail } from "lucide-react";
+import { Link2, Mail, FileSearch } from "lucide-react";
 import OrboAvatar from "../../components/OrboAvatar.jsx";
 import Composer from "./Composer.jsx";
 import ChatMessage, { OrboBubble, ThinkingBubble } from "./ChatMessage.jsx";
@@ -16,6 +16,16 @@ function looksCheckable(text) {
   const urlish = /^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+.*$/i.test(t);
   const emailish = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
   return urlish || emailish;
+}
+
+// Pull the first URL or email out of ANY message (even a sentence like "is this legit? https://…").
+// Used to offer a "Get report" scan button under Orbo's chat reply.
+function extractTarget(text) {
+  const url = text.match(/https?:\/\/[^\s]+/i);
+  if (url) return url[0].replace(/[.,)\]]+$/, ""); // trim trailing punctuation
+  const email = text.match(/[^\s@]+@[^\s@]+\.[^\s@]+/);
+  if (email) return email[0].replace(/[.,)\]]+$/, "");
+  return null;
 }
 
 const PROMPT_CHIPS = [
@@ -56,13 +66,15 @@ export default function Home() {
   }
 
   // Free-form question → Orbo answers (security topics only; server declines off-topic).
-  async function askOrbo(question) {
+  // If the question CONTAINED a link/email (e.g. "is this legit? https://…"), attach it
+  // so the reply can offer a "Get report" button to run the real scan.
+  async function askOrbo(question, scanTarget = null) {
     setBusy(true);
     try {
       const history = messages.filter((m) => m.kind === "text").slice(-6).map((m) => ({ role: m.role, text: m.text }));
       const { answer } = await api.post("/api/ask-orbo",
         { indicatorId: lastIndicatorId.current, question, history }, { getToken });
-      add({ role: "orbo", kind: "text", pose: "happy", text: answer });
+      add({ role: "orbo", kind: "text", pose: "happy", text: answer, scanTarget });
     } catch {
       add({ role: "orbo", kind: "text", pose: "caution", text: "I couldn't answer that just now — please try again." });
     } finally {
@@ -70,11 +82,12 @@ export default function Home() {
     }
   }
 
-  // Composer submit: a link/email → scan; anything else → treat as a question for Orbo.
+  // Composer submit: a bare link/email → scan; a sentence → ask Orbo (but if it has a
+  // link/email inside, pass it along so Orbo can offer a "Get report" scan button).
   async function handleSend(text) {
     add({ role: "user", kind: "text", text });
     if (looksCheckable(text)) await scan(text);
-    else await askOrbo(text);
+    else await askOrbo(text, extractTarget(text));
   }
 
   function handleChip(chip) {
@@ -158,6 +171,13 @@ export default function Home() {
     else await scan(target);
   }
 
+  // "Get report" button under a chat reply → run the real scan on the detected target,
+  // and drop the button so it can't be re-clicked.
+  async function handleGetReport(msgId, target) {
+    setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, scanTarget: null } : m)));
+    await checkTarget(target);
+  }
+
   // User picked one of the upload choices → check it (and drop the buttons).
   async function handleChoice(msgId, choice) {
     add({ role: "user", kind: "text", text: choice.value });
@@ -202,7 +222,17 @@ export default function Home() {
               );
               return (
                 <ChatMessage key={m.id} role={m.role} pose={m.pose}>
-                  {m.role === "orbo" ? <OrboBubble><Markdown text={m.text} /></OrboBubble> : m.text}
+                  {m.role === "orbo" ? (
+                    <OrboBubble>
+                      <Markdown text={m.text} />
+                      {m.scanTarget && (
+                        <button onClick={() => handleGetReport(m.id, m.scanTarget)} disabled={busy}
+                          style={{ ...choiceBtn, marginTop: 10 }}>
+                          <FileSearch size={15} /> Get a full report on {shorten(m.scanTarget)}
+                        </button>
+                      )}
+                    </OrboBubble>
+                  ) : m.text}
                 </ChatMessage>
               );
             })
