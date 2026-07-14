@@ -23,18 +23,36 @@ export default function Composer({ onSend, onUploadImage, disabled }) {
     if (!disabled) fileRef.current?.click();
   }
 
-  function onFileChosen(e) {
+  // Shared: validate an image File and hand its data URL up. Used by the paperclip AND paste.
+  function readImageFile(file) {
     setFileError("");
-    const file = e.target.files?.[0];
-    e.target.value = ""; // reset so the same file can be re-picked
     if (!file) return;
     if (!file.type.startsWith("image/")) { setFileError("Please choose an image file."); return; }
     if (file.size > MAX_IMAGE_BYTES) { setFileError("That image is too large (max 8MB)."); return; }
-
     const reader = new FileReader();
-    reader.onload = () => onUploadImage?.(reader.result, file.name); // result = data:image/...;base64,...
+    reader.onload = () => onUploadImage?.(reader.result, file.name || "pasted-image.png"); // data:image/...;base64,...
     reader.onerror = () => setFileError("Couldn't read that image.");
     reader.readAsDataURL(file);
+  }
+
+  function onFileChosen(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset so the same file can be re-picked
+    readImageFile(file);
+  }
+
+  // Paste an image straight from the clipboard (Cmd/Ctrl+V) → upload it. A pasted image
+  // has a clipboard item of kind "file"; pasted text falls through to the normal input.
+  function onPaste(e) {
+    if (disabled) return;
+    const items = e.clipboardData?.items ?? [];
+    for (const item of items) {
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) { e.preventDefault(); readImageFile(file); return; } // stop it landing as text
+      }
+    }
+    // no image → let the paste proceed as normal text
   }
 
   return (
@@ -54,7 +72,8 @@ export default function Composer({ onSend, onUploadImage, disabled }) {
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="Paste a link or email address, or 📎 upload a screenshot…"
+          onPaste={onPaste}
+          placeholder="Paste a link, email, or a screenshot (⌘V), or 📎 upload…"
           disabled={disabled}
           style={{ flex: 1, border: "none", outline: "none", fontSize: "1em", background: "transparent" }}
         />
