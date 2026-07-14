@@ -127,7 +127,9 @@ export default function AppShell() {
             <NotificationBell />
             <UserButton afterSignOutUrl="/" />
           </header>
-          <main style={{ flex: 1, minHeight: 0, background: "var(--canvas)" }}><Outlet /></main>
+          {/* minWidth:0 lets the content shrink instead of pushing wide children (long
+              URLs / text) off-screen; overflow:auto makes this the page scroll area. */}
+          <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "auto", background: "var(--canvas)" }}><Outlet /></main>
         </div>
       </div>
     </NotificationsProvider>

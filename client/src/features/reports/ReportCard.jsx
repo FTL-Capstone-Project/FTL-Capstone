@@ -26,11 +26,14 @@ export default function ReportCard({ report, showReviewStatus = false }) {
 
       {/* Middle: title, who/when, description, tags */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <h3 style={{ margin: 0, fontSize: "1em", color: "var(--navy)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, minWidth: 0 }}>
+          <h3 style={{ margin: 0, fontSize: "1em", color: "var(--navy)", minWidth: 0,
+            // A long URL title (no spaces) would otherwise push the card off-screen;
+            // truncate it to one line with an ellipsis.
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {report.title ?? report.url}
           </h3>
-          <StatusBadge kind={report.kind} />
+          <div style={{ flexShrink: 0 }}><StatusBadge kind={report.kind} /></div>
         </div>
 
         <p style={{ margin: "0 0 6px", fontSize: "0.8em", color: "var(--text-dim)" }}>
@@ -39,7 +42,11 @@ export default function ReportCard({ report, showReviewStatus = false }) {
 
         {report.description && (
           <p style={{ margin: "0 0 8px", fontSize: "0.88em", color: "var(--text)",
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            // Clamp to 2 lines instead of one no-wrap line: a long description now
+            // wraps and truncates with an ellipsis instead of forcing the card wider
+            // than the screen (the old `nowrap` broke the flex layout).
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+            overflow: "hidden", overflowWrap: "anywhere" }}>
             {report.description}
           </p>
         )}
