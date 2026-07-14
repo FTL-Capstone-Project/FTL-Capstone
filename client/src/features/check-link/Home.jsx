@@ -153,18 +153,25 @@ export default function Home() {
       const hasUrl = urls.length > 0;
       const hasEmail = emails.length > 0;
 
-      // If they only want to talk about the image (not scan), or nothing to scan → answer conversationally.
+      // A scannable link found in the image → offer it as the "Get report" target on
+      // whatever Orbo answers, so the user can always escalate to a full scan (interaction key).
+      const reportTarget = hasUrl ? urls[0] : null;
+
+      // Nothing scannable at all → answer about the image itself.
       if (!hasUrl && !hasEmail) {
-        // No scannable target: answer the instruction about the image itself via Orbo.
         const q = instruction
           ? `${instruction} (About an image the user uploaded — summary: ${summary || "n/a"})`
           : `The user uploaded an image (summary: ${summary || "n/a"}) but there's no link or email in it. Briefly say what you see and ask what they'd like checked.`;
-        await askOrbo(q);
+        await askOrbo(q, reportTarget);
         return;
       }
 
-      // Explicit "check the sender" → the email; "check the link" → the URL.
-      if (wantsSender && hasEmail) { await scanWithNote(emails[0], summary); return; }
+      // Explicit "check the sender" → assess the email conversationally, but still offer a
+      // "Get report" button for any link in the image. "check the link" → scan the URL directly.
+      if (wantsSender && hasEmail) {
+        await askOrbo(`Is this email sender legitimate or a likely scam: ${emails[0]}? Explain how to tell.`, reportTarget);
+        return;
+      }
       if (wantsLink && hasUrl) { await scanWithNote(urls[0], summary); return; }
 
       // No clear instruction: if exactly one target, just check it; if both, ask which.
@@ -200,10 +207,11 @@ export default function Home() {
   }
 
   // Route a target: a URL → sandbox scan; an email address → ask Orbo about the sender
-  // (urlscan can't sandbox an email, so we assess sender legitimacy conversationally).
-  async function checkTarget(target) {
+  // (urlscan can't sandbox an email, so we assess sender legitimacy conversationally, and
+  // still offer a "Get report" button if a scannable link came alongside it).
+  async function checkTarget(target, reportTarget = null) {
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target.trim());
-    if (isEmail) await askOrbo(`Is this email sender legitimate or a likely scam: ${target}? Explain how to tell.`);
+    if (isEmail) await askOrbo(`Is this email sender legitimate or a likely scam: ${target}? Explain how to tell.`, reportTarget);
     else await scan(target);
   }
 
