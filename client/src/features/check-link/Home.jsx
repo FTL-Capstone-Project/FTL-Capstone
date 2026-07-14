@@ -133,8 +133,12 @@ export default function Home() {
     setBusy(true);
     try {
       const history = messages.filter((m) => m.kind === "text").slice(-6).map((m) => ({ role: m.role, text: m.text }));
+      // If the question is about a NEW target (a link/email in it), don't attach the previous
+      // scan's context — that's what made Orbo drag the old topic in. Only pass indicatorId
+      // when this is a genuine follow-up about the last checked thing.
+      const indicatorId = scanTarget ? null : lastIndicatorId.current;
       const { answer } = await api.post("/api/ask-orbo",
-        { indicatorId: lastIndicatorId.current, question, history }, { getToken });
+        { indicatorId, question, history }, { getToken });
       add({ role: "orbo", kind: "text", pose: "happy", text: answer, scanTarget });
     } catch {
       add({ role: "orbo", kind: "text", pose: "caution", text: "I couldn't answer that just now — please try again." });
