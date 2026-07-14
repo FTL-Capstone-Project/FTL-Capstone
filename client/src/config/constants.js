@@ -5,15 +5,16 @@ export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 export const POLL_INTERVAL_MS = 1500;
 
 // Sidebar nav per role (§4 / DESIGN_SPEC). Each item: label, sublabel, path, icon.
-// Individuals & members lead with Home (chat); analysts lead with Dashboard, no Home.
+// The chat is "Ask Orbo" at /ask-orbo (the canonical Home). Individuals & members lead
+// with it; analysts lead with Dashboard then Ask Orbo.
 export const NAV_BY_ROLE = {
   individual: [
-    { label: "Home", sub: "Chat with Orbo", to: "/home", icon: "🏠" },
+    { label: "Ask Orbo", sub: "Chat with Orbo", to: "/ask-orbo", icon: "✦" },
     { label: "Dashboard", sub: "Your safety stats", to: "/dashboard", icon: "▦" },
     { label: "Reports", sub: "Full check history", to: "/reports", icon: "🗎" },
   ],
   member: [
-    { label: "Home", sub: "Chat with Orbo", to: "/home", icon: "🏠" },
+    { label: "Ask Orbo", sub: "Chat with Orbo", to: "/ask-orbo", icon: "✦" },
     { label: "Dashboard", sub: "Your safety stats", to: "/dashboard", icon: "▦" },
     { label: "Reports", sub: "Full check history", to: "/reports", icon: "🗎" },
   ],

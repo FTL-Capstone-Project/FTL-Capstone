@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { UserButton, OrganizationSwitcher } from "@clerk/clerk-react";
-import { Plus, Search, Home as HomeIcon, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit } from "lucide-react";
+import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, PanelLeftClose, PanelLeft } from "lucide-react";
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import OrbisLogo from "./OrbisLogo.jsx";
@@ -15,10 +15,9 @@ import { useOrbisRole } from "../lib/useOrbisRole.js";
 
 // Map a nav path → its lucide icon (we render these, not the emoji in NAV_BY_ROLE data).
 const NAV_ICON = {
-  "/home": HomeIcon,
+  "/ask-orbo": Sparkles,
   "/dashboard": LayoutGrid,
   "/reports": FileText,
-  "/ask-orbo": Sparkles,
 };
 
 export default function AppShell() {
@@ -36,13 +35,25 @@ export default function AppShell() {
           borderRight: "1px solid var(--border)", padding: collapsed ? "18px 12px" : 18,
           display: "flex", flexDirection: "column", gap: 14, flexShrink: 0, transition: "width .15s ease" }}>
 
-          {/* Logo — click to collapse/expand (compact planet mark when collapsed) */}
-          <button onClick={() => setCollapsed((c) => !c)} aria-label="Toggle sidebar"
-            title={collapsed ? "Expand" : "Collapse"}
-            style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px 6px",
-              display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start" }}>
-            {collapsed ? <Orbit size={26} color="var(--navy)" /> : <OrbisLogo height={32} />}
-          </button>
+          {/* Logo → Home (the Ask-Orbo chat). A separate chevron collapses the sidebar. */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", padding: "2px 0 6px" }}>
+            <button onClick={() => navigate("/ask-orbo")} aria-label="Go to Orbo home" title="Home"
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
+              {collapsed ? <Orbit size={26} color="var(--navy)" /> : <OrbisLogo height={32} />}
+            </button>
+            {!collapsed && (
+              <button onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" title="Collapse"
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
+                <PanelLeftClose size={18} />
+              </button>
+            )}
+          </div>
+          {collapsed && (
+            <button onClick={() => setCollapsed(false)} aria-label="Expand sidebar" title="Expand"
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
+              <PanelLeft size={18} />
+            </button>
+          )}
 
           {inOrg && !collapsed && (
             <div style={{ margin: "2px 0" }}>
@@ -50,7 +61,7 @@ export default function AppShell() {
             </div>
           )}
 
-          <button onClick={() => navigate("/home?new=1")} style={{ display: "flex", alignItems: "center",
+          <button onClick={() => navigate("/ask-orbo?new=1")} style={{ display: "flex", alignItems: "center",
             justifyContent: "center", gap: 8, background: "var(--primary)", color: "#fff", border: "none",
             borderRadius: 12, padding: collapsed ? "11px 0" : "11px 14px", fontWeight: 700, cursor: "pointer", fontSize: "0.95em" }}>
             <Plus size={18} /> {!collapsed && "New check"}
@@ -118,7 +129,7 @@ function navLinkStyle(collapsed) {
 }
 
 function NavItem({ item, collapsed }) {
-  const Icon = NAV_ICON[item.to] ?? HomeIcon;
+  const Icon = NAV_ICON[item.to] ?? Sparkles;
   return (
     <NavLink to={item.to} title={item.label} style={({ isActive }) => ({
       display: "flex", alignItems: "center", gap: 10, padding: collapsed ? "8px 0" : "8px 12px",
