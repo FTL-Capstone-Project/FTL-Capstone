@@ -213,14 +213,19 @@ const choiceBtn = {
   fontWeight: 600, fontSize: "0.88em", cursor: "pointer",
 };
 
-// Empty Home = the wireframe's greeting: centered planet-Orbo, "Hi {name}", subtitle,
-// and the three prompt-chip pills. No emojis (per design) — clean lucide icons only.
+// Empty Home = the wireframe's greeting: the big planet-Orbo mascot, "Hi {name}" with a
+// small waving Orbo used AS the emoji at the end (replacing the old Apple 👋), subtitle,
+// and the three prompt-chip pills. No Apple emojis (per design).
 function EmptyState({ firstName, onChip }) {
   return (
     <div style={{ minHeight: "100%", display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center", gap: 14, textAlign: "center", paddingBottom: "8vh" }}>
       <OrboAvatar pose="happy" size={120} />
-      <h1 style={{ color: "var(--navy)", fontSize: "1.8em", fontWeight: 800 }}>Hi {firstName}</h1>
+      <h1 style={{ color: "var(--navy)", fontSize: "1.8em", fontWeight: 800,
+        display: "inline-flex", alignItems: "center", gap: 8 }}>
+        Hi {firstName}
+        <OrboAvatar pose="wave" size={38} />
+      </h1>
       <p style={{ color: "var(--text-dim)", marginTop: -6 }}>Paste anything suspicious and I'll check it for you.</p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 6 }}>
         {PROMPT_CHIPS.map((c) => (
