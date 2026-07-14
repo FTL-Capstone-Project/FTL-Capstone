@@ -59,9 +59,12 @@ visionRouter.post("/extract", requireAuth, async (req, res) => {
 
   try {
     const prompt =
-      "You are analyzing an image a user uploaded to check for scams (a screenshot of an email, message, or web page). " +
-      "Extract any URLs and email addresses you can see. Reply ONLY as minified JSON: " +
-      '{"urls":["..."],"emails":["..."],"summary":"one sentence describing what the image shows"}. ' +
+      "You are analyzing an image a user uploaded to check for scams (usually a screenshot of an email or message). " +
+      "Extract URLs and email addresses FROM THE MESSAGE CONTENT ITSELF — the sender address and any links inside " +
+      "the email body. IGNORE the web browser's address bar and the mail client's own chrome: do NOT return the " +
+      "webmail URL (e.g. mail.google.com, outlook.office.com, mail.yahoo.com) — that's just the user's inbox, not " +
+      "part of the suspicious message. Reply ONLY as minified JSON: " +
+      '{"urls":["links found INSIDE the message"],"emails":["sender/from addresses"],"summary":"one sentence describing what the image shows"}. ' +
       "If you see none, use empty arrays.";
     const out = await visionJSON({ prompt, imageDataUrl, maxTokens: 500 });
     return res.json({

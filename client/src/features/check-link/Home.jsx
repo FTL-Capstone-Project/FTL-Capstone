@@ -7,6 +7,7 @@ import OrboAvatar from "../../components/OrboAvatar.jsx";
 import Composer from "./Composer.jsx";
 import ChatMessage, { OrboBubble, ThinkingBubble } from "./ChatMessage.jsx";
 import VerdictMessage from "./VerdictMessage.jsx";
+import VerdictCard from "./VerdictCard.jsx";
 import Markdown from "./Markdown.jsx";
 import { getConversation, saveConversation, newConversationId } from "../../lib/conversations.js";
 
@@ -18,6 +19,12 @@ function looksCheckable(text) {
   const urlish = /^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+.*$/i.test(t);
   const emailish = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
   return urlish || emailish;
+}
+
+// A webmail/inbox URL (the mail client's own address bar in a screenshot), not the suspicious
+// link — filtered out of "Get report" candidates.
+function isWebmailUrl(u = "") {
+  return /(^|\/\/|\.)(mail\.google|gmail|outlook\.(live|office)|mail\.yahoo|proton\.me|icloud)\b/i.test(u);
 }
 
 // Pull the first URL or email out of ANY message (even a sentence like "is this legit? https://…").
@@ -145,7 +152,12 @@ export default function Home() {
     if (instruction) add({ role: "user", kind: "text", text: instruction });
     setBusy(true);
     try {
-      const { urls, emails, summary } = await api.post("/api/vision/extract", { imageDataUrl: dataUrl }, { getToken });
+      const raw = await api.post("/api/vision/extract", { imageDataUrl: dataUrl }, { getToken });
+      // Drop webmail/inbox URLs — a screenshot of an email shows the mail client's own address
+      // bar (mail.google.com, outlook…), which isn't the suspicious link and can't be scanned.
+      const urls = (raw.urls || []).filter((u) => !isWebmailUrl(u));
+      const emails = raw.emails || [];
+      const summary = raw.summary || "";
 
       // Decide what to check based on the user's instruction.
       const wantsSender = /\b(sender|from|who sent|email address|address)\b/i.test(instruction || "");
@@ -166,10 +178,10 @@ export default function Home() {
         return;
       }
 
-      // Explicit "check the sender" → assess the email conversationally, but still offer a
-      // "Get report" button for any link in the image. "check the link" → scan the URL directly.
+      // Asked about the SENDER → give a quick conversational read, and offer a "Get report"
+      // button that produces the FORMAL sender report (about the email the user asked about).
       if (wantsSender && hasEmail) {
-        await askOrbo(`Is this email sender legitimate or a likely scam: ${emails[0]}? Explain how to tell.`, reportTarget);
+        await askOrbo(`Is this email sender legitimate or a likely scam: ${emails[0]}? Explain how to tell.`, emails[0]);
         return;
       }
       if (wantsLink && hasUrl) { await scanWithNote(urls[0], summary); return; }
@@ -206,20 +218,40 @@ export default function Home() {
     await checkTarget(target);
   }
 
-  // Route a target: a URL → sandbox scan; an email address → ask Orbo about the sender
-  // (urlscan can't sandbox an email, so we assess sender legitimacy conversationally, and
-  // still offer a "Get report" button if a scannable link came alongside it).
-  async function checkTarget(target, reportTarget = null) {
+  // Route a target: a URL → sandbox scan (verdict card); an email → formal sender report card.
+  async function checkTarget(target) {
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target.trim());
-    if (isEmail) await askOrbo(`Is this email sender legitimate or a likely scam: ${target}? Explain how to tell.`, reportTarget);
-    else await scan(target);
+    if (isEmail) {
+      setBusy(true);
+      try {
+        const report = await api.post("/api/ask-orbo/sender-report", { email: target }, { getToken });
+        add({ role: "orbo", kind: "senderReport", indicator: report,
+          pose: report.ai_score >= 70 ? "safe" : report.ai_score >= 35 ? "caution" : "danger" });
+      } catch {
+        add({ role: "orbo", kind: "text", pose: "caution", text: "I couldn't build a sender report just now — please try again." });
+      } finally { setBusy(false); }
+    } else {
+      await scan(target);
+    }
   }
 
-  // "Get report" button under a chat reply → run the real scan on the detected target,
-  // and drop the button so it can't be re-clicked.
+  // "Get report" button under a chat reply → produce a formal report card, and drop the button.
+  // A URL → sandbox scan (verdict card). An email → a structured SENDER report card.
   async function handleGetReport(msgId, target) {
     setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, scanTarget: null } : m)));
-    await checkTarget(target);
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target.trim());
+    if (!isEmail) { await scan(target); return; }
+    // Sender report: Claude → verdict-shaped object → render as a card in the chat.
+    setBusy(true);
+    try {
+      const report = await api.post("/api/ask-orbo/sender-report", { email: target }, { getToken });
+      add({ role: "orbo", kind: "senderReport", indicator: report,
+        pose: report.ai_score >= 70 ? "safe" : report.ai_score >= 35 ? "caution" : "danger" });
+    } catch {
+      add({ role: "orbo", kind: "text", pose: "caution", text: "I couldn't build a sender report just now — please try again." });
+    } finally {
+      setBusy(false);
+    }
   }
 
   // User picked one of the upload choices → check it (and drop the buttons).
@@ -243,6 +275,11 @@ export default function Home() {
           ) : (
             messages.map((m) => {
               if (m.kind === "verdict") return <VerdictMessage key={m.id} indicatorId={m.indicatorId} onAskMore={handleAskMore} />;
+              if (m.kind === "senderReport") return (
+                <ChatMessage key={m.id} role="orbo" pose={m.pose}>
+                  <VerdictCard indicator={m.indicator} onAskMore={() => handleAskMore(null)} />
+                </ChatMessage>
+              );
               if (m.kind === "image") return (
                 <ChatMessage key={m.id} role="user">
                   <img src={m.src} alt={m.text || "uploaded image"}

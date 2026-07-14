@@ -7,6 +7,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { env } from "../../config/env.js";
 import { chatText } from "../../services/llm.js";
 import { getIndicatorContext } from "../indicators/indicators.service.js";
+import { generateSenderReport } from "./senderReport.js";
 
 export const askOrboRouter = Router();
 
@@ -52,5 +53,22 @@ askOrboRouter.post("/", requireAuth, async (req, res) => {
   } catch (e) {
     console.warn("⚠ ask-orbo failed:", e.message);
     return res.status(502).json({ error: "Orbo couldn't answer just now." });
+  }
+});
+
+// POST /api/ask-orbo/sender-report — a formal structured verdict about an email SENDER.
+// Body: { email, context? }  →  a verdict-shaped object the client renders as a VerdictCard.
+askOrboRouter.post("/sender-report", requireAuth, async (req, res) => {
+  const { email, context } = req.body ?? {};
+  if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return res.status(400).json({ error: "A valid sender email is required" });
+  }
+  if (!env.anthropicApiKey) return res.status(503).json({ error: "Sender report not configured" });
+  try {
+    const report = await generateSenderReport({ email: email.trim(), context: typeof context === "string" ? context : "" });
+    return res.json(report);
+  } catch (e) {
+    console.warn("⚠ sender-report failed:", e.message);
+    return res.status(502).json({ error: "Orbo couldn't build a sender report just now." });
   }
 });
