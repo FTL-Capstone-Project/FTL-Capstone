@@ -43,11 +43,14 @@ export async function scanUrl(rawUrl) {
   if (!submitRes.ok) {
     const err = await submitRes.json().catch(() => ({}));
     const detail = err.description || err.message || "failed";
+    const both = `${err.message || ""} ${err.description || ""}`; // check both fields
     // Classify WHY so the UI can explain it (not just "review manually").
     let reason = "submit_failed";
-    if (/could not be resolved|resolve|DNS/i.test(detail)) reason = "unreachable"; // internal/typo/dead domain
-    else if (/prevent scanning|owner of this infrastructure|opted out/i.test(detail)) reason = "opted_out"; // domain owner blocked urlscan
-    else if (/blocked|not allowed|private|blacklist/i.test(detail)) reason = "blocked"; // urlscan won't scan it
+    if (/could not be resolved|resolve|DNS/i.test(both)) reason = "unreachable"; // internal/typo/dead domain
+    // Domain owner opted out of urlscan (big trusted sites: youtube, openai, google…). urlscan
+    // phrases this as "Scan prevented" / "blocked from scanning" / "owner requested…prevent scanning".
+    else if (/scan prevented|prevent scanning|blocked from scanning|owner of this infrastructure|opted out/i.test(both)) reason = "opted_out";
+    else if (/blocked|not allowed|private|blacklist/i.test(both)) reason = "blocked"; // urlscan won't scan it
     throw Object.assign(new Error(`urlscan submit ${submitRes.status}: ${detail}`), { reason });
   }
   const { uuid, api: resultApi } = await submitRes.json();
