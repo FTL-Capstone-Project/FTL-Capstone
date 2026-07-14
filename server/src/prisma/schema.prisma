@@ -1,6 +1,13 @@
 // Orbis data model — mirrors project_plan.md §5.
 // Global indicators (shared threat intel) + per-org reviews (private verdicts).
 // Owner: Michael (schema/migrations); shape agreed with David (§5).
+//
+// TWO LAYERS:
+//   GLOBAL   → Indicator: one row per unique URL (canonicalKey), scanned once, shared by everyone.
+//   PER-ORG  → Submission / OrgReview / Campaign / Notification: isolated by orgId.
+// Individuals have orgId = null and no OrgReview layer.
+//
+// SCORE DIRECTION: aiScore / humanScore are a 0-100 SAFETY score (100 = safe, 0 = dangerous).
 
 generator client {
   provider = "prisma-client-js"
@@ -12,86 +19,102 @@ datasource db {
 }
 
 model Organization {
-  id          Int      @id @default(autoincrement())
-  clerkOrgId  String   @unique
-  name        String
-  createdAt   DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  clerkOrgId String   @unique
+  name       String
+  createdAt  DateTime @default(now())
 
-  users       User[]
-  orgReviews  OrgReview[]
-  campaigns   Campaign[]
+  users      User[]
+  orgReviews OrgReview[]
+  campaigns  Campaign[]
 }
 
 model User {
-  id            Int      @id @default(autoincrement())
-  clerkUserId   String   @unique
-  orgId         Int?     // null = individual
-  email         String   @unique
-  name          String?
-  role          String   @default("individual") // individual | member | analyst
-  createdAt     DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  clerkUserId String   @unique
+  orgId       Int? // null = individual (no org)
+  email       String   @unique // copied from Clerk; used to match forwarded emails
+  name        String?
+  role        String   @default("individual") // individual | member | analyst
+  createdAt   DateTime @default(now())
 
-  organization  Organization? @relation(fields: [orgId], references: [id])
+  organization  Organization?  @relation(fields: [orgId], references: [id])
   submissions   Submission[]
   notifications Notification[]
+  reviews       OrgReview[]    @relation("ReviewedBy") // reviews this analyst authored
+
+  @@index([orgId])
+  @@index([email])
 }
 
 model Submission {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  orgId        Int?     // null = reported as an individual
-  indicatorId  Int
-  rawUrl       String
-  contextText  String?
-  source       String   @default("web") // web | email
-  escalated    Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  orgId       Int? // null = reported as an individual
+  indicatorId Int
+  rawUrl      String
+  contextText String?
+  source      String   @default("web") // web | email
+  escalated   Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
-  user         User      @relation(fields: [userId], references: [id])
-  indicator    Indicator @relation(fields: [indicatorId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+  indicator Indicator @relation(fields: [indicatorId], references: [id])
+
+  @@index([userId])
+  @@index([orgId])
+  @@index([indicatorId])
 }
 
 // GLOBAL — one row per unique URL, scanned once, shared by everyone.
 model Indicator {
-  id             Int      @id @default(autoincrement())
-  canonicalKey   String   @unique
-  domain         String
-  status         String   @default("pending") // pending | scanning | done | error
-  aiScore        Int?
-  aiVerdict      String?
-  aiConfidence   String?
-  screenshotUrl  String?
-  urlscanUuid    String?
-  domainAgeDays  Int?
-  blacklistHit   Boolean  @default(false)
-  blacklistSource String?
-  reportCount    Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  canonicalKey    String   @unique // dedup key (host + path + semantic params), globally unique
+  domain          String
+  status          String   @default("pending") // pending | scanning | done | error
+  aiScore         Int? // 0-100 SAFETY score (100 = safe)
+  aiVerdict       String? // Claude plain-English explanation (shared)
+  aiConfidence    String? // low | medium | high
+  screenshotUrl   String? // from urlscan.io
+  urlscanUuid     String?
+  domainAgeDays   Int?
+  blacklistHit    Boolean  @default(false) // Google Safe Browsing known-bad?
+  blacklistSource String? // e.g. google_safe_browsing:SOCIAL_ENGINEERING
+  reportCount     Int      @default(0) // total submissions across all orgs + individuals
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  submissions    Submission[]
-  orgReviews     OrgReview[]
-  notifications  Notification[]
+  submissions   Submission[]
+  orgReviews    OrgReview[]
+  notifications Notification[]
+
+  @@index([domain])
+  @@index([status])
 }
 
 // PER-ORG overlay — each org's private authoritative verdict on a global indicator.
 model OrgReview {
-  id            Int      @id @default(autoincrement())
-  orgId         Int
-  indicatorId   Int
-  humanScore    Int?
-  humanVerdict  String?
-  reviewStatus  String   @default("pending review") // pending review | investigating | confirmed malicious | confirmed safe
-  reviewedBy    Int?
-  campaignId    Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  orgId        Int
+  indicatorId  Int
+  humanScore   Int? // analyst's authoritative 0-100 safety score
+  humanVerdict String?
+  reviewStatus String   @default("pending review") // pending review | investigating | confirmed malicious | confirmed safe
+  reviewedBy   Int? // FK → User.id (which analyst)
+  campaignId   Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  organization  Organization @relation(fields: [orgId], references: [id])
-  indicator     Indicator    @relation(fields: [indicatorId], references: [id])
-  campaign      Campaign?    @relation(fields: [campaignId], references: [id])
+  organization   Organization @relation(fields: [orgId], references: [id])
+  indicator      Indicator    @relation(fields: [indicatorId], references: [id])
+  campaign       Campaign?    @relation(fields: [campaignId], references: [id])
+  reviewedByUser User?        @relation("ReviewedBy", fields: [reviewedBy], references: [id])
 
   @@unique([orgId, indicatorId])
+  @@index([orgId])
+  @@index([indicatorId])
+  @@index([campaignId])
+  @@index([reviewStatus])
 }
 
 model Campaign {
@@ -104,17 +127,22 @@ model Campaign {
 
   organization Organization @relation(fields: [orgId], references: [id])
   orgReviews   OrgReview[]
+
+  @@index([orgId])
 }
 
 model Notification {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  indicatorId  Int?
-  type         String   // e.g. verdict_confirmed
-  message      String
-  isRead       Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  indicatorId Int?
+  type        String // e.g. verdict_confirmed
+  message     String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
-  user         User       @relation(fields: [userId], references: [id])
-  indicator    Indicator? @relation(fields: [indicatorId], references: [id])
+  user      User       @relation(fields: [userId], references: [id])
+  indicator Indicator? @relation(fields: [indicatorId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
 }

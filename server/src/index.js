@@ -1,9 +1,20 @@
 // ============================================================
 // Orbis API — Express entry point.
-// MIDDLEWARE ORDER MATTERS: express.json() must come BEFORE routes
-// so req.body is parsed. (Clerk auth is applied per-route via requireAuth.)
+//
+// MIDDLEWARE ORDER MATTERS:
+//   1. express.raw() for /api/webhooks/clerk ONLY — svix needs the raw body
+//      to verify the signature, so it must run before express.json().
+//   2. express.json() for everything else.
+//   3. CORS (allow the Vite client).
+//   4. clerkMiddleware() — attaches verified Clerk auth to every request
+//      (does NOT block; requireAuth per-route enforces 401). Skipped when
+//      Clerk keys are absent so the app still boots in dev-stub mode.
+//   5. feature routers.
+//   6. error handler (last).
 // ============================================================
 import express from "express";
+import cors from "cors";
+import { clerkMiddleware } from "@clerk/express";
 import { env, warnMissingEnv } from "./config/env.js";
 
 import { submissionsRouter } from "./features/submissions/submissions.routes.js";
@@ -14,25 +25,54 @@ import { webhooksRouter } from "./features/webhooks/webhooks.routes.js";
 
 warnMissingEnv();
 
-const app = express();
-app.use(express.json()); // 1) parse JSON bodies FIRST
+export function createApp() {
+  const app = express();
 
-// simple CORS for local dev (client on :5173 → server on :3001)
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS");
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-  next();
-});
+  // 1) RAW body for the Clerk webhook (svix signature verification needs it).
+  app.use("/api/webhooks/clerk", express.raw({ type: "*/*" }));
 
-app.get("/api/health", (_req, res) => res.json({ ok: true }));
+  // 2) JSON for everything else.
+  app.use(express.json());
 
-// 2) mount feature routers
-app.use("/api/submissions", submissionsRouter);
-app.use("/api/indicators", indicatorsRouter);
-app.use("/api/history", historyRouter);
-app.use("/api/notifications", notificationsRouter);
-app.use("/api/webhooks", webhooksRouter);
+  // 3) CORS for the Vite client.
+  app.use(
+    cors({
+      origin: env.clientUrl,
+      methods: ["GET", "POST", "PATCH", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+    })
+  );
 
-app.listen(env.port, () => console.log(`🪐 Orbis API on http://localhost:${env.port}`));
+  // 4) Clerk auth context (real mode only; dev-stub skips it).
+  if (env.clerkEnabled) {
+    app.use(clerkMiddleware());
+  }
+
+  // Health check (public).
+  app.get("/api/health", (_req, res) =>
+    res.json({ ok: true, clerk: env.clerkEnabled ? "live" : "dev-stub" })
+  );
+
+  // 5) Feature routers.
+  app.use("/api/submissions", submissionsRouter);
+  app.use("/api/indicators", indicatorsRouter);
+  app.use("/api/history", historyRouter);
+  app.use("/api/notifications", notificationsRouter);
+  app.use("/api/webhooks", webhooksRouter);
+
+  // 6) Central error handler.
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, _req, res, _next) => {
+    console.error("[orbis] unhandled error:", err);
+    res.status(err.status || 500).json({ error: err.message || "Internal error" });
+  });
+
+  return app;
+}
+
+// Only listen when run directly (not when imported by tests).
+if (process.env.NODE_ENV !== "test") {
+  createApp().listen(env.port, () =>
+    console.log(`🪐 Orbis API on http://localhost:${env.port}  (auth: ${env.clerkEnabled ? "live Clerk" : "dev-stub"})`)
+  );
+}
