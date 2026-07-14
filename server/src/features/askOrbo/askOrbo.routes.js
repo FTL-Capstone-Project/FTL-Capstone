@@ -6,7 +6,7 @@ import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { env } from "../../config/env.js";
 import { chatText } from "../../services/llm.js";
-import { readIndicator } from "../submissions/_devStore.js"; // ⚠️ dev-only source of context
+import { getIndicatorContext } from "../indicators/indicators.service.js";
 
 export const askOrboRouter = Router();
 
@@ -22,14 +22,7 @@ askOrboRouter.post("/", requireAuth, async (req, res) => {
   // Pull the verdict context for this check (if any) so answers are grounded.
   let context = null;
   if (indicatorId != null) {
-    const ind = readIndicator(Number(indicatorId));
-    if (ind && ind.status === "done") {
-      context = {
-        title: ind.title, verdict: ind.ai_verdict, score: ind.ai_score,
-        confidence: ind.ai_confidence, tags: ind.tags,
-        reasons: (ind.evidence ?? []).map((e) => e.text),
-      };
-    }
+    context = await getIndicatorContext(Number(indicatorId)); // { title, verdict, score, confidence, tags, domain } | null
   }
 
   const system =

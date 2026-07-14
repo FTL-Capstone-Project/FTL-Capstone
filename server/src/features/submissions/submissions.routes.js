@@ -1,32 +1,38 @@
 // ── feature: submissions · owner: David ──
 // POST /api/submissions — the core "check a link" entry point.
-// Flow: canonicalize → find-or-create GLOBAL indicator → scan+blacklist+verdict → save.
+// Flow: validate → submitUrl() [find-or-create GLOBAL indicator in Postgres, record the
+// submission, dedup by canonicalKey] → background scan+blacklist+verdict → client polls.
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { canonicalize } from "../../services/canonicalize.js";
-import { createPending } from "./_devStore.js"; // ⚠️ dev-only; removed in Step 2 (Prisma)
+import { submitUrl } from "../indicators/indicators.service.js";
 
 export const submissionsRouter = Router();
 
 submissionsRouter.post("/", requireAuth, async (req, res) => {
-  const { url } = req.body ?? {};
+  const { url, contextText } = req.body ?? {};
   if (!url || typeof url !== "string" || !url.trim()) {
     return res.status(400).json({ error: "A url is required" }); // → Invalid Input screen
   }
 
-  // Validate the URL up front so bad input gets a friendly 400 (→ Invalid Input screen)
-  // before we create anything. The store canonicalizes again internally for dedup.
+  // Validate up front so bad input gets a friendly 400 before we touch the DB.
   try {
     canonicalize(url);
   } catch {
     return res.status(400).json({ error: "That doesn't look like a link or email address" });
   }
 
-  // Find-or-create the GLOBAL indicator by canonicalKey. If we've seen this URL before,
-  // reuse it (the "seen before" dedup + report_count bump); if new, the store kicks off the
-  // real scan → blacklist → verdict pipeline in the background and the client polls for it.
-  // (Still in-memory until Prisma lands — see _devStore.js.)
-  const { id: indicatorId, seenBefore } = createPending(url);
-
-  return res.status(201).json({ submissionId: indicatorId, indicatorId, status: "pending", seenBefore });
+  try {
+    const { indicatorId, submissionId, seenBefore } = await submitUrl({
+      rawUrl: url,
+      user: req.user,
+      contextText: typeof contextText === "string" ? contextText : null,
+    });
+    // Always return pending — the client polls GET /indicators/:id; a seen-before
+    // indicator that's already "done" resolves on the first poll.
+    return res.status(201).json({ submissionId, indicatorId, status: "pending", seenBefore });
+  } catch (e) {
+    console.error("[submissions] failed:", e.message);
+    return res.status(500).json({ error: "Couldn't start the check. Please try again." });
+  }
 });
