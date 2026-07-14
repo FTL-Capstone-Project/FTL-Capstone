@@ -87,27 +87,43 @@ export default function Home() {
       text: "Sure — ask me anything about this. For example: why did they send this, are scams like this common, or what should I do now?" });
   }
 
-  // Paperclip upload: read the image, then ASK what to check (don't assume).
-  async function handleUploadImage(dataUrl, fileName) {
+  // Image submitted (from the composer) WITH an optional instruction. The image was staged
+  // first and only sent when the user hit submit — so we now read it + honor their note.
+  async function handleSendImage(dataUrl, instruction, fileName) {
     add({ role: "user", kind: "image", src: dataUrl, text: fileName });
+    if (instruction) add({ role: "user", kind: "text", text: instruction });
     setBusy(true);
     try {
       const { urls, emails, summary } = await api.post("/api/vision/extract", { imageDataUrl: dataUrl }, { getToken });
+
+      // Decide what to check based on the user's instruction.
+      const wantsSender = /\b(sender|from|who sent|email address|address)\b/i.test(instruction || "");
+      const wantsLink = /\b(link|url|website|site|address)\b/i.test(instruction || "");
+      const hasUrl = urls.length > 0;
+      const hasEmail = emails.length > 0;
+
+      // If they only want to talk about the image (not scan), or nothing to scan → answer conversationally.
+      if (!hasUrl && !hasEmail) {
+        // No scannable target: answer the instruction about the image itself via Orbo.
+        const q = instruction
+          ? `${instruction} (About an image the user uploaded — summary: ${summary || "n/a"})`
+          : `The user uploaded an image (summary: ${summary || "n/a"}) but there's no link or email in it. Briefly say what you see and ask what they'd like checked.`;
+        await askOrbo(q);
+        return;
+      }
+
+      // Explicit "check the sender" → the email; "check the link" → the URL.
+      if (wantsSender && hasEmail) { await scanWithNote(emails[0], summary); return; }
+      if (wantsLink && hasUrl) { await scanWithNote(urls[0], summary); return; }
+
+      // No clear instruction: if exactly one target, just check it; if both, ask which.
       const choices = [
         ...urls.map((u) => ({ label: `🔗 Check this link: ${shorten(u)}`, value: u })),
         ...emails.map((e) => ({ label: `✉️ Check this sender: ${e}`, value: e })),
       ];
-
-      if (choices.length === 0) {
-        add({ role: "orbo", kind: "text", pose: "caution",
-          text: `I looked at your image${summary ? ` — ${summary}` : ""}, but couldn't find a link or email to check. If there's a link, try pasting it directly.` });
-      } else if (choices.length === 1) {
-        // Only one thing found → just check it.
-        add({ role: "orbo", kind: "text", pose: "thinking",
-          text: `I read your image${summary ? ` — ${summary}` : ""}. Checking ${choices[0].value} now…` });
-        await scan(choices[0].value);
+      if (choices.length === 1) {
+        await scanWithNote(choices[0].value, summary);
       } else {
-        // Multiple things found → ASK which one (don't assume).
         add({ role: "orbo", kind: "choices", pose: "wave",
           text: `I read your image${summary ? ` — ${summary}` : ""}. I found a few things — which would you like me to check?`,
           choices });
@@ -120,11 +136,26 @@ export default function Home() {
     }
   }
 
-  // User picked one of the upload choices → scan it (and drop the buttons).
+  // Announce what Orbo found, then check it. (setBusy already true from the image flow.)
+  async function scanWithNote(target, summary) {
+    add({ role: "orbo", kind: "text", pose: "thinking",
+      text: `I read your image${summary ? ` — ${summary}` : ""}. Checking ${target} now…` });
+    await checkTarget(target);
+  }
+
+  // Route a target: a URL → sandbox scan; an email address → ask Orbo about the sender
+  // (urlscan can't sandbox an email, so we assess sender legitimacy conversationally).
+  async function checkTarget(target) {
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target.trim());
+    if (isEmail) await askOrbo(`Is this email sender legitimate or a likely scam: ${target}? Explain how to tell.`);
+    else await scan(target);
+  }
+
+  // User picked one of the upload choices → check it (and drop the buttons).
   async function handleChoice(msgId, choice) {
     add({ role: "user", kind: "text", text: choice.label.replace(/^.*?:\s*/, "") });
     setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, choices: null } : m)));
-    await scan(choice.value);
+    await checkTarget(choice.value);
   }
 
   const empty = messages.length === 0;
@@ -167,7 +198,7 @@ export default function Home() {
           )}
         </div>
       </div>
-      <Composer onSend={handleSend} onUploadImage={handleUploadImage} disabled={busy} />
+      <Composer onSend={handleSend} onSendImage={handleSendImage} disabled={busy} />
     </div>
   );
 }
