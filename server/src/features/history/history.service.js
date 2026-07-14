@@ -30,9 +30,9 @@ export function toReportJson(submission, orgReview, reporterName) {
   return {
     indicator_id: ind.id,
     url: submission.rawUrl,
-    title: null, // not persisted yet (David emits it from the scan) — card falls back to url
-    description: ind.aiVerdict ?? null,
-    tags: [], // not persisted yet — card hides the tag row when empty
+    title: ind.aiTitle ?? null,           // persisted by David's scan pipeline
+    description: ind.aiDescription ?? ind.aiVerdict ?? null,
+    tags: Array.isArray(ind.aiTags) ? ind.aiTags : (ind.aiTags ?? []),
     reported_by: reporterName ?? "you",
     created_at: submission.createdAt,
     kind: scoreToKind(ind.aiScore),

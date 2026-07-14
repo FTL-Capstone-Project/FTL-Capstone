@@ -30,6 +30,9 @@ describe("toReportJson (DB row → Reports-card shape)", () => {
       id: 1,
       aiScore: 22,
       aiVerdict: "Looks like a PayPal phishing page.",
+      aiTitle: "Fake PayPal login",
+      aiDescription: "Credential phishing on a lookalike domain.",
+      aiTags: ["Credential phishing"],
       screenshotUrl: null,
     },
   };
@@ -40,7 +43,9 @@ describe("toReportJson (DB row → Reports-card shape)", () => {
     expect(r.url).toBe("https://paypa1-secure.com/verify");
     expect(r.ai_score).toBe(22);
     expect(r.kind).toBe("dangerous"); // derived from score 22
-    expect(r.description).toBe("Looks like a PayPal phishing page.");
+    expect(r.title).toBe("Fake PayPal login");
+    expect(r.description).toBe("Credential phishing on a lookalike domain.");
+    expect(r.tags).toEqual(["Credential phishing"]);
     expect(r.reported_by).toBe("David M.");
   });
 
