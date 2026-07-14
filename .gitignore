@@ -20,3 +20,6 @@ server/src/prisma/*.db
 .DS_Store
 *.log
 npm-debug.log*
+
+# Claude Code project instructions (each team member keeps their own locally)
+CLAUDE.md
