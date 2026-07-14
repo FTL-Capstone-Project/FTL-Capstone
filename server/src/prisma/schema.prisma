@@ -75,6 +75,10 @@ model Indicator {
   aiScore         Int? // 0-100 SAFETY score (100 = safe)
   aiVerdict       String? // Claude plain-English explanation (shared)
   aiConfidence    String? // low | medium | high
+  aiTitle         String? // short headline for the Reports card, e.g. "Fake PayPal login"
+  aiDescription   String? // one-sentence summary under the title
+  aiTags          Json? // category chips, e.g. ["Credential phishing","Impersonation"]
+  aiReasons       Json? // "why" rows: [{ text, severity: safe|review|dangerous }]
   screenshotUrl   String? // from urlscan.io
   urlscanUuid     String?
   domainAgeDays   Int?

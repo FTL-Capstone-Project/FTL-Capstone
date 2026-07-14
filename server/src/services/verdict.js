@@ -39,7 +39,7 @@ export async function generateVerdict({ evidence = [], blacklist_hit, blacklist_
       description: cleanText(ai.description) || firstSentence(ai.verdict),
       tags: cleanTags(ai.tags, raw),
       // Always exactly 3 "why Orbo flagged this" reasons (Claude's, padded from evidence if needed).
-      evidence_summary: exactlyThreeReasons(ai.reasons, evidence, score),
+      evidence_summary: buildReasons(ai.reasons, evidence, score),
     };
   } catch (e) {
     console.warn("⚠ Claude verdict failed, using rule-based fallback:", e.message);
@@ -60,8 +60,9 @@ async function claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain
     '"tags":["<1-3 short category chips, e.g. \\"Credential phishing\\", \\"Impersonation\\", \\"Safe\\">"],' +
     '"reasons":[{"text":"<short reason Orbo reached this verdict>","severity":"safe|review|dangerous"}],' +
     '"confidence":"low|medium|high"}. ' +
-    "ALWAYS provide EXACTLY 3 items in reasons — the top 3 things that most drove your decision, each one short " +
-    "and concrete (based on the evidence). For a safe link, give 3 reassuring reasons; for a dangerous one, 3 red flags. " +
+    "REASONS RULE: give AT LEAST 3 reasons. If the link is SAFE, give 3 reassuring reasons. " +
+    "If it is SUSPICIOUS or DANGEROUS, give MORE — list EVERY red flag you can justify from the evidence " +
+    "(aim for 4-6) so the user sees the full case for not clicking. Each reason short and concrete. " +
     "No markdown, no extra text. REMEMBER: higher score = SAFER (100 = safe, 0 = malicious). " +
     "If it is on a known-bad blacklist, it is confirmed malicious — score it near 0 and say so plainly.";
 
@@ -126,7 +127,7 @@ function ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_ag
     title: fallbackTitle(raw, blacklist_source, score),
     description: firstSentence(ai_verdict),
     tags: cleanTags(null, raw, bucket, blacklist_source),
-    evidence_summary: exactlyThreeReasons(null, evidence, score),
+    evidence_summary: buildReasons(null, evidence, score),
   };
 }
 
@@ -138,25 +139,27 @@ export function scoreBucket(score) {
   return "dangerous";
 }
 
-// Always return EXACTLY 3 reason rows [{text, severity}]. Prefer the model's reasons,
-// fall back to the scan evidence, then pad with sensible generic lines so the UI
-// always shows three (per the design ask).
-function exactlyThreeReasons(modelReasons, evidence, score) {
+// Return the "why" rows [{text, severity}] — AT LEAST 3 always. For a SAFE link, 3 reassuring
+// reasons is enough. For a suspicious/dangerous link, keep MORE (up to 6) so the user sees the
+// full case against clicking. Prefer the model's reasons, fall back to scan evidence, then pad.
+function buildReasons(modelReasons, evidence, score) {
   const sev = (s) => (["safe", "review", "dangerous"].includes(s) ? s : "review");
+  const isSafe = score >= 70;
+  const cap = isSafe ? 3 : 6; // safe = concise; risky = show them all
   let rows = [];
   if (Array.isArray(modelReasons)) {
     rows = modelReasons
       .filter((r) => r && typeof r.text === "string" && r.text.trim())
       .map((r) => ({ text: r.text.trim(), severity: sev(r.severity) }));
   }
-  if (rows.length < 3 && Array.isArray(evidence)) {
+  // supplement from raw scan evidence (dedup by text)
+  if (Array.isArray(evidence)) {
     for (const e of evidence) {
-      if (rows.length >= 3) break;
+      if (rows.length >= cap) break;
       if (e?.text && !rows.some((r) => r.text === e.text)) rows.push({ text: e.text, severity: sev(e.severity) });
     }
   }
-  // pad with generic-but-honest lines matching the overall verdict (high score = safe)
-  const isSafe = score >= 70;
+  // guarantee a floor of 3 with honest generic lines matching the verdict
   const pad = isSafe
     ? ["No known-bad blacklist matches", "Reaches an established, reachable site", "No obvious credential-stealing signs"]
     : ["Signals don't fully add up to a trusted site", "Treat unexpected requests with caution", "Double-check the real sender before acting"];
@@ -164,7 +167,7 @@ function exactlyThreeReasons(modelReasons, evidence, score) {
     if (rows.length >= 3) break;
     if (!rows.some((r) => r.text === p)) rows.push({ text: p, severity: isSafe ? "safe" : "review" });
   }
-  return rows.slice(0, 3);
+  return rows.slice(0, cap);
 }
 
 // ── helpers for the Reports-card fields (title / description / tags) ──

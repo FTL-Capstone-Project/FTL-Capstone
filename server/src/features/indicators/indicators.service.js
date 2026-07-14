@@ -123,7 +123,11 @@ async function runPipeline(indicatorId, rawUrl, contextText) {
         domainAgeDays: scan.domain_age_days ?? null,
         blacklistHit: bl.blacklist_hit,
         blacklistSource: bl.blacklist_source ?? null,
-        // TODO(after Michael's migration): aiTitle, aiDescription, aiTags from `verdict`.
+        // Reports-card fields (now real columns): headline, summary, tag chips, "why" rows.
+        aiTitle: verdict.title ?? null,
+        aiDescription: verdict.description ?? null,
+        aiTags: verdict.tags ?? [],
+        aiReasons: verdict.evidence_summary ?? [],
       },
     });
   } catch (e) {
@@ -163,12 +167,11 @@ export async function readIndicatorForClient(indicatorId, user) {
     ai_verdict: indicator.aiVerdict,
     ai_confidence: indicator.aiConfidence,
     report_count: indicator.reportCount,
-    // Derived until Michael's aiTitle/aiDescription/aiTags columns land:
-    title: deriveTitle(indicator, bucket),
-    description: firstSentence(indicator.aiVerdict),
-    tags: deriveTags(indicator, bucket),
-    // "why" list: from the stored verdict text (evidence list isn't persisted per-row yet)
-    evidence: [],
+    // Real stored fields now (fall back to derived only for older rows scanned pre-migration).
+    title: indicator.aiTitle || deriveTitle(indicator, bucket),
+    description: indicator.aiDescription || firstSentence(indicator.aiVerdict),
+    tags: asArray(indicator.aiTags) ?? deriveTags(indicator, bucket),
+    evidence: asArray(indicator.aiReasons) ?? [],
     domain: indicator.domain,
   };
 }
@@ -178,11 +181,16 @@ export async function getIndicatorContext(indicatorId) {
   const i = await prisma.indicator.findUnique({ where: { id: indicatorId } });
   if (!i || i.status !== "done") return null;
   return {
-    title: deriveTitle(i, scoreBucket(i.aiScore)),
+    title: i.aiTitle || deriveTitle(i, scoreBucket(i.aiScore)),
     verdict: i.aiVerdict, score: i.aiScore, confidence: i.aiConfidence,
-    tags: deriveTags(i, scoreBucket(i.aiScore)), domain: i.domain,
+    tags: asArray(i.aiTags) ?? deriveTags(i, scoreBucket(i.aiScore)),
+    reasons: (asArray(i.aiReasons) ?? []).map((r) => r.text),
+    domain: i.domain,
   };
 }
+
+// Prisma Json comes back parsed; guard against null/non-array from older rows.
+function asArray(v) { return Array.isArray(v) ? v : null; }
 
 // ── derivation helpers (temporary until the columns exist) ──
 function deriveTitle(i, bucket) {

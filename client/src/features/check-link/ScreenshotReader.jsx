@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import { ScanText } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { api } from "../../lib/api.js";
+import Markdown from "./Markdown.jsx";
 
-// "What does this say?" — sends the sandbox screenshot to Claude vision (server-side)
-// and shows a plain-English readout, translating any non-English text.
+// "Explain this page" — sends the sandbox screenshot to Claude vision (server-side) and
+// shows a plain-English explanation of what the page is and what it's asking you to do.
+// (Screenshots come back in English now, so this is about UNDERSTANDING the page, not translating.)
 export default function ScreenshotReader({ screenshotUrl }) {
   const { getToken } = useAuth();
   const [state, setState] = useState("idle"); // idle | loading | done | error
@@ -24,12 +26,12 @@ export default function ScreenshotReader({ screenshotUrl }) {
   if (state === "idle") {
     return (
       <button onClick={read} style={link}>
-        <ScanText size={15} /> What does this say? <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>(read &amp; translate)</span>
+        <BookOpen size={15} /> Explain this page <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>(what is it, what does it want?)</span>
       </button>
     );
   }
   if (state === "loading") {
-    return <p style={{ fontSize: "0.85em", color: "var(--text-dim)", marginTop: 8 }}>Orbo is reading the screenshot…</p>;
+    return <p style={{ fontSize: "0.85em", color: "var(--text-dim)", marginTop: 8 }}>Orbo is reading the page…</p>;
   }
   if (state === "error") {
     return (
@@ -40,8 +42,8 @@ export default function ScreenshotReader({ screenshotUrl }) {
   }
   return (
     <div style={{ marginTop: 10, background: "var(--canvas)", border: "1px solid var(--border)",
-      borderRadius: 10, padding: "10px 12px", fontSize: "0.9em", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-      {readout}
+      borderRadius: 10, padding: "10px 12px", fontSize: "0.9em", lineHeight: 1.55 }}>
+      <Markdown text={readout} />
     </div>
   );
 }

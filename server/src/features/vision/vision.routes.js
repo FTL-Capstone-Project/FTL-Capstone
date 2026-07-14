@@ -34,14 +34,13 @@ visionRouter.post("/read-screenshot", requireAuth, async (req, res) => {
     const dataUrl = `data:image/png;base64,${buf.toString("base64")}`;
 
     const prompt =
-      "This is a screenshot of a web page or email that a user is unsure about. Respond ENTIRELY IN ENGLISH. " +
-      "If the page/text is in another language, do NOT keep the original — give the fully translated English version only. " +
-      "In plain, friendly language: (1) one line on what this page/message is and what it wants the user to do; " +
-      "(2) then under a heading 'What it says (in English):', give a clear English rendering of the main visible text " +
-      "(translated if needed — the user wants to READ it in English, not see the foreign original). " +
-      "Keep it concise. If the image is blank or unreadable, say so.";
+      "This is a screenshot of the web page a user's link leads to. In plain, friendly English, EXPLAIN the page " +
+      "so a non-technical person understands it: (1) what this page is, (2) what it's asking the user to do or " +
+      "enter, and (3) anything worth noticing (login/payment forms, urgency, unusual requests). If the page is in " +
+      "another language, explain it in English. Keep it SHORT — a couple sentences or a few '- ' bullets. " +
+      "Do NOT use big markdown headings (#/##). If the image is blank or unreadable, say so.";
 
-    const readout = await visionText({ prompt, imageDataUrl: dataUrl, maxTokens: 700 });
+    const readout = await visionText({ prompt, imageDataUrl: dataUrl, maxTokens: 500 });
     return res.json({ readout });
   } catch (e) {
     console.warn("⚠ read-screenshot failed:", e.message);
