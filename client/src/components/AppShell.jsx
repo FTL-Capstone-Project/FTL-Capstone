@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { Outlet, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import { UserButton, OrganizationSwitcher } from "@clerk/clerk-react";
-import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, PanelLeftClose, PanelLeft, Clock, X } from "lucide-react";
+import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, PanelLeftClose, PanelLeft, Clock, MoreHorizontal, Pencil, Pin, Trash2 } from "lucide-react";
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import OrbisLogo from "./OrbisLogo.jsx";
 import { NAV_BY_ROLE } from "../config/constants.js";
 import { useOrbisRole } from "../lib/useOrbisRole.js";
-import { listConversations, searchConversations, subscribe, deleteConversation } from "../lib/conversations.js";
+import { listConversations, searchConversations, subscribe, deleteConversation, renameConversation, togglePin, groupConversations } from "../lib/conversations.js";
 
 // NOTE: SHARED COMPONENT (app frame). Merged: David's wireframe styling + real Orbis logo +
 // lucide icons, layered with Michael's role-aware nav (useOrbisRole + NAV_BY_ROLE), collapsible
@@ -27,12 +27,17 @@ export default function AppShell() {
   const [recents, setRecents] = useState(() => listConversations());
   const { role, orgName } = useOrbisRole();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const activeId = params.get("c"); // which chat is open right now → highlight it
   const nav = NAV_BY_ROLE[role] ?? NAV_BY_ROLE.individual;
   const inOrg = role === "member" || role === "analyst";
 
   // Keep Recents live: re-read when the conversation store changes (chat saved/deleted).
   useEffect(() => subscribe(() => setRecents(listConversations())), []);
-  const shownRecents = search.trim() ? searchConversations(search) : recents;
+  // While searching: a flat list of matches (no date headers). Otherwise: date-grouped.
+  const searching = search.trim().length > 0;
+  const searchResults = searching ? searchConversations(search) : [];
+  const groups = searching ? [] : groupConversations(recents);
 
   return (
     <NotificationsProvider>
@@ -91,20 +96,38 @@ export default function AppShell() {
             ))}
           </nav>
 
-          {/* Recents — real past chat threads (localStorage). Click to reopen; hover to delete. */}
+          {/* Recents — real past chat threads (localStorage). Click to reopen; ⋯ menu to
+              rename / pin / delete. Grouped by date (Today/Yesterday/…), or a flat list of
+              matches while searching. The open chat is highlighted. */}
           {!collapsed && (
             <div style={{ marginTop: 4, overflowY: "auto", flex: 1, minHeight: 0 }}>
-              <div style={{ fontSize: "0.68em", fontWeight: 700, color: "var(--text-dim)",
-                textTransform: "uppercase", letterSpacing: "0.06em", padding: "0 8px 6px" }}>Recents</div>
-              {shownRecents.length === 0 ? (
-                <div style={{ padding: "6px 8px", color: "var(--text-dim)", fontSize: "0.8em", fontStyle: "italic" }}>
-                  {search.trim() ? "No matching chats" : "Your past chats show up here"}
-                </div>
+              {searching ? (
+                // Search mode: one flat list under a "Recents" header.
+                <>
+                  <div style={groupHeaderStyle}>Recents</div>
+                  {searchResults.length === 0 ? (
+                    <EmptyRecents label="No matching chats" />
+                  ) : (
+                    searchResults.map((c) => (
+                      <RecentItem key={c.id} convo={c} active={c.id === activeId}
+                        onOpen={() => navigate(`/ask-orbo?c=${c.id}`)}
+                        onDelete={() => deleteConversation(c.id)} />
+                    ))
+                  )}
+                </>
+              ) : groups.length === 0 ? (
+                <EmptyRecents label="Your past chats show up here" />
               ) : (
-                shownRecents.map((c) => (
-                  <RecentItem key={c.id} convo={c}
-                    onOpen={() => navigate(`/ask-orbo?c=${c.id}`)}
-                    onDelete={() => { deleteConversation(c.id); }} />
+                // Normal mode: a header per date group (Pinned / Today / Yesterday / …).
+                groups.map((group) => (
+                  <div key={group.label}>
+                    <div style={groupHeaderStyle}>{group.label}</div>
+                    {group.items.map((c) => (
+                      <RecentItem key={c.id} convo={c} active={c.id === activeId}
+                        onOpen={() => navigate(`/ask-orbo?c=${c.id}`)}
+                        onDelete={() => deleteConversation(c.id)} />
+                    ))}
+                  </div>
                 ))
               )}
             </div>
@@ -145,26 +168,87 @@ function navLinkStyle(collapsed) {
   });
 }
 
-// One past-chat row: clock icon + auto-title, click to reopen, hover reveals a delete ✕.
-function RecentItem({ convo, onOpen, onDelete }) {
-  const [hover, setHover] = useState(false);
+// Shared style for a Recents date-group header ("Today", "Pinned", …). Mirrors the old
+// single "Recents" label so grouped headers look consistent.
+const groupHeaderStyle = {
+  fontSize: "0.68em", fontWeight: 700, color: "var(--text-dim)",
+  textTransform: "uppercase", letterSpacing: "0.06em", padding: "10px 8px 4px",
+};
+
+// Placeholder shown when there are no chats to list.
+function EmptyRecents({ label }) {
   return (
-    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+    <div style={{ padding: "6px 8px", color: "var(--text-dim)", fontSize: "0.8em", fontStyle: "italic" }}>
+      {label}
+    </div>
+  );
+}
+
+// One past-chat row: pin/clock icon + title. Click to reopen; the ⋯ button opens a small
+// menu to Rename / Pin / Delete. The active (currently open) chat is highlighted.
+function RecentItem({ convo, active, onOpen, onDelete }) {
+  const [hover, setHover] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const highlight = active || hover;
+
+  // Rename via a simple prompt (beginner-friendly, no custom modal). Cancel leaves it as-is.
+  function handleRename(e) {
+    e.stopPropagation();
+    setMenuOpen(false);
+    const name = window.prompt("Rename chat", convo.customTitle || convo.title);
+    if (name != null) renameConversation(convo.id, name);
+  }
+  function handlePin(e) {
+    e.stopPropagation();
+    setMenuOpen(false);
+    togglePin(convo.id);
+  }
+  function handleDelete(e) {
+    e.stopPropagation();
+    setMenuOpen(false);
+    if (window.confirm("Delete this chat?")) onDelete();
+  }
+
+  return (
+    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setMenuOpen(false); }}
       onClick={onOpen} title={convo.title}
-      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 8,
-        cursor: "pointer", color: "var(--text-dim)", fontSize: "0.85em",
-        background: hover ? "var(--canvas)" : "transparent" }}>
-      <Clock size={14} style={{ flexShrink: 0 }} />
+      style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
+        borderRadius: 8, cursor: "pointer", color: active ? "var(--primary)" : "var(--text-dim)",
+        fontSize: "0.85em", fontWeight: active ? 700 : 400,
+        background: highlight ? "var(--canvas)" : "transparent" }}>
+      {convo.pinned ? <Pin size={14} style={{ flexShrink: 0 }} /> : <Clock size={14} style={{ flexShrink: 0 }} />}
       <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{convo.title}</span>
-      {hover && (
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} aria-label="Delete chat"
+
+      {(hover || menuOpen) && (
+        <button onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }} aria-label="Chat options"
           style={{ border: "none", background: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center", padding: 0 }}>
-          <X size={14} />
+          <MoreHorizontal size={16} />
         </button>
+      )}
+
+      {menuOpen && (
+        <div style={{ position: "absolute", top: "100%", right: 4, zIndex: 20, minWidth: 150,
+          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+          boxShadow: "var(--shadow)", padding: 4, color: "var(--text)", fontWeight: 400 }}>
+          <button onClick={handleRename} style={menuItemStyle}><Pencil size={14} /> Rename</button>
+          <button onClick={handlePin} style={menuItemStyle}>
+            <Pin size={14} /> {convo.pinned ? "Unpin" : "Pin"}
+          </button>
+          <button onClick={handleDelete} style={{ ...menuItemStyle, color: "var(--danger)" }}>
+            <Trash2 size={14} /> Delete
+          </button>
+        </div>
       )}
     </div>
   );
 }
+
+// One row inside the ⋯ menu.
+const menuItemStyle = {
+  display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
+  padding: "7px 10px", borderRadius: 8, border: "none", background: "none",
+  cursor: "pointer", fontSize: "0.9em", color: "inherit",
+};
 
 function NavItem({ item, collapsed }) {
   const Icon = NAV_ICON[item.to] ?? Sparkles;
