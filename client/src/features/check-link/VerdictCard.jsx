@@ -16,7 +16,7 @@ function bucket(score) {
 }
 
 // The verdict card, rendered INSIDE the chat as Orbo's response (wireframe: Report_Response).
-// badge + risk gauge + plain-English verdict + safe screenshot + "why" + action buttons.
+// badge + safety gauge + plain-English verdict + safe screenshot + "why" + action buttons.
 // onAskMore(): lets the chat start a follow-up question. onAction(kind): Report it / Mark safe.
 export default function VerdictCard({ indicator, onAskMore, onAction }) {
   const { ai_score, ai_verdict, ai_confidence, screenshot_url, report_count, evidence } = indicator;
