@@ -1,6 +1,7 @@
 // Escalation/closure status for org-member reports. TODO(Ozias): wire real review_status values.
 const CHIPS = {
   "pending review":       { label: "Pending review", color: "var(--review)", bg: "var(--review-bg)" },
+  "investigating":        { label: "Investigating", color: "var(--review)", bg: "var(--review-bg)" },
   "confirmed malicious":  { label: "Confirmed malicious", color: "var(--danger)", bg: "var(--danger-bg)" },
   "confirmed safe":       { label: "Confirmed safe", color: "var(--safe)", bg: "var(--safe-bg)" },
 };

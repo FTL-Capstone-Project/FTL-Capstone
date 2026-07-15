@@ -24,6 +24,18 @@ a:hover { text-decoration: underline; }
   .report-card__score { text-align: left; }
 }
 
+/* Whole report card is clickable, but only the title <button> is a real control
+   (keeps the <h3> in the heading outline for screen readers). The button's ::after
+   stretches over the entire card so a click anywhere opens the modal. */
+.report-card { cursor: pointer; }
+.report-card__open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.report-card:hover { border-color: var(--primary); }
+.report-card__open:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
 /* Orbo's "thinking" typing dots (used by ThinkingBubble). */
 @keyframes orboDot {
   0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }

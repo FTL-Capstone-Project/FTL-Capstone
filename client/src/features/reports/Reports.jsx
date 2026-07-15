@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { useAuth, useUser } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../lib/api.js";
+import { useOrbisRole } from "../../lib/useOrbisRole.js";
 import ReportCard from "./ReportCard.jsx";
+import ReportDetailModal from "./ReportDetailModal.jsx";
 
 // The verdict filter options (O2). `value` is what we compare against each
 // report's `kind`; `label` is what the user sees. Note: our verdict kind for
@@ -19,16 +21,16 @@ const FILTERS = [
 // One page, two variants (they differ only by that chip) — not two routes.
 export default function Reports() {
   const { getToken } = useAuth();
-  const { user } = useUser();
+  const { role } = useOrbisRole(); // authoritative role from Clerk org membership (Michael's hook)
   const [reports, setReports] = useState([]);
   const [filter, setFilter] = useState("all"); // which verdict is selected; "all" = show everything
+  const [selected, setSelected] = useState(null); // the report whose detail modal is open (null = closed)
 
-  // Role decides whether closure status is shown. Read it from Clerk when
-  // available, else default to individual (no closure chip).
+  // Role decides whether analyst/closure info is shown. Anyone in an org (member
+  // OR analyst) sees the analyst score + closure chip; solo individuals don't.
   // FRONTEND role = what to SHOW only; real security is the backend filtering
   // data by the verified session (story #12).
-  const role = user?.publicMetadata?.role ?? "individual";
-  const isMember = role === "member";
+  const isMember = role === "member" || role === "analyst";
 
   useEffect(() => {
     api.get("/api/history?mine=1", { getToken })
@@ -78,9 +80,23 @@ export default function Reports() {
       ) : (
         <div style={{ display: "grid", gap: 8 }}>
           {visibleReports.map((r) => (
-            <ReportCard key={r.indicator_id} report={r} showReviewStatus={isMember} />
+            <ReportCard
+              key={r.indicator_id}
+              report={r}
+              showReviewStatus={isMember}
+              onOpen={() => setSelected(r)}
+            />
           ))}
         </div>
+      )}
+
+      {/* Detail modal — opens when a card is clicked. Persona variant driven by isMember. */}
+      {selected && (
+        <ReportDetailModal
+          report={selected}
+          isMember={isMember}
+          onClose={() => setSelected(null)}
+        />
       )}
     </div>
   );

@@ -15,10 +15,24 @@ import StatusChip from "./StatusChip.jsx";
 // `showReviewStatus` — off by default = the INDIVIDUAL view (no analyst/closure
 // chip, because a solo user has no security team). The org-member variant (O3)
 // passes showReviewStatus={true} to reveal the closure chip.
-export default function ReportCard({ report, showReviewStatus = false }) {
+//
+// `onOpen` — click/Enter/Space opens the detail modal. The card acts as a button
+// (role + tabIndex + key handler) so it's reachable by keyboard, not just mouse.
+export default function ReportCard({ report, showReviewStatus = false, onOpen }) {
+  // Format the DB timestamp ("2026-07-14T23:03:28.535Z") into a readable date
+  // like "Jul 14, 2026". Guarded so a null/invalid value shows nothing (not 1970).
+  const when = report.created_at
+    ? new Date(report.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+    : null;
+
   return (
-    <div className="report-card" style={{ display: "flex", gap: 14, background: "var(--surface)",
-      border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 16 }}>
+    // The card is a plain container that keeps a real <h3> heading (so screen-reader
+    // users can navigate report titles by heading). Only the TITLE is the actual
+    // button; a stretched invisible overlay keeps the whole card clickable.
+    <article
+      className="report-card"
+      style={{ position: "relative", display: "flex", gap: 14, background: "var(--surface)",
+        border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 16 }}>
 
       {/* Thumbnail of the detonated page. Grey placeholder until urlscan gives us one. */}
       <div style={{ width: 96, height: 72, flexShrink: 0, borderRadius: 8,
@@ -27,17 +41,24 @@ export default function ReportCard({ report, showReviewStatus = false }) {
       {/* Middle: title, who/when, description, tags */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, minWidth: 0 }}>
-          <h3 style={{ margin: 0, fontSize: "1em", color: "var(--navy)", minWidth: 0,
-            // A long URL title (no spaces) would otherwise push the card off-screen;
-            // truncate it to one line with an ellipsis.
+          <h3 style={{ margin: 0, fontSize: "1em", minWidth: 0,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {report.title ?? report.url}
+            {/* The button is the ONLY interactive element; its ::after (below) stretches
+                over the whole card so a click anywhere opens the modal. */}
+            <button
+              onClick={() => onOpen?.()}
+              className="report-card__open"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer",
+                font: "inherit", color: "var(--navy)", textAlign: "left" }}
+            >
+              {report.title ?? report.url}
+            </button>
           </h3>
           <div style={{ flexShrink: 0 }}><StatusBadge kind={report.kind} /></div>
         </div>
 
         <p style={{ margin: "0 0 6px", fontSize: "0.8em", color: "var(--text-dim)" }}>
-          Reported by {report.reported_by ?? "you"} · {report.created_at}
+          Reported by {report.reported_by ?? "you"}{when ? ` · ${when}` : ""}
         </p>
 
         {report.description && (
@@ -77,7 +98,7 @@ export default function ReportCard({ report, showReviewStatus = false }) {
           </div>
         )}
       </div>
-    </div>
+    </article>
   );
 }
 

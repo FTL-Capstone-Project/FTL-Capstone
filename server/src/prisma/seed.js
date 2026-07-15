@@ -59,6 +59,13 @@ async function main() {
       aiTitle: "Fake PayPal 'account locked' email",
       aiDescription: "Credential phishing page impersonating PayPal on a newly registered lookalike domain.",
       aiTags: ["Credential phishing", "Campaign: Bank impersonation"],
+      // Threat vectors shown in the report detail modal (the "why" rows).
+      aiReasons: [
+        { text: "Credential harvesting — fake login form captures your password", severity: "dangerous" },
+        { text: "Brand impersonation — closely mimics PayPal's branding", severity: "dangerous" },
+        { text: "Newly registered domain — created just 3 days ago", severity: "dangerous" },
+        { text: "Urgency manipulation — 'account locked' pressure tactic", severity: "review" },
+      ],
       aiConfidence: "high",
       screenshotUrl: null,
       blacklistHit: true,
@@ -77,6 +84,11 @@ async function main() {
       aiTitle: "Unusual shipping notification from FedEx",
       aiDescription: "Low-reputation domain with a redirect. No credential form found, but proceed with caution.",
       aiTags: ["Social engineering"],
+      aiReasons: [
+        { text: "Shortened redirect hides the true destination", severity: "review" },
+        { text: "Low-reputation domain not linked to the real FedEx", severity: "review" },
+        { text: "No credential form detected on the page", severity: "safe" },
+      ],
       aiConfidence: "medium",
       domainAgeDays: 180,
       reportCount: 3,
@@ -92,6 +104,11 @@ async function main() {
       aiTitle: "HR benefits enrollment reminder",
       aiDescription: "Verified internal HR communication. Links point to the Acme internal portal.",
       aiTags: ["Internal comms"],
+      aiReasons: [
+        { text: "Verified sender on the Acme corporate domain", severity: "safe" },
+        { text: "Links resolve to the internal HR portal only", severity: "safe" },
+        { text: "Long-established domain with no blacklist history", severity: "safe" },
+      ],
       aiConfidence: "high",
       domainAgeDays: 2200,
       reportCount: 1,
