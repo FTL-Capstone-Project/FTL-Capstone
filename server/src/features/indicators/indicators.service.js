@@ -120,6 +120,10 @@ async function runPipeline(indicatorId, rawUrl, contextText) {
         aiConfidence: verdict.ai_confidence,
         screenshotUrl: scan.screenshot_url ?? null,
         urlscanUuid: scan.urlscan_uuid ?? null,
+        // Redirect facts (step 2): where the link truly lands, so the verdict + chat never guess.
+        finalUrl: scan.final_url ?? null,
+        finalHost: scan.final_host ?? null,
+        redirectedToDifferentHost: scan.redirected_to_different_host ?? false,
         domainAgeDays: scan.domain_age_days ?? null,
         blacklistHit: bl.blacklist_hit,
         blacklistSource: bl.blacklist_source ?? null,
@@ -173,6 +177,10 @@ export async function readIndicatorForClient(indicatorId, user) {
     tags: asArray(indicator.aiTags) ?? deriveTags(indicator, bucket),
     evidence: asArray(indicator.aiReasons) ?? [],
     domain: indicator.domain,
+    // Where the link actually goes — lets the card show a "goes to amazon.com" cue.
+    final_url: indicator.finalUrl,
+    final_host: indicator.finalHost,
+    redirected_to_different_host: indicator.redirectedToDifferentHost,
   };
 }
 
@@ -186,6 +194,9 @@ export async function getIndicatorContext(indicatorId) {
     tags: asArray(i.aiTags) ?? deriveTags(i, scoreBucket(i.aiScore)),
     reasons: (asArray(i.aiReasons) ?? []).map((r) => r.text),
     domain: i.domain,
+    // The true destination, so "Ask Orbo more" answers with fact instead of "even if it redirected".
+    final_host: i.finalHost,
+    redirected_to_different_host: i.redirectedToDifferentHost,
   };
 }
 
