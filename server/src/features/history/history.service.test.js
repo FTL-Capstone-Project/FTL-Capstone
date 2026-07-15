@@ -54,10 +54,11 @@ describe("toReportJson (DB row → Reports-card shape)", () => {
     expect(r.review).toBe(null);
   });
 
-  it("org member (has review) → nests review_status/human_score/reviewed_by", () => {
+  it("org member (has review) → nests review_status/human_score/reviewed_by/shared_with_org", () => {
     const orgReview = {
       reviewStatus: "confirmed malicious",
       humanScore: 18,
+      sharedWithOrg: true,
       reviewedByUser: { name: "Priya S." },
     };
     const r = toReportJson(submission, orgReview, "David M.");
@@ -65,6 +66,7 @@ describe("toReportJson (DB row → Reports-card shape)", () => {
       review_status: "confirmed malicious",
       human_score: 18,
       reviewed_by: "Priya S.",
+      shared_with_org: true,
     });
   });
 

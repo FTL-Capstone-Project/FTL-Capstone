@@ -22,7 +22,7 @@ Orbis is an AI-assisted phishing-triage web app. A user submits a suspicious URL
 The product serves three roles from one codebase:
 
 - **Individuals** get a lightweight "is this link safe?" page with a plain-language verdict and their own report history, with no organization behind them.
-- **Organization Members** get the same quick check at work; those with a security team can escalate a link for an authoritative review and are notified when it's confirmed.
+- **Organization Members** get the same quick check at work; those with a security team can escalate a link for an authoritative review and are notified when it's confirmed. They also get a read-only **Team History** of what their organization has been running into — but only the reviews an analyst has explicitly shared with the team (a privacy gate, so sensitive submissions aren't exposed org-wide by default).
 - **Analysts** get a full triage dashboard: org-wide threat history (scoped to their own organization), keyword search, campaign clustering, and a natural-language "ask-the-data" feature that turns plain-English questions into validated queries rendered as charts.
 
 **Objective:** make expert-level phishing triage faster for analysts and accessible to everyday users, with AI features that explain *why* a link is dangerous and let analysts query the threat database without writing SQL.
