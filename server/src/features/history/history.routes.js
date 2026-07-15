@@ -1,10 +1,12 @@
-// ── feature: history · owner: Ozias (personal ?mine=1) / analyst track (org-wide) ──
-// GET /api/history?mine=1 — the caller's own reports (personal Reports page). §6.
+// ── feature: history · owner: Ozias (personal ?mine=1 + org ?org=1) / analyst track (org-wide stats) ──
+// GET /api/history?mine=1 — the caller's own reports (personal "My History"). §6.
+// GET /api/history?org=1  — the caller's whole ORGANIZATION's reports ("Team History").
 //
 // This is the data source for my Reports screen. Flow:
-//   Reports.jsx → api.get("/api/history?mine=1") → HERE → Prisma → Postgres → back.
+//   Reports.jsx → api.get("/api/history?mine=1" | "?org=1") → HERE → Prisma → Postgres → back.
 // requireAuth (Michael's middleware) puts the verified user on req.user, so we
-// only ever return THAT user's submissions (story #12 data isolation).
+// only ever return submissions the caller is allowed to see (story #12 data
+// isolation): ?mine=1 = their own rows; ?org=1 = rows scoped to THEIR org only.
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { prisma } from "../../db.js";
@@ -14,6 +16,7 @@ export const historyRouter = Router();
 
 historyRouter.get("/", requireAuth, async (req, res, next) => {
   const mine = req.query.mine === "1";
+  const orgWide = req.query.org === "1";
 
   try {
     if (mine) {
@@ -51,8 +54,53 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
       return res.json({ reports });
     }
 
-    // Org-wide (analyst) branch → analyst track; guard with requireAnalyst.
-    // TODO(analyst): stats + recent for req.user.orgId.
+    if (orgWide) {
+      // "Team History": everything my whole org has reported, so a member can
+      // see what scams the organization has been running into lately.
+      // Individuals (no org) have no team → return an empty list, not an error.
+      if (!req.user.orgId) {
+        return res.json({ reports: [] });
+      }
+
+      // 1) Every submission in MY org, newest first, with the joined global
+      //    indicator AND the teammate who reported it (for "Reported by <name>").
+      const submissions = await prisma.submission.findMany({
+        where: { orgId: req.user.orgId },
+        orderBy: { createdAt: "desc" },
+        include: { indicator: true, user: true },
+      });
+
+      // 2) My org's reviews for those indicators that an analyst has explicitly
+      //    SHARED with the team (sharedWithOrg = true). This is the privacy gate:
+      //    only vetted-and-shared items appear in Team History, so nothing with
+      //    personal info leaks org-wide without an analyst's deliberate decision.
+      //    One query, same N+1-avoiding pattern as the ?mine=1 branch above.
+      const indicatorIds = submissions.map((s) => s.indicatorId);
+      const reviews = await prisma.orgReview.findMany({
+        where: { orgId: req.user.orgId, indicatorId: { in: indicatorIds }, sharedWithOrg: true },
+        include: { reviewedByUser: true }, // to show which analyst shared it
+      });
+      const reviewsByIndicator = new Map(reviews.map((r) => [r.indicatorId, r]));
+
+      // 3) One card per unique indicator (dedup: if two teammates checked the
+      //    same link, show it once — keep the newest, which is first after sort).
+      //    SKIP any indicator with no shared review — it isn't part of Team History.
+      const seen = new Set();
+      const reports = [];
+      for (const submission of submissions) {
+        if (seen.has(submission.indicatorId)) continue;
+        const review = reviewsByIndicator.get(submission.indicatorId) ?? null;
+        if (!review) continue; // not analyst-reviewed + shared → hidden from the team
+        seen.add(submission.indicatorId);
+        // Reporter name comes from THIS submission's user (a teammate), not me.
+        reports.push(toReportJson(submission, review, submission.user?.name));
+      }
+
+      return res.json({ reports });
+    }
+
+    // Org-wide STATS (analyst dashboard) branch → analyst track; guard with
+    // requireAnalyst. TODO(analyst): stats + recent for req.user.orgId.
     return res.json({ recent: [], stats: {} });
   } catch (err) {
     return next(err);

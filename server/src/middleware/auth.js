@@ -41,9 +41,22 @@ export function makeRequireAuth(deps = {}) {
 
   return async function requireAuthMiddleware(req, res, next) {
     try {
-      // ---- Dev stub: no Clerk configured → fake identity, no DB write. ----
+      // ---- Dev stub: no Clerk configured → fake identity. ----
       if (!clerkEnabled) {
-        req.user = req.user ?? { ...DEV_STUB_USER };
+        // Resolve (create-or-fetch) the dev user's REAL mirror row so req.user.id is a
+        // valid DB id — otherwise writes (submissions) and reads (history) disagree on
+        // which user this is. Best-effort: if the DB is unavailable (e.g. unit tests),
+        // fall back to the static stub so local building still works.
+        try {
+          const row = await resolveUser(db, {
+            clerkUserId: DEV_STUB_USER.clerkUserId,
+            email: DEV_STUB_USER.email,
+            name: DEV_STUB_USER.name,
+          });
+          req.user = req.user ?? { ...DEV_STUB_USER, id: row.id, role: row.role, orgId: row.orgId };
+        } catch {
+          req.user = req.user ?? { ...DEV_STUB_USER };
+        }
         return next();
       }
 

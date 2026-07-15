@@ -104,6 +104,10 @@ model OrgReview {
   humanScore   Int? // analyst's authoritative 0-100 safety score
   humanVerdict String?
   reviewStatus String   @default("pending review") // pending review | investigating | confirmed malicious | confirmed safe
+  // Privacy gate: an analyst must EXPLICITLY flag a review as shareable before it
+  // shows up in the org's Team History. Defaults to false (private) so nothing with
+  // personal info leaks to the whole team without a deliberate analyst decision.
+  sharedWithOrg Boolean @default(false)
   reviewedBy   Int? // FK → User.id (which analyst)
   campaignId   Int?
   createdAt    DateTime @default(now())
@@ -119,6 +123,7 @@ model OrgReview {
   @@index([indicatorId])
   @@index([campaignId])
   @@index([reviewStatus])
+  @@index([sharedWithOrg])
 }
 
 model Campaign {

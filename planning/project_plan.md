@@ -153,8 +153,12 @@ not one layout with columns toggled:
 - **Individual** - the lightest view. Just *my* checks, each verdict, score, and a verdict filter. No teammate
   names, no analyst columns, no campaigns - a solo user has none of those, and showing them implies features
   they don't have.
-- **Organization Member** - my checks **plus escalation/closure status** ("Pending review" → "Confirmed by
-  analyst"), which is the payoff for story #7. Still personal; no org-wide analytics or campaign clustering.
+- **Organization Member** - my checks (**My History**) **plus escalation/closure status** ("Pending review" →
+  "Confirmed by analyst"), the payoff for story #7. **Plus a read-only "Team History" tab** showing only the
+  items an analyst has reviewed **and explicitly shared** with the org (`org_reviews.shared_with_org = true`).
+  This is a curated, vetted feed — **not** the analyst's full org-wide analytics or campaign clustering. The
+  explicit share step is a privacy gate (an analyst can withhold anything containing personal info); items
+  default to unshared. See the "Team History share gate" note under §5.
 - **Analyst** - a **triage queue**, not a flat list: campaign-grouped so a phishing wave is one row, sorted by
   priority (score × recency × report count), with a pending-review filter front and center. The flat filterable
   list is a secondary view. This is what makes the analyst's grouped information genuinely useful (story #9).
@@ -218,6 +222,7 @@ and the team-setup flow are all drawn.
 | | human_score | integer | analyst's authoritative score (nullable) |
 | | human_verdict | text | analyst's written verdict (nullable) |
 | | review_status | text | `pending review` \| `investigating` \| `confirmed malicious` \| `confirmed safe` |
+| | shared_with_org | boolean | **Team History gate** - has an analyst explicitly shared this review with the whole org? Defaults `false` |
 | | reviewed_by | integer | FK → users.id - which analyst (nullable) |
 | | campaign_id | integer | FK → campaigns.id (nullable) - per-org clustering |
 | | created_at / updated_at | timestamp | |
@@ -266,6 +271,18 @@ safe to share from what must stay private:
 Because `canonical_key` is **globally unique**, 20 members of one org reporting the same link collapse into a
 single indicator (one investigation for their analyst) **and** benefit from any scan already done for anyone
 else on the platform.
+
+**Team History share gate (`org_reviews.shared_with_org`) - a privacy catch.** Org members get a read-only
+"Team History" that shows what their org has been running into - but **only** the reviews an analyst has
+explicitly shared (`shared_with_org = true`). This is deliberate, not incidental: a member's submission can
+carry personal information (the message it came from, an internal link, a name), so an analyst reviewing it
+must **opt in** before it becomes visible to the whole team. The design follows two standard principles:
+**human-in-the-loop** (a human affirmatively authorizes wider release, which catches sensitive/PII context a
+rule can't) and **data minimization / need-to-know** (default to the narrowest audience; broaden only on an
+explicit decision). Mechanics: the flag defaults `false`; only the analyst review action (`PATCH
+/api/indicators/:id/review`) sets it `true`; `GET /api/history?org=1` returns only shared items; a member's own
+submissions always stay in their **My History** regardless of the flag. Auditability is covered by the existing
+`reviewed_by` + `updated_at` columns.
 
 **How `canonical_key` is computed (the dedup rule - agreed approach).** Phishers add per-victim tracking junk
 to URLs so every target gets a "unique" link (`.../verify?id=david&ref=email123` vs `.../verify?id=maria&ref=email456`),
@@ -343,21 +360,24 @@ and `org_id` from the verified Clerk session token (no hand-rolled JWTs).
 | Create | POST | `/api/webhooks/inbound-email` | Inbound-email service (or a simulated forward) → us: a message hit the Orbo inbox | `{ from, subject, body, links[] }` | `{ submissionId, indicatorId, status }` | 400 unparseable; 202 accepted-but-unknown-sender (ignored) | 4, 13 |
 | Create | POST | `/api/submissions` | Submit a URL for analysis (web chat) | `{ url, contextText? }` | `{ submissionId, indicatorId, status }` | 400 invalid/empty URL (→ Invalid Input screen); 401 unauthenticated | 1, 2, 3, 4, 5, 13 |
 | Read | GET | `/api/indicators/:id` | Get a verdict (polled until done); merges the global indicator with the caller's org_review if any | - | `{ status, ai_score, ai_verdict, screenshot_url, report_count, review?: { human_score, human_verdict, review_status }, ... }` | 401; 403 not in caller's scope; 404 not found | 1, 7, 12, 15 |
-| Read | GET | `/api/history?mine=1` | My reported links (individual/member) | - | `{ reports: [...] }` | 401 unauthenticated | 7, 14 |
-| Read | GET | `/api/history` | Org-wide history + stats (analyst) | - | `{ recent: [...], stats: {...} }` | 401; 403 non-analyst | 8, 12 |
+| Read | GET | `/api/history?mine=1` | My reported links (individual/member); each report's `review` includes `shared_with_org` | - | `{ reports: [...] }` | 401 unauthenticated | 7, 14 |
+| Read | GET | `/api/history?org=1` | **Team History** (org member): my org's reports that an analyst reviewed **and shared** (`shared_with_org = true`); scoped to the caller's org | - | `{ reports: [...] }` | 401 unauthenticated | 7, 12 |
+| Read | GET | `/api/history` | Org-wide history + stats (analyst dashboard) | - | `{ recent: [...], stats: {...} }` | 401; 403 non-analyst | 8, 12 |
 | Read | GET | `/api/search?q=` | Keyword search within org (analyst) | - | `{ results: [...] }` | 401; 403 non-analyst | 11, 14 |
-| Update | PATCH | `/api/indicators/:id/review` | Analyst records/overrides their org's verdict - upserts the `org_reviews` row for (caller's org, indicator); raises a notification | `{ human_score, human_verdict, review_status }` | `{ review }` | 401; 403 non-analyst or wrong org; 404 not found; 400 invalid score | 7, 10 |
+| Update | PATCH | `/api/indicators/:id/review` | Analyst records/overrides their org's verdict - upserts the `org_reviews` row for (caller's org, indicator); sets `shared_with_org` (Team History gate); raises a notification | `{ human_score, human_verdict, review_status, shared_with_org? }` | `{ review }` | 401; 403 non-analyst or wrong org; 404 not found; 400 invalid score | 7, 10 |
 | Read | GET | `/api/campaigns` | List my org's campaigns (grouped triage queue) | - | `{ campaigns: [{ id, name, indicatorCount, reportCount, last_seen }] }` | 401; 403 non-analyst | 9 |
 | Read | GET | `/api/campaigns/:id` | Campaign detail: grouped indicators (analyst) | - | `{ campaign, indicators: [...], reportCount }` | 401; 403 non-analyst or wrong org; 404 not found | 9 |
 | Read | GET | `/api/notifications` | My notifications (closure alerts) | - | `{ notifications: [...], unreadCount }` | 401 unauthenticated | 7 |
 | Update | PATCH | `/api/notifications/:id/read` | Mark a notification read (clears the bell badge) | `{}` | `{ id, is_read: true }` | 401; 403 not mine; 404 not found | 7 |
 | Create | POST | `/api/nlp-query` | English → validated filter → results + chart (analyst) ★AI | `{ question }` | `{ filter, results: [...], chartSpec }` | 401; 403 non-analyst; 422 unmappable question (→ "try rephrasing") | 11 |
 
-**Role & org enforcement (story #12):** org-wide reads (`/history`, `/search`, `/nlp-query`, `/campaigns/*`)
-and the review PATCH (`/api/indicators/:id/review`) require the **analyst** role *and* are filtered/upserted to the analyst's own `org_id`;
-individuals/members are scoped to their own submissions (`?mine=1`). One server-side middleware verifies the
-Clerk session and checks role + org on every protected route, reused everywhere - so no org can ever read
-another org's data. (Role is stored in Clerk's user/org metadata and mirrored to `users.role`.)
+**Role & org enforcement (story #12):** the org-wide analyst **dashboard** reads (`/history` stats, `/search`,
+`/nlp-query`, `/campaigns/*`) and the review PATCH (`/api/indicators/:id/review`) require the **analyst** role
+*and* are filtered/upserted to the analyst's own `org_id`. Members are scoped to their own submissions
+(`?mine=1`) **plus a read-only Team History (`?org=1`)** that returns only their org's analyst-reviewed-and-shared
+items — still scoped to the caller's own `org_id`, so no org can read another org's data. One server-side
+middleware verifies the Clerk session and checks role + org on every protected route, reused everywhere.
+(Role is stored in Clerk's user/org metadata and mirrored to `users.role`.)
 
 **Note - endpoint count for the rubric:** even after handing auth/orgs/invites to Clerk, we still build 12
 first-party endpoints across full CRUD, comfortably past the "5 Node endpoints" bar.
@@ -498,13 +518,18 @@ later, once the data and submission flows exist). Concretely, this week covers:
   (a `pending review` `org_reviews` row is created) and their Reports page shows the **closure status**
   ("Pending review" → "Confirmed by analyst") — even though the analyst-facing UI that flips that status is a
   later slice.
+- **Organization Member — Team History (added):** a read-only "Team History" tab on the Reports page showing
+  only the org's analyst-reviewed-**and-shared** items (`GET /api/history?org=1`, gated by
+  `org_reviews.shared_with_org`). The `shared_with_org` column + the member view + the filter ship now; the
+  **analyst UI that sets the flag** (`PATCH /api/indicators/:id/review`) remains a later slice, so for MVP 0 the
+  flag is populated by the demo/seed data. See the "Team History share gate" note in §5.
 
 ### Who does what (each = a full UI + API + logic vertical)
 | Person | Slice | End-to-end goal | Owns |
 |---|---|---|---|
 | 🟦 **David** | **Check-Link Core + Verdict AI** | Paste a link → urlscan sandbox → Claude plain-English verdict → "seen-before" dedup. This is **AI Feature A** and the demo centerpiece. | `Home`, `CheckResult`, `VerdictCard`, `POST /api/submissions`, `GET /api/indicators/:id`, `canonicalize.js`, `verdict.js` |
 | 🟩 **Michael** | **Auth + App Shell + Data Layer** | Clerk-protected skeleton + Prisma schema/seed that **unblocks everyone**. | `<ClerkProvider>`, `AppShell`, `middleware/auth.js`, `webhooks/clerk`, the DB (Prisma schema + seed) |
-| 🟪 **Ozias** | **Reports + Notifications + Escalation** | The **"closure loop"** — users see their history and get notified when a verdict is confirmed. | `Reports`, `NotificationBell`, `GET /api/history?mine=1`, notifications endpoints, the escalation write, the email-forward pipeline (later) |
+| 🟪 **Ozias** | **Reports + Notifications + Escalation** | The **"closure loop"** — users see their history (incl. read-only **Team History**) and get notified when a verdict is confirmed. | `Reports`, `HistoryScopeToggle`, `NotificationBell`, `GET /api/history?mine=1` + `?org=1`, notifications endpoints, the escalation write, the email-forward pipeline (later) |
 
 ### Critical ordering (dependencies)
 1. **Michael scaffolds first** (monorepo + Clerk + Prisma schema/seed) — **auth is a day-1 dependency for

@@ -1,5 +1,4 @@
 import StatusBadge from "../../components/StatusBadge.jsx";
-import StatusChip from "./StatusChip.jsx";
 
 // One report row in the "My checks" list — built to match the wireframe
 // (client/src/assets/wireframes/Personal/Orbis Reports_Page (Personal).png).
@@ -12,9 +11,10 @@ import StatusChip from "./StatusChip.jsx";
 // in mockReports.js). If David hasn't added a field yet, we fall back so the
 // card still renders instead of breaking.
 //
-// `showReviewStatus` — off by default = the INDIVIDUAL view (no analyst/closure
-// chip, because a solo user has no security team). The org-member variant (O3)
-// passes showReviewStatus={true} to reveal the closure chip.
+// `showReviewStatus` — off by default = the INDIVIDUAL view (single "SAFETY SCORE",
+// because a solo user has no security team). The org-member variant passes
+// showReviewStatus={true} to reveal the second "ANALYST SCORE" (the analyst's
+// human score, or "Pending"), matching the Organizational Reports wireframe.
 //
 // `onOpen` — click/Enter/Space opens the detail modal. The card acts as a button
 // (role + tabIndex + key handler) so it's reachable by keyboard, not just mouse.
@@ -85,16 +85,35 @@ export default function ReportCard({ report, showReviewStatus = false, onOpen })
         )}
       </div>
 
-      {/* Right: the Orbo score, and (org members) the analyst closure status */}
-      <div className="report-card__score" style={{ flexShrink: 0, textAlign: "right", minWidth: 84 }}>
-        <div style={{ fontSize: "0.68em", fontWeight: 700, color: "var(--text-dim)",
-          letterSpacing: "0.04em" }}>SAFETY SCORE</div>
+      {/* Right: the Orbo (AI) score. Org members ALSO see the analyst's score
+          (matches the Organizational wireframe's stacked "Orbo + Analyst" column). */}
+      <div className="report-card__score" style={{ flexShrink: 0, textAlign: "right", minWidth: 96 }}>
+        {/* Orbo (AI) score — shown to everyone. Individuals see it as "SAFETY SCORE";
+            org members see the dual layout, so it's labeled "ORBO SCORE". */}
+        <div style={scoreLabelStyle}>{showReviewStatus ? "ORBO SCORE" : "SAFETY SCORE"}</div>
         <div style={{ fontSize: "1.5em", fontWeight: 800, color: `var(--${scoreColor(report.kind)})` }}>
           {report.ai_score ?? "—"}<span style={{ fontSize: "0.5em", color: "var(--text-dim)" }}>/100</span>
         </div>
-        {showReviewStatus && report.review?.review_status && (
-          <div style={{ marginTop: 6 }}>
-            <StatusChip status={report.review.review_status} />
+
+        {/* Analyst score — ORG MEMBERS ONLY, when this item has a review.
+            Scored → the human number + "Scored by <analyst>"; not yet → "Pending". */}
+        {showReviewStatus && report.review && (
+          <div style={{ marginTop: 10 }}>
+            <div style={scoreLabelStyle}>ANALYST SCORE</div>
+            {report.review.human_score != null ? (
+              <>
+                <div style={{ fontSize: "1.5em", fontWeight: 800,
+                  color: `var(--${scoreColor(scoreToKind(report.review.human_score))})` }}>
+                  {report.review.human_score}<span style={{ fontSize: "0.5em", color: "var(--text-dim)" }}>/100</span>
+                </div>
+                <div style={scoredByStyle}>Scored by {report.review.reviewed_by ?? "an analyst"}</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: "1.15em", fontWeight: 800, color: "var(--text-dim)" }}>Pending</div>
+                <div style={scoredByStyle}>Scored by Orbo (AI)</div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -108,3 +127,16 @@ function scoreColor(kind) {
   if (kind === "dangerous") return "danger";
   return "review";
 }
+
+// Turn a 0-100 SAFETY score into a verdict "kind" so the analyst number is colored
+// the same way as the Orbo number. Mirrors scoreToKind in history.service.js.
+function scoreToKind(score) {
+  if (score == null) return "review";
+  if (score >= 70) return "safe";
+  if (score >= 35) return "review";
+  return "dangerous";
+}
+
+// Shared small styles for the score column (keeps the JSX readable).
+const scoreLabelStyle = { fontSize: "0.68em", fontWeight: 700, color: "var(--text-dim)", letterSpacing: "0.04em" };
+const scoredByStyle = { fontSize: "0.66em", fontStyle: "italic", color: "var(--text-dim)", marginTop: 2 };

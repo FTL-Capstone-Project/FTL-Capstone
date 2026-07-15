@@ -38,6 +38,7 @@ Individuals and organization members use Orbis to check links before clicking an
 - Blacklist check against known malware/phishing URLs (via the free Google Safe Browsing API), fed into the AI verdict
 - AI-generated danger verdict: a score from 0 to 100 across multiple threat vectors, plus a plain-English explanation
 - Personal report history ("my reports") for individuals and organization members
+- Read-only "Team History" for organization members: the threats their org has run into, limited to items an analyst reviewed and explicitly shared with the team (a privacy gate)
 - Organization-wide threat history dashboard for analysts
 - Keyword search across submissions
 - Campaign clustering that groups related and duplicate threats so analysts see attack patterns, not just one-off links

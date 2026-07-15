@@ -11,6 +11,12 @@
 // ============================================================
 import { prisma } from "../db.js";
 
+// Small date helper so the demo always looks "recent" (dates are relative to
+// whenever the seed runs, not hard-coded). Returns a Date N days before now.
+function daysAgo(n) {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+}
+
 async function reset() {
   // Delete in FK-safe order.
   await prisma.notification.deleteMany();
@@ -41,6 +47,17 @@ async function main() {
   });
   const sofia = await prisma.user.create({
     data: { clerkUserId: "user_demo_sofia", orgId: null, email: "sofia@example.com", name: "Sofia", role: "individual" },
+  });
+
+  // More Acme members so "Team History" shows several teammates, not just David.
+  const anya = await prisma.user.create({
+    data: { clerkUserId: "user_demo_anya", orgId: acme.id, email: "anya@acme.com", name: "Anya K.", role: "member" },
+  });
+  const marcus = await prisma.user.create({
+    data: { clerkUserId: "user_demo_marcus", orgId: acme.id, email: "marcus@acme.com", name: "Marcus T.", role: "member" },
+  });
+  const sarah = await prisma.user.create({
+    data: { clerkUserId: "user_demo_sarah", orgId: acme.id, email: "sarah@acme.com", name: "Sarah L.", role: "member" },
   });
 
   // ── Campaign (analyst clustering, org-scoped) ──
@@ -115,18 +132,50 @@ async function main() {
     },
   });
 
+  const microsoftScam = await prisma.indicator.create({
+    data: {
+      canonicalKey: "microsoft365-signin-verify.com/login",
+      domain: "microsoft365-signin-verify.com",
+      status: "done",
+      aiScore: 31,
+      aiVerdict: "This is not a Microsoft domain. The real sign-in is login.microsoftonline.com. This lookalike is collecting Microsoft 365 passwords.",
+      aiTitle: "Fake Microsoft 365 sign-in page",
+      aiDescription: "Credential phishing page impersonating the Microsoft 365 login on a lookalike domain.",
+      aiTags: ["Credential phishing", "Impersonation"],
+      aiReasons: [
+        { text: "Fake login form captures your Microsoft 365 password", severity: "dangerous" },
+        { text: "Lookalike domain not owned by Microsoft", severity: "dangerous" },
+        { text: "Recently registered domain", severity: "review" },
+      ],
+      aiConfidence: "high",
+      blacklistHit: true,
+      blacklistSource: "google_safe_browsing:SOCIAL_ENGINEERING",
+      domainAgeDays: 9,
+      reportCount: 6,
+    },
+  });
+
   // ── Submissions (report events; many → one indicator) ──
+  // Spread across Acme teammates and the last ~10 days so "Team History" looks
+  // like a real, recent stream of things the org has been encountering.
+  // Org submissions are `escalated: true` (auto-escalation, story #4).
   await prisma.submission.createMany({
     data: [
-      { userId: david.id, orgId: acme.id, indicatorId: paypalScam.id, rawUrl: "https://paypa1-secure.com/verify?id=david", source: "web", escalated: true },
-      { userId: david.id, orgId: acme.id, indicatorId: fedexMaybe.id, rawUrl: "https://fedex-track-parcel.co/track?x=99", source: "email", escalated: true },
-      { userId: david.id, orgId: acme.id, indicatorId: hrSafe.id, rawUrl: "https://intranet.acme.com/benefits", source: "web", escalated: true },
-      { userId: sofia.id, orgId: null, indicatorId: paypalScam.id, rawUrl: "https://paypa1-secure.com/verify?id=sofia", source: "web", escalated: false },
+      { userId: david.id,  orgId: acme.id, indicatorId: paypalScam.id,    rawUrl: "https://paypa1-secure.com/verify?id=david", source: "web",   escalated: true, createdAt: daysAgo(8) },
+      { userId: anya.id,   orgId: acme.id, indicatorId: microsoftScam.id, rawUrl: "https://microsoft365-signin-verify.com/login", source: "email", escalated: true, createdAt: daysAgo(6) },
+      { userId: marcus.id, orgId: acme.id, indicatorId: fedexMaybe.id,    rawUrl: "https://fedex-track-parcel.co/track?x=99",  source: "email", escalated: true, createdAt: daysAgo(4) },
+      { userId: sarah.id,  orgId: acme.id, indicatorId: hrSafe.id,        rawUrl: "https://intranet.acme.com/benefits",        source: "web",   escalated: true, createdAt: daysAgo(2) },
+      // David also personally checked the FedEx link earlier (proves dedup: one card, newest wins).
+      { userId: david.id,  orgId: acme.id, indicatorId: fedexMaybe.id,    rawUrl: "https://fedex-track-parcel.co/track?x=99",  source: "web",   escalated: true, createdAt: daysAgo(9) },
+      // Sofia is an individual (no org) → never appears in Acme's Team History.
+      { userId: sofia.id,  orgId: null,    indicatorId: paypalScam.id,    rawUrl: "https://paypa1-secure.com/verify?id=sofia", source: "web",   escalated: false, createdAt: daysAgo(3) },
     ],
   });
 
   // ── Per-org reviews (two-phase verdict) ──
   // Priya confirmed the PayPal scam (overrode with her own score); FedEx still pending.
+  // `sharedWithOrg: true` = Priya deemed it safe/useful to show the whole team, so it
+  // appears in Team History. Pending/investigating reviews stay unshared (the gate).
   await prisma.orgReview.create({
     data: {
       orgId: acme.id,
@@ -134,12 +183,22 @@ async function main() {
       humanScore: 18,
       humanVerdict: "Analyzed headers and registrar. Domain registered via NameCheap 72h ago. SPF/DKIM failing. Confirmed high-priority phishing campaign targeting employees.",
       reviewStatus: "confirmed malicious",
+      sharedWithOrg: true,
       reviewedBy: priya.id,
       campaignId: campaign.id,
     },
   });
   await prisma.orgReview.create({
     data: { orgId: acme.id, indicatorId: fedexMaybe.id, reviewStatus: "pending review" },
+  });
+  // Microsoft phishing — Priya is actively looking into it (the 4th status word).
+  await prisma.orgReview.create({
+    data: {
+      orgId: acme.id,
+      indicatorId: microsoftScam.id,
+      reviewStatus: "investigating",
+      reviewedBy: priya.id,
+    },
   });
   await prisma.orgReview.create({
     data: {
@@ -148,6 +207,7 @@ async function main() {
       humanScore: 94,
       humanVerdict: "Verified internal HR communication. Safe.",
       reviewStatus: "confirmed safe",
+      sharedWithOrg: true,
       reviewedBy: priya.id,
     },
   });

@@ -44,6 +44,9 @@ export function toReportJson(submission, orgReview, reporterName) {
           review_status: orgReview.reviewStatus,
           human_score: orgReview.humanScore,
           reviewed_by: orgReview.reviewedByUser?.name ?? null,
+          // Has an analyst shared this with the whole team? Team History only ever
+          // returns shared items, but ?mine=1 can use this to hint "shared with your team".
+          shared_with_org: orgReview.sharedWithOrg ?? false,
         }
       : null,
   };
