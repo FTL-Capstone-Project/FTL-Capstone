@@ -8,6 +8,7 @@ import Login from "./features/auth/Login.jsx";
 import Register from "./features/auth/Register.jsx";
 import Home from "./features/check-link/Home.jsx";
 import Reports from "./features/reports/Reports.jsx";
+import Dashboard from "./features/dashboard/Dashboard.jsx";
 
 // Route map:
 //  Public:    /  /login  /register
@@ -34,7 +35,7 @@ export default function App() {
         <Route path="/home" element={<Navigate to="/ask-orbo" replace />} />
         <Route path="/check/:indicatorId" element={<Navigate to="/ask-orbo" replace />} />
         <Route path="/reports" element={<Reports />} />
-        <Route path="/dashboard" element={<ComingSoon title="Dashboard" note="Your safety stats and trends will live here." />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/settings" element={<ComingSoon title="Settings" note="Account and preferences are on the way." />} />
         {/* Catch-all: never strand the user on a blank screen. */}
         <Route path="*" element={<ComingSoon note="That page doesn't exist yet." />} />
