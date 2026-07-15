@@ -4,7 +4,7 @@
 // submission, dedup by canonicalKey] → background scan+blacklist+verdict → client polls.
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { canonicalize } from "../../services/canonicalize.js";
+import { normalizeUrl } from "../../services/canonicalize.js";
 import { submitUrl } from "../indicators/indicators.service.js";
 
 export const submissionsRouter = Router();
@@ -15,16 +15,19 @@ submissionsRouter.post("/", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "A url is required" }); // → Invalid Input screen
   }
 
-  // Validate up front so bad input gets a friendly 400 before we touch the DB.
+  // Validate + normalize up front. normalizeUrl prepends "https://" to a bare domain
+  // ("amzon.com") so the parser, the dedup key, storage, and the urlscan submit all agree,
+  // and rejects a bare email (that belongs to the sender-report path, not the scanner).
+  let normalizedUrl;
   try {
-    canonicalize(url);
+    normalizedUrl = normalizeUrl(url);
   } catch {
     return res.status(400).json({ error: "That doesn't look like a link or email address" });
   }
 
   try {
     const { indicatorId, submissionId, seenBefore } = await submitUrl({
-      rawUrl: url,
+      rawUrl: normalizedUrl,
       user: req.user,
       contextText: typeof contextText === "string" ? contextText : null,
     });

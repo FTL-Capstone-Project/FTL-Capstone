@@ -147,11 +147,13 @@ export default function Home() {
     }
   }
 
-  // Composer submit: a bare link/email → scan; a sentence → ask Orbo (but if it has a
+  // Composer submit: a bare link/email → check it; a sentence → ask Orbo (but if it has a
   // link/email inside, pass it along so Orbo can offer a "Get report" scan button).
+  // checkTarget() routes an email → sender report and a URL → sandbox scan (the scanner rejects
+  // emails), so a typed "foo@bar.com" gets a report instead of a failed URL scan.
   async function handleSend(text) {
     add({ role: "user", kind: "text", text });
-    if (looksCheckable(text)) await scan(text);
+    if (looksCheckable(text)) await checkTarget(text.trim());
     else await askOrbo(text, extractTarget(text));
   }
 
