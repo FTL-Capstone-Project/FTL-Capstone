@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { escalateSubmission } from "./submissions.service.js";
 
-function mockPrisma() {
+const mockPrisma = () => {
   return {
     submission: {
       update: vi.fn(async ({ where }) => ({ id: where.id, escalated: true })),

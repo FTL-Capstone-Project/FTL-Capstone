@@ -20,7 +20,7 @@ import StatusChip from "./StatusChip.jsx";
 // doesn't carry (full ai_verdict, evidence/threat vectors, confidence, domain).
 
 // Verdict word from a 0-100 SAFETY score (100 = safe). Mirrors David's scoreBucket.
-function scoreKind(score) {
+const scoreKind = (score) => {
   if (score == null) return "review";
   if (score >= 70) return "safe";
   if (score >= 35) return "review";
@@ -34,7 +34,7 @@ const KIND_COLOR = { safe: "var(--safe)", review: "var(--review)", dangerous: "v
 // fabricated percentage number. Reflects the wireframe's bar look, honestly.
 const SEVERITY_FILL = { dangerous: 92, review: 58, safe: 28 };
 
-export default function ReportDetailModal({ report, isMember = false, onClose }) {
+const ReportDetailModal = ({ report, isMember = false, onClose }) => {
   const { getToken } = useAuth();
   const [detail, setDetail] = useState(null); // richer fields from GET /api/indicators/:id
   const [loading, setLoading] = useState(true);
@@ -69,7 +69,7 @@ export default function ReportDetailModal({ report, isMember = false, onClose })
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    function onKey(e) {
+    const onKey = (e) => {
       if (e.key === "Escape") { onCloseRef.current(); return; }
       if (e.key !== "Tab") return;
       // Keep focus cycling among the dialog's focusable elements.
@@ -246,7 +246,7 @@ export default function ReportDetailModal({ report, isMember = false, onClose })
 }
 
 // One "Orbo score" / "Analyst score" card: big number /100 + a subtitle line.
-function ScoreCard({ label, score, kind, subtitle }) {
+const ScoreCard = ({ label, score, kind, subtitle }) => {
   return (
     <div style={cardStyle}>
       <div style={cardLabelStyle}>{label}</div>
@@ -262,7 +262,7 @@ function ScoreCard({ label, score, kind, subtitle }) {
 }
 
 // A single threat-vector row: label + severity-colored bar (qualitative, no fake %).
-function ThreatVector({ text, severity }) {
+const ThreatVector = ({ text, severity }) => {
   const color = KIND_COLOR[severity] ?? "var(--primary)";
   const fill = SEVERITY_FILL[severity] ?? 50;
   return (
@@ -286,3 +286,5 @@ const cardSubtitleStyle = {
   display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
 };
 const sectionHeadingStyle = { margin: "0 0 10px", color: "var(--navy)", fontSize: "1.05em" };
+
+export default ReportDetailModal;

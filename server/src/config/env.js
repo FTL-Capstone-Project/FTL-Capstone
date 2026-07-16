@@ -40,7 +40,7 @@ export const env = {
 };
 
 // Warn (don't crash) if a key is missing — lets us build/stub before all keys exist.
-export function warnMissingEnv() {
+export const warnMissingEnv = () => {
   if (!env.databaseUrl) console.warn("⚠ env: DATABASE_URL is not set (see .env.example) — DB calls will fail.");
   if (!env.clerkEnabled) {
     console.warn("⚠ env: Clerk keys missing — auth runs in DEV STUB mode (fake user). Set CLERK_SECRET_KEY + CLERK_PUBLISHABLE_KEY for real auth.");

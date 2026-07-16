@@ -26,7 +26,7 @@ if (!email) {
 }
 
 // Date helper so the demo always looks recent (relative to when it runs).
-function daysAgo(n) {
+const daysAgo = (n) => {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 }
 
@@ -112,7 +112,7 @@ const DEMO = [
   },
 ];
 
-async function main() {
+const main = async () => {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) throw new Error(`No user with email ${email}. Sign in once so the mirror row exists.`);
   if (user.orgId == null) {

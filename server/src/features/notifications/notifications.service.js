@@ -12,7 +12,7 @@
  * @param {number} userId
  * @returns {Promise<object[]>} raw notification rows (camelCase, straight from Prisma)
  */
-export async function listNotifications(prisma, userId) {
+export const listNotifications = async (prisma, userId) => {
   return prisma.notification.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
@@ -31,7 +31,7 @@ export async function listNotifications(prisma, userId) {
  * @param {import('@prisma/client').PrismaClient} prisma
  * @param {{ id: number, userId: number }} args
  */
-export async function markNotificationRead(prisma, { id, userId }) {
+export const markNotificationRead = async (prisma, { id, userId }) => {
   const existing = await prisma.notification.findUnique({ where: { id } });
   if (!existing) return { status: "not_found" };
   if (existing.userId !== userId) return { status: "forbidden" };
@@ -57,10 +57,10 @@ export async function markNotificationRead(prisma, { id, userId }) {
  * @param {number|null} [args.indicatorId]   the indicator this alert is about (optional)
  * @returns {Promise<object>} the created notification row
  */
-export async function createNotification(
+export const createNotification = async (
   prisma,
   { userId, message, type = "verdict_confirmed", indicatorId = null }
-) {
+) => {
   if (!userId) throw new Error("createNotification: userId is required");
   if (!message) throw new Error("createNotification: message is required");
 

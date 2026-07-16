@@ -20,7 +20,7 @@ const MAX_WAIT_MS = 75_000; // give up after ~75s → status "error", "review ma
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function scanUrl(rawUrl) {
+export const scanUrl = async (rawUrl) => {
   if (!env.urlscanApiKey) {
     // No key → we genuinely cannot scan. Do NOT fabricate danger signals (that falsely
     // accused apple.com of being "3 days old"). Throw so the pipeline marks it "error"
@@ -64,7 +64,7 @@ export async function scanUrl(rawUrl) {
 }
 
 // Turn urlscan's huge result JSON into a small evidence list our verdict + UI can use.
-function distill(result, uuid) {
+const distill = (result, uuid) => {
   const page = result.page ?? {};
   const verdicts = result.verdicts?.overall ?? {};
   const lists = result.lists ?? {};

@@ -15,7 +15,7 @@ import { env } from "../config/env.js";
 const ENDPOINT = "https://safebrowsing.googleapis.com/v4/threatMatches:find";
 const THREAT_TYPES = ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"];
 
-export async function checkBlacklist(rawUrl) {
+export const checkBlacklist = async (rawUrl) => {
   if (!env.safeBrowsingKey) {
     return { blacklist_hit: false, blacklist_source: null }; // stub: no key → unknown → not flagged
   }

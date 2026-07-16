@@ -7,7 +7,7 @@
 import { API_URL } from "../config/constants.js";
 
 // `getToken` comes from Clerk's useAuth() — pass it in from a component/hook.
-async function request(method, path, { body, getToken } = {}) {
+const request = async (method, path, { body, getToken } = {}) => {
   const headers = { "Content-Type": "application/json" };
   if (getToken) {
     const token = await getToken();

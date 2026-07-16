@@ -8,7 +8,7 @@ import ScreenshotReader from "./ScreenshotReader.jsx";
 
 // Maps a 0–100 SAFETY score to a verdict bucket (100 = safe, matches the DB/whole app).
 // High score = safe; low = dangerous.
-function bucket(score) {
+const bucket = (score) => {
   if (score == null) return "review";
   if (score >= 70) return "safe";
   if (score >= 35) return "review";
@@ -18,7 +18,7 @@ function bucket(score) {
 // The verdict card, rendered INSIDE the chat as Orbo's response (wireframe: Report_Response).
 // badge + safety gauge + plain-English verdict + safe screenshot + "why" + action buttons.
 // onAskMore(): lets the chat start a follow-up question. onAction(kind): Report it / Mark safe.
-export default function VerdictCard({ indicator, onAskMore, onAction }) {
+const VerdictCard = ({ indicator, onAskMore, onAction }) => {
   const { ai_score, ai_verdict, ai_confidence, screenshot_url, report_count, evidence } = indicator;
   const kind = bucket(ai_score);
   const style = VERDICT_STYLES[kind];
@@ -27,7 +27,7 @@ export default function VerdictCard({ indicator, onAskMore, onAction }) {
   const [shotSrc, setShotSrc] = useState(screenshot_url);
   const [shotOk, setShotOk] = useState(true);
   const [retried, setRetried] = useState(false);
-  function handleShotError() {
+  const handleShotError = () => {
     if (!retried) { setRetried(true); setTimeout(() => setShotSrc(`${screenshot_url}?r=${Date.now()}`), 2500); }
     else setShotOk(false);
   }
@@ -83,7 +83,7 @@ export default function VerdictCard({ indicator, onAskMore, onAction }) {
   );
 }
 
-function btn(color, filled) {
+const btn = (color, filled) => {
   return {
     padding: "8px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.88em", cursor: "pointer",
     border: `1.5px solid ${color}`,
@@ -91,3 +91,5 @@ function btn(color, filled) {
     color: filled ? "#fff" : color,
   };
 }
+
+export default VerdictCard;

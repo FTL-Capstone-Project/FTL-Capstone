@@ -8,7 +8,7 @@
 // ============================================================
 import logo from "../assets/orbis-logo.png";
 
-export default function OrbisLogo({ height = 32, markOnly = false }) {
+const OrbisLogo = ({ height = 32, markOnly = false }) => {
   return (
     <img
       src={logo}
@@ -18,3 +18,5 @@ export default function OrbisLogo({ height = 32, markOnly = false }) {
     />
   );
 }
+
+export default OrbisLogo;

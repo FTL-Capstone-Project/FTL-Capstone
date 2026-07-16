@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { resolveUser, applyClerkEvent, ensureOrganization } from "./users.service.js";
 
 // Minimal in-memory-ish mock Prisma: records calls and returns plausible rows.
-function mockPrisma() {
+const mockPrisma = () => {
   return {
     organization: {
       upsert: vi.fn(async ({ create, where }) => ({ id: 10, clerkOrgId: where.clerkOrgId, name: create?.name ?? "Acme" })),

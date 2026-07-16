@@ -4,12 +4,12 @@ import { useNotifications } from "../context/NotificationsContext.jsx";
 
 // Bell + unread count in the top bar, with a dropdown list of notifications (O5).
 // Opening the dropdown marks everything read (clears the badge) — story #7 closure.
-export default function NotificationBell() {
+const NotificationBell = () => {
   const { notifications, unreadCount, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false); // is the dropdown showing?
 
   // Toggle the dropdown. When we OPEN it, mark everything read so the badge clears.
-  function toggleOpen() {
+  const toggleOpen = () => {
     if (!open && unreadCount > 0) markAllRead();
     setOpen((prev) => !prev);
   }
@@ -69,3 +69,5 @@ export default function NotificationBell() {
     </div>
   );
 }
+
+export default NotificationBell;

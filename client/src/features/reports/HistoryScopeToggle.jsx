@@ -12,7 +12,7 @@ const OPTIONS = [
   { value: "team", label: "Team History", Icon: Users },
 ];
 
-export default function HistoryScopeToggle({ scope, onChange }) {
+const HistoryScopeToggle = ({ scope, onChange }) => {
   return (
     <div style={{ display: "flex", gap: 20 }}>
       {OPTIONS.map(({ value, label, Icon }) => {
@@ -44,3 +44,5 @@ export default function HistoryScopeToggle({ scope, onChange }) {
     </div>
   );
 }
+
+export default HistoryScopeToggle;

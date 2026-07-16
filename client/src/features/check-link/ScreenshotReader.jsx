@@ -7,12 +7,12 @@ import Markdown from "./Markdown.jsx";
 // "Explain this page" — sends the sandbox screenshot to Claude vision (server-side) and
 // shows a plain-English explanation of what the page is and what it's asking you to do.
 // (Screenshots come back in English now, so this is about UNDERSTANDING the page, not translating.)
-export default function ScreenshotReader({ screenshotUrl }) {
+const ScreenshotReader = ({ screenshotUrl }) => {
   const { getToken } = useAuth();
   const [state, setState] = useState("idle"); // idle | loading | done | error
   const [readout, setReadout] = useState("");
 
-  async function read() {
+  const read = async () => {
     setState("loading");
     try {
       const { readout } = await api.post("/api/vision/read-screenshot", { screenshotUrl }, { getToken });
@@ -53,3 +53,5 @@ const link = {
   color: "var(--primary)", fontWeight: 700, fontSize: "0.85em",
   display: "inline-flex", alignItems: "center", gap: 6,
 };
+
+export default ScreenshotReader;

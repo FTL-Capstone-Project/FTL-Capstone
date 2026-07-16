@@ -10,7 +10,7 @@ import { useAuth, useOrganization, useUser } from "@clerk/clerk-react";
 
 const VALID = ["individual", "member", "analyst"];
 
-export function useOrbisRole() {
+export const useOrbisRole = () => {
   const { orgId, orgRole } = useAuth();
   const { organization } = useOrganization();
   const { user } = useUser();

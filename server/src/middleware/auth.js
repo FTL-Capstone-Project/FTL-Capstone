@@ -32,14 +32,14 @@ const DEV_STUB_USER = Object.freeze({
   isAdmin: false,
 });
 
-export function makeRequireAuth(deps = {}) {
+export const makeRequireAuth = (deps = {}) => {
   const db = deps.prisma || defaultPrisma;
   const clerk = deps.clerkClient || defaultClerkClient;
   const getAuth = deps.getAuth || clerkGetAuth;
   // clerkEnabled can be forced in tests; defaults to the env-derived flag.
   const clerkEnabled = deps.clerkEnabled ?? env.clerkEnabled;
 
-  return async function requireAuthMiddleware(req, res, next) {
+  return async (req, res, next) => {
     try {
       // ---- Dev stub: no Clerk configured → fake identity. ----
       if (!clerkEnabled) {

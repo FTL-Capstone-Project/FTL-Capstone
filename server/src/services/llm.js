@@ -12,7 +12,7 @@ import { env } from "../config/env.js";
 
 // Low-level call. `messages` is the OpenAI messages array (content may be a string
 // or an array of {type:text|image_url} parts). Returns the raw assistant string.
-async function chat({ messages, model = env.llmModel, maxTokens = 512, temperature = 0 }) {
+const chat = async ({ messages, model = env.llmModel, maxTokens = 512, temperature = 0 }) => {
   if (!env.anthropicApiKey) throw new Error("LLM key not set");
 
   const res = await fetch(`${env.llmBaseUrl}/chat/completions`, {
@@ -31,7 +31,7 @@ async function chat({ messages, model = env.llmModel, maxTokens = 512, temperatu
 }
 
 // Prompt → free text (e.g. interactive Q&A).
-export async function chatText({ system, user, model, maxTokens = 500, temperature = 0.3 }) {
+export const chatText = async ({ system, user, model, maxTokens = 500, temperature = 0.3 }) => {
   return chat({
     model, maxTokens, temperature,
     messages: [
@@ -42,7 +42,7 @@ export async function chatText({ system, user, model, maxTokens = 500, temperatu
 }
 
 // Prompt → JSON object (defensive parse: strip ``` fences, else grab first {...}).
-export async function chatJSON({ system, user, model, maxTokens = 512, temperature = 0 }) {
+export const chatJSON = async ({ system, user, model, maxTokens = 512, temperature = 0 }) => {
   const content = await chat({
     model, maxTokens, temperature,
     messages: [
@@ -55,7 +55,7 @@ export async function chatJSON({ system, user, model, maxTokens = 512, temperatu
 
 // Image + prompt → free text (e.g. "read this screenshot and translate it").
 // imageDataUrl = "data:image/png;base64,...."
-export async function visionText({ prompt, imageDataUrl, model, maxTokens = 700 }) {
+export const visionText = async ({ prompt, imageDataUrl, model, maxTokens = 700 }) => {
   return chat({
     model, maxTokens, temperature: 0,
     messages: [{
@@ -69,12 +69,12 @@ export async function visionText({ prompt, imageDataUrl, model, maxTokens = 700 
 }
 
 // Image + prompt → JSON (e.g. extract {urls, emails, summary} from an uploaded image).
-export async function visionJSON({ prompt, imageDataUrl, model, maxTokens = 700 }) {
+export const visionJSON = async ({ prompt, imageDataUrl, model, maxTokens = 700 }) => {
   const content = await visionText({ prompt, imageDataUrl, model, maxTokens });
   return parseJsonLoose(content);
 }
 
-function parseJsonLoose(text) {
+const parseJsonLoose = (text) => {
   const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   try {
     return JSON.parse(cleaned);

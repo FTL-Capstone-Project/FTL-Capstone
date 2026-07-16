@@ -4,7 +4,7 @@
 // day; zero-count days render a faint baseline nub so the axis stays continuous.
 // Hovering a bar shows its date + count (native title tooltip).
 
-export default function SubmissionHistoryChart({ history }) {
+const SubmissionHistoryChart = ({ history }) => {
   const max = Math.max(1, ...history.map((d) => d.count)); // avoid divide-by-zero
   const totalChecks = history.reduce((sum, d) => sum + d.count, 0);
 
@@ -65,8 +65,10 @@ export default function SubmissionHistoryChart({ history }) {
 }
 
 // "2026-07-14" → "Jul 14"
-function formatDate(ymd) {
+const formatDate = (ymd) => {
   const [y, m, d] = ymd.split("-").map(Number);
   const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1];
   return `${month} ${d}`;
 }
+
+export default SubmissionHistoryChart;

@@ -21,7 +21,7 @@ const NAV_ICON = {
   "/reports": FileText,
 };
 
-export default function AppShell() {
+const AppShell = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState("");
   const [recents, setRecents] = useState(() => listConversations());
@@ -159,7 +159,7 @@ export default function AppShell() {
   );
 }
 
-function navLinkStyle(collapsed) {
+const navLinkStyle = (collapsed) => {
   return ({ isActive }) => ({
     marginTop: "auto", display: "flex", alignItems: "center", gap: 8,
     padding: collapsed ? "8px 0" : "8px 12px", justifyContent: collapsed ? "center" : "flex-start",
@@ -176,7 +176,7 @@ const groupHeaderStyle = {
 };
 
 // Placeholder shown when there are no chats to list.
-function EmptyRecents({ label }) {
+const EmptyRecents = ({ label }) => {
   return (
     <div style={{ padding: "6px 8px", color: "var(--text-dim)", fontSize: "0.8em", fontStyle: "italic" }}>
       {label}
@@ -186,24 +186,24 @@ function EmptyRecents({ label }) {
 
 // One past-chat row: pin/clock icon + title. Click to reopen; the ⋯ button opens a small
 // menu to Rename / Pin / Delete. The active (currently open) chat is highlighted.
-function RecentItem({ convo, active, onOpen, onDelete }) {
+const RecentItem = ({ convo, active, onOpen, onDelete }) => {
   const [hover, setHover] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const highlight = active || hover;
 
   // Rename via a simple prompt (beginner-friendly, no custom modal). Cancel leaves it as-is.
-  function handleRename(e) {
+  const handleRename = (e) => {
     e.stopPropagation();
     setMenuOpen(false);
     const name = window.prompt("Rename chat", convo.customTitle || convo.title);
     if (name != null) renameConversation(convo.id, name);
   }
-  function handlePin(e) {
+  const handlePin = (e) => {
     e.stopPropagation();
     setMenuOpen(false);
     togglePin(convo.id);
   }
-  function handleDelete(e) {
+  const handleDelete = (e) => {
     e.stopPropagation();
     setMenuOpen(false);
     if (window.confirm("Delete this chat?")) onDelete();
@@ -250,7 +250,7 @@ const menuItemStyle = {
   cursor: "pointer", fontSize: "0.9em", color: "inherit",
 };
 
-function NavItem({ item, collapsed }) {
+const NavItem = ({ item, collapsed }) => {
   const Icon = NAV_ICON[item.to] ?? Sparkles;
   return (
     <NavLink to={item.to} title={item.label} style={({ isActive }) => ({
@@ -273,3 +273,5 @@ function NavItem({ item, collapsed }) {
     </NavLink>
   );
 }
+
+export default AppShell;

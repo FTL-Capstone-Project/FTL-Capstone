@@ -9,7 +9,7 @@ import { chatJSON } from "../../services/llm.js";
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 
 // { email, context? } → { ai_score, ai_verdict, ai_confidence, title, tags, evidence:[{text,severity}] }
-export async function generateSenderReport({ email, context = "" }) {
+export const generateSenderReport = async ({ email, context = "" }) => {
   const system =
     "You are Orbo, a phishing-triage assistant producing a SENDER REPORT on an email address. " +
     "Judge how trustworthy the SENDER is (you cannot sandbox an email, so reason from the address + any context). " +

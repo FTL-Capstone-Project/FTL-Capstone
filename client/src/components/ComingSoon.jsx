@@ -5,7 +5,7 @@ import OrboAvatar from "./OrboAvatar.jsx";
 // Placeholder for routes that aren't built yet (Dashboard, Settings, unknown paths).
 // Renders INSIDE the AppShell so the sidebar stays and you can always navigate away
 // (no more blank-screen dead-ends). TODO: replace each with the real page.
-export default function ComingSoon({ title = "Coming soon", note }) {
+const ComingSoon = ({ title = "Coming soon", note }) => {
   return (
     <div style={{ minHeight: "100%", display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center", gap: 12, textAlign: "center", padding: 40 }}>
@@ -20,3 +20,5 @@ export default function ComingSoon({ title = "Coming soon", note }) {
     </div>
   );
 }
+
+export default ComingSoon;

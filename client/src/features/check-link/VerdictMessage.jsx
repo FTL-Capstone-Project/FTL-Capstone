@@ -5,7 +5,7 @@ import { useIndicatorPoll } from "./useIndicatorPoll.js";
 // One Orbo response in the chat that resolves a link check: shows the animated
 // "Checking…" bubble while the scan runs, then swaps to the verdict card when done.
 // bucket → Orbo's pose so the avatar's mood matches the result.
-export default function VerdictMessage({ indicatorId, onAskMore }) {
+const VerdictMessage = ({ indicatorId, onAskMore }) => {
   const { indicator, error } = useIndicatorPoll(indicatorId);
   const status = indicator?.status;
 
@@ -35,3 +35,5 @@ export default function VerdictMessage({ indicatorId, onAskMore }) {
     </ChatMessage>
   );
 }
+
+export default VerdictMessage;

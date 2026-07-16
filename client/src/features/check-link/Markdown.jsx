@@ -4,7 +4,7 @@
 // so it's XSS-safe). Not a full CommonMark parser — just what the chat needs.
 
 // Inline: **bold**, *italic*, `code`. Returns an array of React nodes.
-function renderInline(text) {
+const renderInline = (text) => {
   const nodes = [];
   let i = 0, key = 0;
   const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
@@ -23,7 +23,7 @@ function renderInline(text) {
   return nodes;
 }
 
-export default function Markdown({ text = "" }) {
+const Markdown = ({ text = "" }) => {
   const lines = String(text).replace(/\r/g, "").split("\n");
   const blocks = [];
   let list = null; // { ordered, items: [] }
@@ -70,3 +70,5 @@ export default function Markdown({ text = "" }) {
   flushList();
   return <>{blocks}</>;
 }
+
+export default Markdown;

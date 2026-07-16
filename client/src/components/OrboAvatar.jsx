@@ -22,7 +22,7 @@ const POSES = {
 };
 
 // <OrboAvatar pose="thinking" size={64} />  — pose defaults to "wave".
-export default function OrboAvatar({ pose = "wave", size = 48 }) {
+const OrboAvatar = ({ pose = "wave", size = 48 }) => {
   const { src, alt } = POSES[pose] ?? POSES.wave;
   return (
     <img
@@ -34,3 +34,5 @@ export default function OrboAvatar({ pose = "wave", size = 48 }) {
     />
   );
 }
+
+export default OrboAvatar;

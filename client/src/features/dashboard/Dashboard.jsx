@@ -14,7 +14,7 @@ import RecentSubmissions from "./RecentSubmissions.jsx";
 import ActivityRail from "./ActivityRail.jsx";
 import DashboardEmpty from "./DashboardEmpty.jsx";
 
-export default function Dashboard() {
+const Dashboard = () => {
   const api = useApi();
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
@@ -113,6 +113,8 @@ export default function Dashboard() {
 }
 
 // Shared page frame (centers content, matches Reports' spacing).
-function Page({ children }) {
+const Page = ({ children }) => {
   return <div style={{ maxWidth: 1080, margin: "40px auto", padding: "0 24px" }}>{children}</div>;
 }
+
+export default Dashboard;

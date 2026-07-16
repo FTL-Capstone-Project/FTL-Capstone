@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import orboWave from "../../assets/orbo/orbo-wave.png";
 
-export default function ActivityRail({ activity }) {
+const ActivityRail = ({ activity }) => {
   return (
     <aside style={{ display: "grid", gap: 20, alignContent: "start" }}>
       {/* My Activity */}
@@ -57,7 +57,7 @@ export default function ActivityRail({ activity }) {
 
 // A compact prompt that jumps into a fresh Orbo chat. It doesn't answer inline
 // (that's the chat's job) — it routes to /ask-orbo, the canonical chat Home.
-function AskOrboMini() {
+const AskOrboMini = () => {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
 
@@ -124,7 +124,7 @@ function AskOrboMini() {
 }
 
 // "2m ago" / "3h ago" / "5d ago" from an ISO timestamp.
-function relativeTime(iso) {
+const relativeTime = (iso) => {
   const then = new Date(iso).getTime();
   const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
   if (secs < 60) return "just now";
@@ -135,3 +135,5 @@ function relativeTime(iso) {
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
 }
+
+export default ActivityRail;

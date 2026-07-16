@@ -9,13 +9,13 @@ import { Paperclip, ArrowUp, X, AlertCircle } from "lucide-react";
 // Disabled while Orbo is busy.
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB (server allows 12mb base64 ≈ ~9MB raw)
 
-export default function Composer({ onSend, onSendImage, disabled }) {
+const Composer = ({ onSend, onSendImage, disabled }) => {
   const [value, setValue] = useState("");
   const [pendingImage, setPendingImage] = useState(null); // { dataUrl, fileName } | null
   const [fileError, setFileError] = useState("");
   const fileRef = useRef(null);
 
-  function submit(e) {
+  const submit = (e) => {
     e.preventDefault();
     if (disabled) return;
     const trimmed = value.trim();
@@ -29,12 +29,12 @@ export default function Composer({ onSend, onSendImage, disabled }) {
     }
   }
 
-  function pickFile() {
+  const pickFile = () => {
     if (!disabled) fileRef.current?.click();
   }
 
   // Validate an image File and STAGE it (show a preview) — does NOT send. Shared by paperclip + paste.
-  function stageImageFile(file) {
+  const stageImageFile = (file) => {
     setFileError("");
     if (!file) return;
     if (!file.type.startsWith("image/")) { setFileError("Please choose an image file."); return; }
@@ -45,14 +45,14 @@ export default function Composer({ onSend, onSendImage, disabled }) {
     reader.readAsDataURL(file);
   }
 
-  function onFileChosen(e) {
+  const onFileChosen = (e) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // reset so the same file can be re-picked
     stageImageFile(file);
   }
 
   // Paste an image straight from the clipboard (⌘/Ctrl+V) → stage it. Pasted text falls through.
-  function onPaste(e) {
+  const onPaste = (e) => {
     if (disabled) return;
     const items = e.clipboardData?.items ?? [];
     for (const item of items) {
@@ -126,3 +126,5 @@ export default function Composer({ onSend, onSendImage, disabled }) {
     </form>
   );
 }
+
+export default Composer;

@@ -14,7 +14,7 @@ import { deriveRole } from "../../middleware/roles.js";
 /**
  * Ensure a mirror Organization row exists for a Clerk org. Returns the row (or null).
  */
-export async function ensureOrganization(prisma, { clerkOrgId, name }) {
+export const ensureOrganization = async (prisma, { clerkOrgId, name }) => {
   if (!clerkOrgId) return null;
   return prisma.organization.upsert({
     where: { clerkOrgId },
@@ -31,7 +31,7 @@ export async function ensureOrganization(prisma, { clerkOrgId, name }) {
  * @param {object} identity  { clerkUserId, email, name, clerkOrgId, orgName, orgRole, orgMetadata, userMetadata }
  * @returns {Promise<{id, clerkUserId, orgId, email, name, role}>}
  */
-export async function resolveUser(prisma, identity) {
+export const resolveUser = async (prisma, identity) => {
   const {
     clerkUserId,
     email,
@@ -58,21 +58,21 @@ export async function resolveUser(prisma, identity) {
 /**
  * Delete a mirror user by Clerk id (used by the user.deleted webhook). Safe if absent.
  */
-export async function deleteUserByClerkId(prisma, clerkUserId) {
+export const deleteUserByClerkId = async (prisma, clerkUserId) => {
   return prisma.user.deleteMany({ where: { clerkUserId } });
 }
 
 /**
  * Delete a mirror org by Clerk id (organization.deleted webhook). Safe if absent.
  */
-export async function deleteOrgByClerkId(prisma, clerkOrgId) {
+export const deleteOrgByClerkId = async (prisma, clerkOrgId) => {
   return prisma.organization.deleteMany({ where: { clerkOrgId } });
 }
 
 /**
  * Upsert a mirror user from a webhook (no org context — that arrives via membership events).
  */
-export async function upsertUserFromWebhook(prisma, { clerkUserId, email, name }) {
+export const upsertUserFromWebhook = async (prisma, { clerkUserId, email, name }) => {
   if (!clerkUserId) throw new Error("upsertUserFromWebhook: clerkUserId required");
   return prisma.user.upsert({
     where: { clerkUserId },
@@ -90,7 +90,7 @@ export async function upsertUserFromWebhook(prisma, { clerkUserId, email, name }
  * Apply a normalized Clerk event (from mapClerkEvent) to the mirror tables.
  * Returns a short result tag for logging/tests.
  */
-export async function applyClerkEvent(prisma, mapped) {
+export const applyClerkEvent = async (prisma, mapped) => {
   switch (mapped.action) {
     case "upsertUser":
       await upsertUserFromWebhook(prisma, mapped.payload);

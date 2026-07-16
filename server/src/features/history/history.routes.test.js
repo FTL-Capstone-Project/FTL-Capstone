@@ -19,7 +19,7 @@ const { historyRouter } = await import("./history.routes.js");
 // Build a tiny app that injects a chosen user, then mounts the real router.
 // requireAuth (dev-stub mode in tests) does `req.user = req.user ?? stub`, so
 // setting req.user here is preserved — letting us test the org-member path.
-function appAs(user) {
+const appAs = (user) => {
   const app = express();
   app.use((req, _res, next) => { req.user = user; next(); });
   app.use("/api/history", historyRouter);
@@ -27,7 +27,7 @@ function appAs(user) {
 }
 
 // One fake submission joined with its indicator + reporter, like the route includes.
-function sub({ id, indicatorId, aiScore, name, createdAt }) {
+const sub = ({ id, indicatorId, aiScore, name, createdAt }) => {
   return {
     id,
     indicatorId,

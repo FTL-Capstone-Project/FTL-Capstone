@@ -6,7 +6,7 @@ const CHIPS = {
   "confirmed safe":       { label: "Confirmed safe", color: "var(--safe)", bg: "var(--safe-bg)" },
 };
 
-export default function StatusChip({ status }) {
+const StatusChip = ({ status }) => {
   const c = CHIPS[status];
   if (!c) return null;
   return (
@@ -14,3 +14,5 @@ export default function StatusChip({ status }) {
       padding: "2px 10px", borderRadius: 999 }}>{c.label}</span>
   );
 }
+
+export default StatusChip;

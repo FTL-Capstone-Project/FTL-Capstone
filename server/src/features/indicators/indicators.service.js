@@ -21,7 +21,7 @@ import { escalateSubmission } from "../submissions/submissions.service.js";
 // In dev-stub auth mode, req.user is a fake { id: 1, ... } that may not exist in the DB,
 // so a submission FK would fail. Resolve a REAL mirror row for it (upsert by a stable
 // clerkUserId) and use that id. In real Clerk mode, req.user.id is already a real row.
-async function resolveUserId(user) {
+const resolveUserId = async (user) => {
   if (user?.clerkUserId === "user_devstub" || user?.id == null) {
     const row = await prisma.user.upsert({
       where: { clerkUserId: user?.clerkUserId || "user_devstub" },
@@ -41,7 +41,7 @@ async function resolveUserId(user) {
 
 // Submit a URL: dedup by canonicalKey, record the submission, run the pipeline if new.
 // Returns { indicatorId, submissionId, status, seenBefore }.
-export async function submitUrl({ rawUrl, user, contextText = null, source = "web" }) {
+export const submitUrl = async ({ rawUrl, user, contextText = null, source = "web" }) => {
   let canonicalKey;
   try { canonicalKey = canonicalize(rawUrl); } catch { canonicalKey = rawUrl.trim().toLowerCase(); }
   const domain = safeDomain(rawUrl, canonicalKey);
@@ -97,7 +97,7 @@ export async function submitUrl({ rawUrl, user, contextText = null, source = "we
 }
 
 // The real pipeline: scanning → urlscan + Safe Browsing → verdict → done. Writes each phase.
-async function runPipeline(indicatorId, rawUrl, contextText) {
+const runPipeline = async (indicatorId, rawUrl, contextText) => {
   try {
     await prisma.indicator.update({ where: { id: indicatorId }, data: { status: "scanning" } });
 
@@ -139,9 +139,13 @@ async function runPipeline(indicatorId, rawUrl, contextText) {
   }
 }
 
+// Prisma Json comes back parsed; guard against null/non-array from older rows.
+// Defined above its first use below because arrow consts are not hoisted.
+const asArray = (v) => (Array.isArray(v) ? v : null);
+
 // Shape one indicator for the client poll (GET /api/indicators/:id), merging the
 // caller's org_review if any. Field names match what the client + Reports card expect.
-export async function readIndicatorForClient(indicatorId, user) {
+export const readIndicatorForClient = async (indicatorId, user) => {
   const indicator = await prisma.indicator.findUnique({ where: { id: indicatorId } });
   if (!indicator) return null;
 
@@ -177,7 +181,7 @@ export async function readIndicatorForClient(indicatorId, user) {
 }
 
 // Lightweight read for context (askOrbo): just the verdict facts, no org_review.
-export async function getIndicatorContext(indicatorId) {
+export const getIndicatorContext = async (indicatorId) => {
   const i = await prisma.indicator.findUnique({ where: { id: indicatorId } });
   if (!i || i.status !== "done") return null;
   return {
@@ -189,32 +193,29 @@ export async function getIndicatorContext(indicatorId) {
   };
 }
 
-// Prisma Json comes back parsed; guard against null/non-array from older rows.
-function asArray(v) { return Array.isArray(v) ? v : null; }
-
 // ── derivation helpers (temporary until the columns exist) ──
-function deriveTitle(i, bucket) {
+const deriveTitle = (i, bucket) => {
   if (i.blacklistHit) return "Known bad link";
   if (bucket === "dangerous") return "Dangerous link";
   if (bucket === "review") return "Suspicious link";
   return "Looks safe";
 }
-function deriveTags(i, bucket) {
+const deriveTags = (i, bucket) => {
   const tags = [];
   if (i.blacklistHit) tags.push("Known threat");
   tags.push(bucket === "safe" ? "Safe" : bucket === "dangerous" ? "Dangerous" : "Review");
   return [...new Set(tags)];
 }
-function firstSentence(text) {
+const firstSentence = (text) => {
   if (!text) return "";
   const m = text.match(/^.*?[.!?](\s|$)/);
   return (m ? m[0] : text).trim();
 }
-function safeDomain(rawUrl, canonicalKey) {
+const safeDomain = (rawUrl, canonicalKey) => {
   try { return new URL(rawUrl.includes("://") ? rawUrl : `http://${rawUrl}`).hostname.replace(/^www\./, ""); }
   catch { return (canonicalKey.split("/")[0]) || "unknown"; }
 }
-function errorMessage(reason) {
+const errorMessage = (reason) => {
   switch (reason) {
     case "unreachable":
       return "I couldn't reach that link to check it. It looks like an internal, private, or non-existent address — I can only scan links that are reachable on the public internet.";

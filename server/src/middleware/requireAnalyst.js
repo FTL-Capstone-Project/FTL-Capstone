@@ -3,7 +3,7 @@
 // (admin = Clerk org:admin permission layered on the analyst role), so isAnalyst covers them.
 import { isAnalyst } from "./roles.js";
 
-export function requireAnalyst(req, res, next) {
+export const requireAnalyst = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: "Unauthenticated" });
   }

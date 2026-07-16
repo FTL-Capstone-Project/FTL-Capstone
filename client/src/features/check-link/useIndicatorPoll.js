@@ -8,7 +8,7 @@ const MAX_POLLS = 40; // ~60s cap so a stuck scan can't poll forever
 // Polls GET /api/indicators/:id until status is "done" or "error".
 // Used by each verdict message in the chat (one poll per checked link).
 // Returns { indicator, error } — indicator is null until the first response.
-export function useIndicatorPoll(indicatorId) {
+export const useIndicatorPoll = (indicatorId) => {
   const { getToken } = useAuth();
   const [indicator, setIndicator] = useState(null);
   const [error, setError] = useState("");
@@ -17,7 +17,7 @@ export function useIndicatorPoll(indicatorId) {
     if (!indicatorId) return;
     let timer, cancelled = false, tries = 0;
 
-    async function poll() {
+    const poll = async () => {
       try {
         const data = await api.get(`/api/indicators/${indicatorId}`, { getToken });
         if (cancelled) return;

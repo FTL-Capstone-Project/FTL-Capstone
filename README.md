@@ -12,8 +12,7 @@ Mentors Names: **Sasha, Somal, Priyanshu, Archana, Raghu**
 
 Project Code Repository Links
 
-* [Frontend Repo Link]() <!-- TODO: add once frontend repo is created -->
-* [Backend Repo Link]() <!-- TODO: add once backend repo is created -->
+* This is a **monorepo** — the frontend (`client/`) and backend (`server/`) both live in this repository.
 
 ## Project Overview
 
@@ -27,7 +26,7 @@ The product serves three roles from one codebase:
 
 **Objective:** make expert-level phishing triage faster for analysts and accessible to everyday users, with AI features that explain *why* a link is dangerous and let analysts query the threat database without writing SQL.
 
-Deployment Website: **Add Link to Deployed Project**
+Deployment Website: _Not deployed — this is a course project; run it locally (see "Getting started" below)._
 
 ### Open-source libraries used
 

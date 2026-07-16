@@ -18,7 +18,7 @@ const SEGMENTS = [
   { key: "dangerous", label: "Dangerous", color: "var(--danger)" },
 ];
 
-export default function ResultsDonut({ results }) {
+const ResultsDonut = ({ results }) => {
   const total = results.total || 0;
 
   // Build the arc list (skip zero-count segments so there's no invisible stroke).
@@ -93,7 +93,7 @@ export default function ResultsDonut({ results }) {
   );
 }
 
-function Card({ children }) {
+const Card = ({ children }) => {
   return (
     <div
       style={{
@@ -108,3 +108,5 @@ function Card({ children }) {
     </div>
   );
 }
+
+export default ResultsDonut;

@@ -13,7 +13,7 @@ const TRACKING_PARAMS = new Set([
 ]);
 const TRACKING_PREFIXES = ["utm_"]; // any param starting with these is dropped
 
-function isTracking(name) {
+const isTracking = (name) => {
   const n = name.toLowerCase();
   if (TRACKING_PARAMS.has(n)) return true;
   return TRACKING_PREFIXES.some((p) => n.startsWith(p));
@@ -23,7 +23,7 @@ function isTracking(name) {
  * @param {string} rawUrl - the URL exactly as submitted
  * @returns {string} canonical_key, or throws if the URL is unparseable
  */
-export function canonicalize(rawUrl) {
+export const canonicalize = (rawUrl) => {
   let u;
   try {
     u = new URL(rawUrl.trim());

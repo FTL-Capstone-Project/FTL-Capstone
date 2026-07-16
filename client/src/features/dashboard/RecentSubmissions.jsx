@@ -8,7 +8,7 @@ import StatusBadge from "../../components/StatusBadge.jsx";
 // score → the same color the verdict uses (green/amber/red), for the "NN/100" text.
 const KIND_COLOR = { safe: "var(--safe)", review: "var(--review)", dangerous: "var(--danger)" };
 
-export default function RecentSubmissions({ items }) {
+const RecentSubmissions = ({ items }) => {
   return (
     <div
       style={{
@@ -78,8 +78,10 @@ export default function RecentSubmissions({ items }) {
   );
 }
 
-function formatDate(iso) {
+const formatDate = (iso) => {
   const d = new Date(iso);
   const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()];
   return `${month} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
 }
+
+export default RecentSubmissions;

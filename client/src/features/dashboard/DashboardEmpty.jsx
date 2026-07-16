@@ -6,7 +6,7 @@
 import { Link } from "react-router-dom";
 import orboWave from "../../assets/orbo/orbo-wave.png";
 
-export default function DashboardEmpty() {
+const DashboardEmpty = () => {
   return (
     <div
       style={{
@@ -43,3 +43,5 @@ export default function DashboardEmpty() {
     </div>
   );
 }
+
+export default DashboardEmpty;

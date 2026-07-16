@@ -11,7 +11,7 @@
  * @param {{type: string, data: object}} event
  * @returns {{action: string, payload: object} | {action: "ignore", reason: string}}
  */
-export function mapClerkEvent(event) {
+export const mapClerkEvent = (event) => {
   if (!event || typeof event.type !== "string") {
     return { action: "ignore", reason: "no event type" };
   }
@@ -67,7 +67,7 @@ export function mapClerkEvent(event) {
   }
 }
 
-function primaryEmail(data) {
+const primaryEmail = (data) => {
   if (!data) return null;
   const primaryId = data.primary_email_address_id;
   const list = data.email_addresses || [];
@@ -75,7 +75,7 @@ function primaryEmail(data) {
   return primary?.email_address ?? null;
 }
 
-function fullName(data) {
+const fullName = (data) => {
   if (!data) return null;
   const n = [data.first_name, data.last_name].filter(Boolean).join(" ").trim();
   return n || data.username || null;

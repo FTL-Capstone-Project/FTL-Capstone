@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 // TODO(Michael): marketing hero + feature cards. Stub for now.
-export default function Landing() {
+const Landing = () => {
   return (
     <main style={{ maxWidth: 640, margin: "80px auto", textAlign: "center", padding: "0 20px" }}>
       <h1 style={{ color: "var(--navy)", fontSize: "2.4em" }}>🪐 Orbis</h1>
@@ -20,3 +20,5 @@ export default function Landing() {
     </main>
   );
 }
+
+export default Landing;

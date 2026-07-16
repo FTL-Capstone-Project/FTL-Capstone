@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { makeRequireAuth } from "./auth.js";
 import { requireAnalyst } from "./requireAnalyst.js";
 
-function mockRes() {
+const mockRes = () => {
   return {
     statusCode: 200,
     body: undefined,

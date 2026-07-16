@@ -74,7 +74,7 @@ const DEMO = [
   },
 ];
 
-async function main() {
+const main = async () => {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) throw new Error(`No user with email ${email}. Sign in once so the mirror row exists.`);
   console.log(`Target: ${user.name || email} (id=${user.id}, org=${user.orgId}, role=${user.role})`);

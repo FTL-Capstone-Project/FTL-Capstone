@@ -13,11 +13,11 @@ import { prisma } from "../db.js";
 
 // Small date helper so the demo always looks "recent" (dates are relative to
 // whenever the seed runs, not hard-coded). Returns a Date N days before now.
-function daysAgo(n) {
+const daysAgo = (n) => {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 }
 
-async function reset() {
+const reset = async () => {
   // Delete in FK-safe order.
   await prisma.notification.deleteMany();
   await prisma.orgReview.deleteMany();
@@ -28,7 +28,7 @@ async function reset() {
   await prisma.organization.deleteMany();
 }
 
-async function main() {
+const main = async () => {
   console.log("Seeding Orbis demo data…");
   await reset();
 

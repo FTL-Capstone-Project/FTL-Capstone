@@ -16,7 +16,7 @@ import { listNotifications, markNotificationRead } from "./notifications.service
 export const notificationsRouter = Router();
 
 // Shape ONE Prisma notification row into the JSON the bell expects.
-function toNotificationJson(n) {
+const toNotificationJson = (n) => {
   return {
     id: n.id,
     type: n.type,

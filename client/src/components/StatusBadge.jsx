@@ -2,7 +2,7 @@ import { VERDICT_STYLES } from "../config/constants.js";
 
 // Verdict badge: ALWAYS icon + word + color together (accessibility — never color alone).
 // `kind` = "safe" | "review" | "dangerous".
-export default function StatusBadge({ kind = "review" }) {
+const StatusBadge = ({ kind = "review" }) => {
   const s = VERDICT_STYLES[kind] ?? VERDICT_STYLES.review;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: s.bg,
@@ -11,3 +11,5 @@ export default function StatusBadge({ kind = "review" }) {
     </span>
   );
 }
+
+export default StatusBadge;

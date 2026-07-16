@@ -28,7 +28,7 @@ export const ROLES = Object.freeze({
  *  - Otherwise Clerk org:admin maps to analyst (admins get the analyst surfaces);
  *    everyone else in the org is a member.
  */
-export function deriveRole({ orgId, orgRole, orgMetadata, userMetadata } = {}) {
+export const deriveRole = ({ orgId, orgRole, orgMetadata, userMetadata } = {}) => {
   if (!orgId) return ROLES.INDIVIDUAL;
 
   const explicit = normalizeRole(userMetadata?.orbisRole ?? orgMetadata?.[`role:${userMetadata?.sub}`]);
@@ -39,12 +39,12 @@ export function deriveRole({ orgId, orgRole, orgMetadata, userMetadata } = {}) {
 }
 
 /** True when the Clerk org role grants team-management (admin) permission. */
-export function isAdminRole(orgRole) {
+export const isAdminRole = (orgRole) => {
   return orgRole === "org:admin" || orgRole === "admin";
 }
 
 /** Coerce an arbitrary string to a valid Orbis role, or null if unrecognized. */
-export function normalizeRole(value) {
+export const normalizeRole = (value) => {
   if (typeof value !== "string") return null;
   const v = value.toLowerCase().trim();
   if (v === ROLES.INDIVIDUAL || v === ROLES.MEMBER || v === ROLES.ANALYST) return v;
@@ -52,6 +52,6 @@ export function normalizeRole(value) {
 }
 
 /** Roles allowed to reach analyst-only routes. */
-export function isAnalyst(role) {
+export const isAnalyst = (role) => {
   return role === ROLES.ANALYST;
 }

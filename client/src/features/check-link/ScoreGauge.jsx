@@ -1,5 +1,5 @@
 // 0–100 safety gauge (100 = safe). Simple numeric version for now; TODO(David): make it a real dial/ring.
-export default function ScoreGauge({ score, color }) {
+const ScoreGauge = ({ score, color }) => {
   return (
     <div style={{ textAlign: "center" }}>
       <div style={{ fontSize: "2.2em", fontWeight: 800, color }}>{score ?? "—"}</div>
@@ -8,3 +8,5 @@ export default function ScoreGauge({ score, color }) {
     </div>
   );
 }
+
+export default ScoreGauge;

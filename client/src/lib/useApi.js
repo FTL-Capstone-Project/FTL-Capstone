@@ -9,7 +9,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { useMemo } from "react";
 import { api } from "./api.js";
 
-export function useApi() {
+export const useApi = () => {
   const { getToken } = useAuth();
   return useMemo(
     () => ({

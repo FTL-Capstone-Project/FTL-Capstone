@@ -6,7 +6,7 @@
 // Colors come only from theme tokens (never hard-coded hex).
 import { TrendingUp, TrendingDown } from "lucide-react";
 
-export default function StatTile({ label, value, sub, trend, progress }) {
+const StatTile = ({ label, value, sub, trend, progress }) => {
   return (
     <div
       style={{
@@ -67,7 +67,7 @@ export default function StatTile({ label, value, sub, trend, progress }) {
 }
 
 // Small green-up / red-down percentage chip. "flat" renders nothing loud.
-function TrendChip({ trend }) {
+const TrendChip = ({ trend }) => {
   if (!trend || trend.direction === "flat") {
     return <span style={{ fontSize: "0.75em", color: "var(--text-dim)" }}>—</span>;
   }
@@ -81,3 +81,5 @@ function TrendChip({ trend }) {
     </span>
   );
 }
+
+export default StatTile;

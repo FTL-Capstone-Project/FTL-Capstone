@@ -3,7 +3,7 @@ import OrboAvatar from "../../components/OrboAvatar.jsx";
 // One turn in the conversation.
 //   role "user"  → right-aligned blue bubble (what you sent)
 //   role "orbo"  → left-aligned, Orbo avatar + a light bubble (or any children, e.g. a verdict card)
-export default function ChatMessage({ role, pose = "wave", children }) {
+const ChatMessage = ({ role, pose = "wave", children }) => {
   const isUser = role === "user";
 
   if (isUser) {
@@ -28,7 +28,7 @@ export default function ChatMessage({ role, pose = "wave", children }) {
 }
 
 // The plain speech bubble Orbo talks in (for text replies, not verdict cards).
-export function OrboBubble({ children }) {
+export const OrboBubble = ({ children }) => {
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)",
       padding: "10px 14px", borderRadius: "4px 16px 16px 16px", boxShadow: "var(--shadow)", fontSize: "0.95em" }}>
@@ -38,7 +38,7 @@ export function OrboBubble({ children }) {
 }
 
 // The "Checking this link… •••" animated pending bubble.
-export function ThinkingBubble({ label = "Checking this link…" }) {
+export const ThinkingBubble = ({ label = "Checking this link…" }) => {
   return (
     <OrboBubble>
       <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
@@ -53,3 +53,5 @@ export function ThinkingBubble({ label = "Checking this link…" }) {
     </OrboBubble>
   );
 }
+
+export default ChatMessage;

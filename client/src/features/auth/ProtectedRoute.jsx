@@ -1,7 +1,7 @@
 import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/clerk-react";
 
 // Gate for protected pages: render children if signed in, else bounce to Clerk sign-in.
-export default function ProtectedRoute({ children }) {
+const ProtectedRoute = ({ children }) => {
   return (
     <>
       <SignedIn>{children}</SignedIn>
@@ -11,3 +11,5 @@ export default function ProtectedRoute({ children }) {
     </>
   );
 }
+
+export default ProtectedRoute;

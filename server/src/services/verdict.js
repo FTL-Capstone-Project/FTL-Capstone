@@ -17,7 +17,7 @@ import { chatJSON } from "./llm.js";
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 
-export async function generateVerdict({ evidence = [], blacklist_hit, blacklist_source, domain_age_days, raw = {}, contextText }) {
+export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_source, domain_age_days, raw = {}, contextText }) => {
   // ── Hard-signal ceiling (computed regardless of who writes the verdict) ──
   const credFormOnNewDomain =
     evidence.some((e) => /password|credential|login form/i.test(e.text)) &&
@@ -48,7 +48,7 @@ export async function generateVerdict({ evidence = [], blacklist_hit, blacklist_
 }
 
 // ── Claude call: reason over evidence, return {score, verdict, confidence} ──
-async function claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, contextText }) {
+const claudeVerdict = async ({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, contextText }) => {
   const system =
     "You are Orbo, a friendly phishing-triage assistant that explains link safety to non-experts. " +
     "Given technical evidence about a URL, decide how SAFE it is. " +
@@ -91,7 +91,7 @@ async function claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain
 
 // ── Rule-based fallback (also used before a key exists / on Claude errors) ──
 // Compute a DANGER score internally, then convert to a SAFETY score (100 - danger).
-function ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal }) {
+const ruleBasedVerdict = ({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal }) => {
   let danger = 10;
   if (raw.malicious) danger += 55;
   if (typeof raw.score === "number") danger += Math.max(0, raw.score) * 0.4;
@@ -132,7 +132,7 @@ function ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_ag
 }
 
 // SAFETY-score → bucket. 100 = safe, so HIGH score = safe. (Single source of truth.)
-export function scoreBucket(score) {
+export const scoreBucket = (score) => {
   if (score == null) return "review";
   if (score >= 70) return "safe";
   if (score >= 35) return "review";
@@ -142,7 +142,7 @@ export function scoreBucket(score) {
 // Return the "why" rows [{text, severity}] — AT LEAST 3 always. For a SAFE link, 3 reassuring
 // reasons is enough. For a suspicious/dangerous link, keep MORE (up to 6) so the user sees the
 // full case against clicking. Prefer the model's reasons, fall back to scan evidence, then pad.
-function buildReasons(modelReasons, evidence, score) {
+const buildReasons = (modelReasons, evidence, score) => {
   const sev = (s) => (["safe", "review", "dangerous"].includes(s) ? s : "review");
   const isSafe = score >= 70;
   const cap = isSafe ? 3 : 6; // safe = concise; risky = show them all
@@ -171,21 +171,21 @@ function buildReasons(modelReasons, evidence, score) {
 }
 
 // ── helpers for the Reports-card fields (title / description / tags) ──
-function cleanTitle(t) {
+const cleanTitle = (t) => {
   if (typeof t !== "string") return null;
   const s = t.trim().replace(/^["']|["']$/g, "");
   return s && s.length <= 60 ? s : (s ? s.slice(0, 57) + "…" : null);
 }
-function cleanText(t) {
+const cleanText = (t) => {
   return typeof t === "string" && t.trim() ? t.trim() : null;
 }
-function firstSentence(text) {
+const firstSentence = (text) => {
   if (!text) return "";
   const m = text.match(/^.*?[.!?](\s|$)/);
   return (m ? m[0] : text).trim();
 }
 // Build a sensible title when the model didn't give one. (score = SAFETY: low = dangerous)
-function fallbackTitle(raw = {}, blacklist_source, score) {
+const fallbackTitle = (raw = {}, blacklist_source, score) => {
   const brand = (raw.brands ?? [])[0];
   if (blacklist_source) return brand ? `Known ${brand} scam` : "Known bad link";
   if (score < 35) return brand ? `Fake ${brand} page` : "Dangerous link";
@@ -193,7 +193,7 @@ function fallbackTitle(raw = {}, blacklist_source, score) {
   return "Looks safe";
 }
 // Normalize tags: use the model's if valid, else derive from evidence/brand/bucket.
-function cleanTags(modelTags, raw = {}, bucket, blacklist_source) {
+const cleanTags = (modelTags, raw = {}, bucket, blacklist_source) => {
   if (Array.isArray(modelTags)) {
     const t = modelTags.map((x) => String(x).trim()).filter(Boolean).slice(0, 3);
     if (t.length) return t;
@@ -206,12 +206,12 @@ function cleanTags(modelTags, raw = {}, bucket, blacklist_source) {
   return [...new Set(tags)].slice(0, 3);
 }
 
-function prettySource(src) {
+const prettySource = (src) => {
   if (!src) return "a security blacklist";
   const type = src.split(":")[1] ?? "";
   return `Google Safe Browsing${type ? " · " + type.toLowerCase().replace(/_/g, " ") : ""}`;
 }
-function topReasons(evidence) {
+const topReasons = (evidence) => {
   const picks = [...evidence]
     .sort((a, b) => sevRank(b.severity) - sevRank(a.severity))
     .slice(0, 2)

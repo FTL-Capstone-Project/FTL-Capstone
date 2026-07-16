@@ -12,31 +12,31 @@
 const KEY = "orbis.conversations.v1";
 const listeners = new Set();
 
-function readAll() {
+const readAll = () => {
   try { return JSON.parse(localStorage.getItem(KEY)) || []; }
   catch { return []; }
 }
-function writeAll(list) {
+const writeAll = (list) => {
   try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* quota/full — ignore */ }
   listeners.forEach((fn) => fn());
 }
 
 // Subscribe to changes (returns an unsubscribe fn). Use with useSyncExternalStore or an effect.
-export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+export const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 
 // All conversations for the Recents list: PINNED first, then newest activity first.
 // (b.pinned === true) - (a.pinned === true) sorts pinned (true=1) above unpinned (false=0).
-export function listConversations() {
+export const listConversations = () => {
   return readAll().sort((a, b) =>
     (b.pinned === true) - (a.pinned === true) || (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
-export function getConversation(id) {
+export const getConversation = (id) => {
   return readAll().find((c) => c.id === id) || null;
 }
 
 // Create-or-update a conversation. Auto-titles from the first user text message.
-export function saveConversation({ id, messages, now }) {
+export const saveConversation = ({ id, messages, now }) => {
   if (!id) return;
   const list = readAll();
   const idx = list.findIndex((c) => c.id === id);
@@ -59,7 +59,7 @@ export function saveConversation({ id, messages, now }) {
 
 // Rename a chat to a user-chosen title. Does NOT count as activity, so it does NOT reorder
 // the list. Passing an empty name clears the custom title back to the auto-derived one.
-export function renameConversation(id, customTitle) {
+export const renameConversation = (id, customTitle) => {
   const list = readAll();
   const c = list.find((x) => x.id === id);
   if (!c) return;
@@ -70,7 +70,7 @@ export function renameConversation(id, customTitle) {
 }
 
 // Pin/unpin a chat so it floats to the top. Does NOT bump updatedAt (pinning isn't activity).
-export function togglePin(id) {
+export const togglePin = (id) => {
   const list = readAll();
   const c = list.find((x) => x.id === id);
   if (!c) return;
@@ -78,12 +78,12 @@ export function togglePin(id) {
   writeAll(list);
 }
 
-export function deleteConversation(id) {
+export const deleteConversation = (id) => {
   writeAll(readAll().filter((c) => c.id !== id));
 }
 
 // Search Recents by title OR any message text (for the sidebar search box).
-export function searchConversations(query) {
+export const searchConversations = (query) => {
   const q = query.trim().toLowerCase();
   if (!q) return listConversations();
   return listConversations().filter((c) =>
@@ -94,14 +94,14 @@ export function searchConversations(query) {
 
 // A fresh conversation id. (No Math.random dependency issues — time + counter.)
 let seq = 0;
-export function newConversationId() {
+export const newConversationId = () => {
   return `c_${Date.now().toString(36)}_${(seq++).toString(36)}`;
 }
 
 // Bucket a (pre-sorted) list of conversations into the sidebar's date groups. Pinned chats
 // get their own group at the top; the rest fall into Today / Yesterday / Previous 7 Days /
 // Older by their updatedAt. Returns only the non-empty groups, in display order.
-export function groupConversations(list) {
+export const groupConversations = (list) => {
   const now = new Date();
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const day = 86400000; // one day in milliseconds
@@ -120,7 +120,7 @@ export function groupConversations(list) {
 }
 
 // Title = first thing the user actually asked/checked, cleaned up. Falls back to "New chat".
-function deriveTitle(messages = []) {
+const deriveTitle = (messages = []) => {
   const firstUser = messages.find((m) => m.role === "user" && (m.text || "").trim());
   if (firstUser) return labelFor(firstUser.text);
   const firstImg = messages.find((m) => m.kind === "image");
@@ -129,7 +129,7 @@ function deriveTitle(messages = []) {
 }
 
 // Turn the first user message into a clean, human title.
-function labelFor(raw) {
+const labelFor = (raw) => {
   const text = raw.trim().replace(/\s+/g, " ");
   // A bare URL → "Check paypal.com" (strip the scheme + www and drop the ugly path).
   const url = text.match(/^(?:https?:\/\/)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:[/?#]\S*)?$/i);
@@ -141,7 +141,7 @@ function labelFor(raw) {
 }
 
 // Sentence-case, cut at a WORD boundary (never mid-word), strip trailing punctuation.
-function tidySentence(text) {
+const tidySentence = (text) => {
   const t = text.replace(/^[a-z]/, (c) => c.toUpperCase());
   if (t.length <= 40) return t;
   const cut = t.slice(0, 40);

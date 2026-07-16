@@ -22,7 +22,7 @@ const FILTERS = [
 //                PLUS a "My History | Team History" toggle to see the whole org's
 //                reports (what scams the organization has been running into).
 // One page, role-driven variants — not separate routes.
-export default function Reports() {
+const Reports = () => {
   const { getToken } = useAuth();
   const { role } = useOrbisRole(); // authoritative role from Clerk org membership (Michael's hook)
   const [reports, setReports] = useState([]);       // my own reports (?mine=1)
@@ -129,3 +129,5 @@ export default function Reports() {
     </div>
   );
 }
+
+export default Reports;

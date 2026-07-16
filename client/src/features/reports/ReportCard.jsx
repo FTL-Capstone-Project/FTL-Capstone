@@ -3,13 +3,12 @@ import StatusBadge from "../../components/StatusBadge.jsx";
 // One report row in the "My checks" list — built to match the wireframe
 // (client/src/assets/wireframes/Personal/Orbis Reports_Page (Personal).png).
 //
-// `report` fields (see mockReports.js for the full shape + notes):
+// `report` comes from GET /api/history and has these fields:
 //   title, description, tags[], reported_by, created_at, kind, ai_score,
 //   screenshot_url, review (org members only).
 //
-// The score-direction and title/tags fields depend on David's data (flagged
-// in mockReports.js). If David hasn't added a field yet, we fall back so the
-// card still renders instead of breaking.
+// ai_score is a 0-100 SAFETY score (higher = safer). Any field may be missing
+// for older rows, so we fall back below so the card still renders.
 //
 // `showReviewStatus` — off by default = the INDIVIDUAL view (single "SAFETY SCORE",
 // because a solo user has no security team). The org-member variant passes
@@ -18,7 +17,7 @@ import StatusBadge from "../../components/StatusBadge.jsx";
 //
 // `onOpen` — click/Enter/Space opens the detail modal. The card acts as a button
 // (role + tabIndex + key handler) so it's reachable by keyboard, not just mouse.
-export default function ReportCard({ report, showReviewStatus = false, onOpen }) {
+const ReportCard = ({ report, showReviewStatus = false, onOpen }) => {
   // Format the DB timestamp ("2026-07-14T23:03:28.535Z") into a readable date
   // like "Jul 14, 2026". Guarded so a null/invalid value shows nothing (not 1970).
   const when = report.created_at
@@ -122,7 +121,7 @@ export default function ReportCard({ report, showReviewStatus = false, onOpen })
 }
 
 // Map the verdict "kind" to a theme color token for the score number.
-function scoreColor(kind) {
+const scoreColor = (kind) => {
   if (kind === "safe") return "safe";
   if (kind === "dangerous") return "danger";
   return "review";
@@ -130,7 +129,7 @@ function scoreColor(kind) {
 
 // Turn a 0-100 SAFETY score into a verdict "kind" so the analyst number is colored
 // the same way as the Orbo number. Mirrors scoreToKind in history.service.js.
-function scoreToKind(score) {
+const scoreToKind = (score) => {
   if (score == null) return "review";
   if (score >= 70) return "safe";
   if (score >= 35) return "review";
@@ -140,3 +139,5 @@ function scoreToKind(score) {
 // Shared small styles for the score column (keeps the JSX readable).
 const scoreLabelStyle = { fontSize: "0.68em", fontWeight: 700, color: "var(--text-dim)", letterSpacing: "0.04em" };
 const scoredByStyle = { fontSize: "0.66em", fontStyle: "italic", color: "var(--text-dim)", marginTop: 2 };
+
+export default ReportCard;

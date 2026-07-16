@@ -17,7 +17,7 @@
 //
 // Returns: { submission, orgReview } — the updated rows, for the route to log/return.
 
-export async function escalateSubmission(prisma, { submissionId, orgId, indicatorId }) {
+export const escalateSubmission = async (prisma, { submissionId, orgId, indicatorId }) => {
   if (!submissionId) throw new Error("escalateSubmission: submissionId is required");
   if (!orgId) throw new Error("escalateSubmission: orgId is required (only org members can escalate)");
   if (!indicatorId) throw new Error("escalateSubmission: indicatorId is required");

@@ -7,7 +7,7 @@ import {
 
 // Minimal mock Prisma (same style as users.service.test.js): records calls,
 // returns plausible rows. No live DB.
-function mockPrisma(existing = undefined) {
+const mockPrisma = (existing = undefined) => {
   return {
     notification: {
       findMany: vi.fn(async () => [

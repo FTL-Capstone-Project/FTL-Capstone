@@ -19,23 +19,23 @@ const ACTIVITY_LIMIT = 6; // right-rail activity feed rows
 const HISTORY_DAYS = 30; // "My Submission History" bar chart window
 
 // ---- small date helpers (UTC, no external dep) ----
-function daysAgo(n) {
+const daysAgo = (n) => {
   const d = new Date();
   d.setUTCHours(0, 0, 0, 0);
   d.setUTCDate(d.getUTCDate() - n);
   return d;
 }
-function startOfThisMonth() {
+const startOfThisMonth = () => {
   const d = new Date();
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 }
-function ymd(date) {
+const ymd = (date) => {
   return date.toISOString().slice(0, 10); // "2026-07-14"
 }
 
 // Percent change this-period vs last-period. Returns { pct, direction } where
 // direction is "up" | "down" | "flat". null baseline (no prior data) → flat 0.
-function trend(current, previous) {
+const trend = (current, previous) => {
   if (previous === 0) {
     if (current === 0) return { pct: 0, direction: "flat" };
     return { pct: 100, direction: "up" }; // grew from nothing
@@ -49,7 +49,7 @@ function trend(current, previous) {
  * Build the entire personal dashboard payload for one user.
  * @param {number} userId  req.user.id (the verified caller)
  */
-export async function getDashboard(userId) {
+export const getDashboard = async (userId) => {
   // Pull every submission for this user ONCE, with the joined global indicator
   // (score/verdict/title live on the indicator). We derive most widgets from this
   // in-memory list — cheap for a personal account, and avoids many round-trips.

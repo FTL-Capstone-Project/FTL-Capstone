@@ -1,7 +1,7 @@
 // "Why Orbo flagged this" — list of evidence rows. Each: { text, severity: safe|review|dangerous }.
 const DOT = { safe: "var(--safe)", review: "var(--review)", dangerous: "var(--danger)" };
 
-export default function EvidenceList({ items = [] }) {
+const EvidenceList = ({ items = [] }) => {
   if (!items.length) return null;
   return (
     <div style={{ marginTop: 12 }}>
@@ -21,3 +21,5 @@ export default function EvidenceList({ items = [] }) {
     </div>
   );
 }
+
+export default EvidenceList;

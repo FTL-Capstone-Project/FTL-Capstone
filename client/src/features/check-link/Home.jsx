@@ -13,7 +13,7 @@ import { getConversation, saveConversation, newConversationId } from "../../lib/
 
 // Looks like a URL or an email address? (so we know whether to SCAN it vs treat it as
 // a question for Orbo.)
-function looksCheckable(text) {
+const looksCheckable = (text) => {
   const t = text.trim();
   if (/\s/.test(t) && !/^https?:\/\//i.test(t)) return false; // has spaces → it's a sentence/question
   const urlish = /^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+.*$/i.test(t);
@@ -27,13 +27,13 @@ let lastActiveConvoId = null;
 
 // A webmail/inbox URL (the mail client's own address bar in a screenshot), not the suspicious
 // link — filtered out of "Get report" candidates.
-function isWebmailUrl(u = "") {
+const isWebmailUrl = (u = "") => {
   return /(^|\/\/|\.)(mail\.google|gmail|outlook\.(live|office)|mail\.yahoo|proton\.me|icloud)\b/i.test(u);
 }
 
 // Pull the first URL or email out of ANY message (even a sentence like "is this legit? https://…").
 // Used to offer a "Get report" scan button under Orbo's chat reply.
-function extractTarget(text) {
+const extractTarget = (text) => {
   const url = text.match(/https?:\/\/[^\s]+/i);
   if (url) return url[0].replace(/[.,)\]]+$/, ""); // trim trailing punctuation
   const email = text.match(/[^\s@]+@[^\s@]+\.[^\s@]+/);
@@ -47,7 +47,7 @@ const PROMPT_CHIPS = [
   { label: "Verify a sender", reply: "Go ahead and paste the sender's email address — I'll tell you if it looks legit." },
 ];
 
-export default function Home() {
+const Home = () => {
   const { getToken } = useAuth();
   const { user } = useUser();
   const firstName = user?.firstName ?? "there";
@@ -110,7 +110,7 @@ export default function Home() {
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
 
   // Scan a URL/email → verdict card. (shared by paste, chip, and upload-choice paths)
-  async function scan(target) {
+  const scan = async (target) => {
     setBusy(true);
     try {
       const { indicatorId } = await api.post("/api/submissions", { url: target }, { getToken });
@@ -129,7 +129,7 @@ export default function Home() {
   // Free-form question → Orbo answers (security topics only; server declines off-topic).
   // If the question CONTAINED a link/email (e.g. "is this legit? https://…"), attach it
   // so the reply can offer a "Get report" button to run the real scan.
-  async function askOrbo(question, scanTarget = null) {
+  const askOrbo = async (question, scanTarget = null) => {
     setBusy(true);
     try {
       const history = messages.filter((m) => m.kind === "text").slice(-6).map((m) => ({ role: m.role, text: m.text }));
@@ -149,19 +149,19 @@ export default function Home() {
 
   // Composer submit: a bare link/email → scan; a sentence → ask Orbo (but if it has a
   // link/email inside, pass it along so Orbo can offer a "Get report" scan button).
-  async function handleSend(text) {
+  const handleSend = async (text) => {
     add({ role: "user", kind: "text", text });
     if (looksCheckable(text)) await scan(text);
     else await askOrbo(text, extractTarget(text));
   }
 
-  function handleChip(chip) {
+  const handleChip = (chip) => {
     add({ role: "user", kind: "text", text: chip.label });
     add({ role: "orbo", kind: "text", pose: "wave", text: chip.reply });
   }
 
   // "Ask Orbo more" on a verdict card → invite the user to ask; questions route to askOrbo.
-  function handleAskMore(indicatorId) {
+  const handleAskMore = (indicatorId) => {
     lastIndicatorId.current = indicatorId;
     add({ role: "orbo", kind: "text", pose: "happy",
       text: "Sure — ask me anything about this. For example: why did they send this, are scams like this common, or what should I do now?" });
@@ -169,7 +169,7 @@ export default function Home() {
 
   // Image submitted (from the composer) WITH an optional instruction. The image was staged
   // first and only sent when the user hit submit — so we now read it + honor their note.
-  async function handleSendImage(dataUrl, instruction, fileName) {
+  const handleSendImage = async (dataUrl, instruction, fileName) => {
     add({ role: "user", kind: "image", src: dataUrl, text: fileName });
     if (instruction) add({ role: "user", kind: "text", text: instruction });
     setBusy(true);
@@ -234,14 +234,14 @@ export default function Home() {
   }
 
   // Announce what Orbo found, then check it. (setBusy already true from the image flow.)
-  async function scanWithNote(target, summary) {
+  const scanWithNote = async (target, summary) => {
     add({ role: "orbo", kind: "text", pose: "thinking",
       text: `I read your image${summary ? ` — ${summary}` : ""}. Checking ${target} now…` });
     await checkTarget(target);
   }
 
   // Route a target: a URL → sandbox scan (verdict card); an email → formal sender report card.
-  async function checkTarget(target) {
+  const checkTarget = async (target) => {
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target.trim());
     if (isEmail) {
       setBusy(true);
@@ -259,7 +259,7 @@ export default function Home() {
 
   // "Get report" button under a chat reply → produce a formal report card, and drop the button.
   // A URL → sandbox scan (verdict card). An email → a structured SENDER report card.
-  async function handleGetReport(msgId, target) {
+  const handleGetReport = async (msgId, target) => {
     setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, scanTarget: null } : m)));
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target.trim());
     if (!isEmail) { await scan(target); return; }
@@ -277,7 +277,7 @@ export default function Home() {
   }
 
   // User picked one of the upload choices → check it (and drop the buttons).
-  async function handleChoice(msgId, choice) {
+  const handleChoice = async (msgId, choice) => {
     add({ role: "user", kind: "text", text: choice.value });
     setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, choices: null } : m)));
     await checkTarget(choice.value);
@@ -353,7 +353,7 @@ export default function Home() {
   );
 }
 
-function shorten(u) { return u.length > 48 ? u.slice(0, 45) + "…" : u; }
+const shorten = (u) => (u.length > 48 ? u.slice(0, 45) + "…" : u);
 
 const choiceBtn = {
   display: "flex", alignItems: "center", gap: 8, textAlign: "left", padding: "8px 12px", borderRadius: 10,
@@ -364,7 +364,7 @@ const choiceBtn = {
 // Empty Home = the wireframe's greeting: the big planet-Orbo mascot, "Hi {name}" with a
 // small waving Orbo used AS the emoji at the end (replacing the old Apple 👋), subtitle,
 // and the three prompt-chip pills. No Apple emojis (per design).
-function EmptyState({ firstName, onChip }) {
+const EmptyState = ({ firstName, onChip }) => {
   return (
     <div style={{ minHeight: "100%", display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center", gap: 14, textAlign: "center", paddingBottom: "8vh" }}>
@@ -388,3 +388,5 @@ function EmptyState({ firstName, onChip }) {
     </div>
   );
 }
+
+export default Home;
