@@ -1,12 +1,36 @@
 // ── sender report · owner: David ──
 // A formal, structured verdict about an EMAIL SENDER (not a URL — senders can't be
-// sandbox-detonated). Claude scores the sender's legitimacy from signals we can reason
-// about: domain legitimacy, lookalike/typosquatting, display-name vs address mismatch,
-// and any urgency/credential-request cues from the image context. Returns the SAME shape
-// as the URL verdict so the client reuses VerdictCard.
+// sandbox-detonated). Senders have NO sandbox evidence, so a lone LLM guess is weak and
+// non-reproducible. We add a DETERMINISTIC backstop: run the same typosquat/lookalike
+// detector we use for URLs against the sender's domain. If the domain is a lookalike of a
+// known brand (paypa1.com, linkedln.com), CODE forces the verdict to dangerous — the model
+// only writes the words. A real, well-known brand domain nudges toward trust. Returns the
+// SAME shape as the URL verdict so the client reuses VerdictCard.
 import { chatJSON } from "../../services/llm.js";
+import { detectLookalike, registeredDomain, knownBrandDomain } from "../../services/typosquat.js";
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
+
+// Deterministically classify a sender's domain (no LLM). This is the backstop that makes
+// the safe/dangerous call in CODE:
+//   - "lookalike"  → domain resembles a known brand but isn't it (paypa1.com) → dangerous
+//   - "brand"      → domain IS a known brand's real domain (linkedin.com)     → lean safe
+//   - "unknown"    → not in our brand list → no strong signal, defer to the model's wording
+const assessSenderDomain = (email) => {
+  const at = String(email).lastIndexOf("@");
+  if (at < 0) return { kind: "unknown", domain: null, brand: null };
+  const host = email.slice(at + 1);
+  const domain = registeredDomain(host);
+  const brand = knownBrandDomain(host);
+  if (brand) return { kind: "brand", domain, brand };
+  const look = detectLookalike(host); // {brand, domains} | null — fires only on lookalikes
+  if (look) return { kind: "lookalike", domain, brand: look.brand };
+  return { kind: "unknown", domain, brand: null };
+};
+
+// Turn the deterministic domain assessment into a score ceiling/floor the model can't
+// override, plus a forced evidence line so the "why" always reflects the hard signal.
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // { email, context? } → { ai_score, ai_verdict, ai_confidence, title, tags, evidence:[{text,severity}] }
 export const generateSenderReport = async ({ email, context = "" }) => {
@@ -27,26 +51,55 @@ export const generateSenderReport = async ({ email, context = "" }) => {
     "IMPORTANT: a real matching domain is a GOOD sign but NOT proof (display addresses can be spoofed) — " +
     "always note that the user should verify the full email headers. No markdown, no extra text.";
 
-  const user = `Sender email: ${email}\nContext from the message (if any): ${context || "none provided"}\n\nGive the sender report as JSON.`;
+  // ── Deterministic backstop (runs BEFORE the model owns the verdict) ──
+  const dom = assessSenderDomain(email);
+
+  const user =
+    `Sender email: ${email}\nContext from the message (if any): ${context || "none provided"}\n` +
+    `Deterministic domain check: ${
+      dom.kind === "lookalike" ? `LOOKALIKE of ${cap(dom.brand)} — the domain "${dom.domain}" is NOT a real ${cap(dom.brand)} domain (impersonation).`
+      : dom.kind === "brand" ? `the domain "${dom.domain}" IS a real ${cap(dom.brand)} domain (but display addresses can still be spoofed).`
+      : `"${dom.domain}" is not a known brand domain; judge from the address + context.`
+    }\n\nGive the sender report as JSON.`;
 
   const out = await chatJSON({ system, user, maxTokens: 500, temperature: 0 });
   if (typeof out?.score !== "number" || typeof out?.verdict !== "string" || !out.verdict.trim()) {
     throw new Error("sender report JSON missing score/verdict");
   }
-  const score = clamp(out.score);
   const sev = (s) => (["safe", "review", "dangerous"].includes(s) ? s : "review");
-  const reasons = Array.isArray(out.reasons)
+  let reasons = Array.isArray(out.reasons)
     ? out.reasons.filter((r) => r?.text?.trim()).map((r) => ({ text: r.text.trim(), severity: sev(r.severity) }))
     : [];
+
+  // CODE makes the safe/dangerous call for the cases we can be sure about; the model's
+  // number is only trusted in the "unknown" case.
+  let score = clamp(out.score);
+  let forcedTag = null;
+  if (dom.kind === "lookalike") {
+    // Impersonation is a hard danger signal — ceiling the score, prepend the reason.
+    score = Math.min(score, 15);
+    reasons = [{ text: `The domain "${dom.domain}" is a lookalike of ${cap(dom.brand)}, not a real ${cap(dom.brand)} address — this is impersonation`, severity: "dangerous" }, ...reasons];
+    forcedTag = "Impersonation";
+  } else if (dom.kind === "brand") {
+    // A real, well-known brand domain shouldn't be scored as dangerous by the model; floor
+    // it into "review" at worst (still not a blanket "safe" — headers can be spoofed).
+    score = Math.max(score, 55);
+    reasons = [{ text: `"${dom.domain}" is a genuine ${cap(dom.brand)} domain (verify full headers to rule out spoofing)`, severity: "safe" }, ...reasons];
+  }
+
+  // Tags: force the impersonation chip when code confirmed a lookalike.
+  let tags = Array.isArray(out.tags) ? out.tags.map((t) => String(t).trim()).filter(Boolean) : [];
+  if (forcedTag && !tags.includes(forcedTag)) tags = [forcedTag, ...tags];
 
   return {
     status: "done",
     ai_score: score,
     ai_verdict: out.verdict.trim(),
-    ai_confidence: out.confidence ?? "medium",
+    // Confidence is high when a deterministic domain signal decided it; else the model's.
+    ai_confidence: dom.kind === "unknown" ? (out.confidence ?? "medium") : "high",
     title: (out.title || "").trim() || "Sender report",
-    tags: Array.isArray(out.tags) ? out.tags.slice(0, 3) : [],
-    evidence: reasons.length ? reasons : [{ text: "Assessed the sender address and available context", severity: "review" }],
+    tags: [...new Set(tags)].slice(0, 3),
+    evidence: (reasons.length ? reasons : [{ text: "Assessed the sender address and available context", severity: "review" }]).slice(0, 6),
     screenshot_url: null,
     report_count: 1,
     review: null,

@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { registeredDomain, detectLookalike, assessTyposquat } from "./typosquat.js";
+import { registeredDomain, detectLookalike, assessTyposquat, knownBrandDomain } from "./typosquat.js";
+
+describe("knownBrandDomain", () => {
+  it("recognizes a real brand domain (and its subdomains)", () => {
+    expect(knownBrandDomain("linkedin.com")).toBe("linkedin");
+    expect(knownBrandDomain("mail.amazon.com")).toBe("amazon"); // subdomain of a listed brand
+    expect(knownBrandDomain("www.paypal.com")).toBe("paypal");
+  });
+  it("returns null for lookalikes and unknown domains", () => {
+    expect(knownBrandDomain("paypa1.com")).toBeNull();     // lookalike, not the real domain
+    expect(knownBrandDomain("linkedln.com")).toBeNull();
+    expect(knownBrandDomain("some-random-startup.io")).toBeNull();
+  });
+});
 
 describe("registeredDomain", () => {
   it("extracts eTLD+1 and strips www.", () => {

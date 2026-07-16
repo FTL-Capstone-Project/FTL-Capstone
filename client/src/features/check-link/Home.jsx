@@ -202,12 +202,12 @@ const Home = () => {
         return;
       }
 
-      // Asked about the SENDER → give a quick conversational read, and offer a "Get report"
-      // button that produces the FORMAL sender report (about the email the user asked about).
-      if (wantsSender && hasEmail) {
-        await askOrbo(`Is this email sender legitimate or a likely scam: ${emails[0]}? Explain how to tell.`, emails[0]);
-        return;
-      }
+      // Asked about the SENDER → go straight to the ONE authoritative sender report
+      // (not a separate conversational guess). Producing a chat answer AND a report from
+      // two independent Claude calls let them contradict each other (chat said
+      // "suspicious", card said "Safe 82" for the same address). checkTarget() below runs
+      // the single sender-report verdict, same as a typed email address.
+      if (wantsSender && hasEmail) { await checkTargetWithNote(emails[0], summary); return; }
       if (wantsLink && hasUrl) { await scanWithNote(urls[0], summary); return; }
 
       // No clear instruction: if exactly one target, just check it; if both, ask which.
@@ -237,6 +237,14 @@ const Home = () => {
 
   // Announce what Orbo found, then check it. (setBusy already true from the image flow.)
   const scanWithNote = async (target, summary) => {
+    add({ role: "orbo", kind: "text", pose: "thinking",
+      text: `I read your image${summary ? ` — ${summary}` : ""}. Checking ${target} now…` });
+    await checkTarget(target);
+  }
+
+  // Same as scanWithNote but for the sender path — routes through checkTarget so an email
+  // yields the single authoritative sender report (no separate conversational verdict).
+  const checkTargetWithNote = async (target, summary) => {
     add({ role: "orbo", kind: "text", pose: "thinking",
       text: `I read your image${summary ? ` — ${summary}` : ""}. Checking ${target} now…` });
     await checkTarget(target);

@@ -18,6 +18,64 @@ import { assessTyposquat } from "./typosquat.js";
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 
+// ============================================================
+// DETERMINISTIC SCORING RUBRIC — the safety NUMBER is computed from the signals we
+// already gather (urlscan + Safe Browsing + typosquat), NOT invented by the LLM.
+// Same input → same score (reproducible), every contribution is visible (auditable),
+// and it's unit-testable. Claude only writes the words; its number is clamped to the
+// rubric. This mirrors how real scanners (VirusTotal/urlscan) work: signals aggregate
+// to a score, AI narrates.
+//
+// The weights are hand-picked (no science behind "60 vs 50" at capstone scale) — they
+// live HERE in one table and are locked by tests, so tuning is a visible knob, not a
+// hidden risk. Score = 100 − (sum of triggered danger weights), clamped 0–100.
+// Higher = safer (matches the whole app's 100 = safe convention).
+// ============================================================
+const DANGER_WEIGHTS = {
+  blacklistHit: 60,        // Google Safe Browsing confirmed known-bad
+  urlscanMalicious: 55,    // urlscan flagged the page malicious
+  domainUnder7Days: 35,    // brand-new domain (classic phishing infra)
+  domainUnder30Days: 20,   // domainUnder30 and Under7 are mutually exclusive (worst tier wins)
+  domainUnder90Days: 8,
+  credFormOnNewDomain: 30, // password/login form on a <7-day domain
+  redirectsOffDomain: 15,  // lands on a different registered domain than submitted
+  brandImpersonation: 20,  // typosquat/lookalike that does NOT reach the real brand
+  insecureHttp: 10,        // served over plain HTTP, no TLS
+};
+
+// Compute the deterministic danger→safety score from the signals. Returns the safety
+// score (0-100), the list of {label, weight} contributions (for auditing/tests), and a
+// confidence derived from how many INDEPENDENT signals fired.
+const computeSafetyScore = ({ blacklist_hit, domain_age_days, raw = {}, evidence = [], typo }) => {
+  const hits = [];
+  const add = (cond, key) => { if (cond) hits.push({ label: key, weight: DANGER_WEIGHTS[key] }); };
+
+  add(blacklist_hit, "blacklistHit");
+  add(!!raw.malicious, "urlscanMalicious");
+  // domain age: only the worst applicable tier counts (they're a ladder, not additive)
+  if (domain_age_days != null) {
+    if (domain_age_days < 7) add(true, "domainUnder7Days");
+    else if (domain_age_days < 30) add(true, "domainUnder30Days");
+    else if (domain_age_days < 90) add(true, "domainUnder90Days");
+  }
+  const credForm = evidence.some((e) => /password|credential|login form/i.test(e.text)) &&
+    domain_age_days != null && domain_age_days < 7;
+  add(credForm, "credFormOnNewDomain");
+  add(!!raw.redirected_to_different_host, "redirectsOffDomain");
+  add(typo?.impersonation, "brandImpersonation");
+  add(evidence.some((e) => /insecure http|no encryption/i.test(e.text)), "insecureHttp");
+
+  const danger = hits.reduce((sum, h) => sum + h.weight, 0);
+  const score = clamp(100 - danger);
+
+  // Confidence = how many independent danger signals agree. Several strong signals all
+  // firing = high confidence; one weak signal (or none) = low. Distinct from the score.
+  const strong = hits.filter((h) => h.weight >= 30).length;
+  const confidence = strong >= 2 ? "high" : (hits.length >= 1 ? "medium" : "low");
+
+  return { score, hits, confidence };
+};
+
 export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_source, domain_age_days, raw = {}, contextText }) => {
   // ── Typosquat/lookalike check: is the submitted host a lookalike of a known brand, and does
   // it actually land on that brand's real domain? Prepend the finding as evidence so Claude and
@@ -31,15 +89,24 @@ export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_
     domain_age_days != null && domain_age_days < 7;
   const hardSignal = blacklist_hit || credFormOnNewDomain || typo.impersonation;
 
-  // ── Try Claude first; fall back to rules on any failure ──
+  // ── Deterministic rubric: the NUMBER comes from the signals, not the LLM. ──
+  const rubric = computeSafetyScore({ blacklist_hit, domain_age_days, raw, evidence, typo });
+  const anchoredScore = hardSignal ? Math.min(rubric.score, 20) : rubric.score;
+
+  // ── Try Claude first (for the WORDS); fall back to rules on any failure ──
   try {
     const ai = await claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, contextText, typo });
-    let score = clamp(ai.score);
-    if (hardSignal) score = Math.min(score, 20); // ceiling: known-bad can't score "safe"
+    // The rubric owns the number. Claude may nudge it ±15 (so its narrative and score
+    // don't visibly disagree), but never past the hard-signal ceiling.
+    let score = anchoredScore;
+    if (typeof ai.score === "number" && !hardSignal) {
+      score = clamp(Math.max(anchoredScore - 15, Math.min(anchoredScore + 15, ai.score)));
+    }
     return {
       ai_score: score,
       ai_verdict: ai.verdict,
-      ai_confidence: hardSignal ? "high" : (ai.confidence ?? "medium"),
+      // Confidence = how many independent signals agree (deterministic), not the model's guess.
+      ai_confidence: hardSignal ? "high" : rubric.confidence,
       // Fields Ozias's Reports card renders (title/description/tags). Fall back if the
       // model omitted them so the card is never blank.
       title: cleanTitle(ai.title) || fallbackTitle(raw, blacklist_source, score),
@@ -50,7 +117,9 @@ export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_
     };
   } catch (e) {
     console.warn("⚠ Claude verdict failed, using rule-based fallback:", e.message);
-    return ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal });
+    // Same rubric score/confidence as the happy path — only the WORDS are rule-written,
+    // so the number is identical whether Claude answered or not.
+    return ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal, anchoredScore, confidence: rubric.confidence });
   }
 }
 
@@ -117,23 +186,10 @@ const claudeVerdict = async ({ evidence, blacklist_hit, blacklist_source, domain
 }
 
 // ── Rule-based fallback (also used before a key exists / on Claude errors) ──
-// Compute a DANGER score internally, then convert to a SAFETY score (100 - danger).
-const ruleBasedVerdict = ({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal }) => {
-  let danger = 10;
-  if (raw.malicious) danger += 55;
-  if (typeof raw.score === "number") danger += Math.max(0, raw.score) * 0.4;
-  if (domain_age_days != null) {
-    if (domain_age_days < 7) danger += 35;
-    else if (domain_age_days < 30) danger += 20;
-    else if (domain_age_days < 90) danger += 8;
-  }
-  const dangers = evidence.filter((e) => e.severity === "dangerous").length;
-  const reviews = evidence.filter((e) => e.severity === "review").length;
-  danger += dangers * 15 + reviews * 5;
-  if ((raw.brands ?? []).length > 0) danger += 20;
-
-  let score = clamp(100 - danger); // → SAFETY score
-  if (hardSignal) score = Math.min(score, 20); // ceiling: known-bad can't look safe
+// The NUMBER is the same deterministic rubric score as the happy path (passed in as
+// anchoredScore); this function only writes rule-based WORDS around it.
+const ruleBasedVerdict = ({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal, anchoredScore, confidence }) => {
+  const score = anchoredScore;
 
   const bucket = scoreBucket(score);
   let ai_verdict;
@@ -150,7 +206,7 @@ const ruleBasedVerdict = ({ evidence, blacklist_hit, blacklist_source, domain_ag
   return {
     ai_score: score,
     ai_verdict,
-    ai_confidence: hardSignal ? "high" : evidence.length >= 3 ? "medium" : "low",
+    ai_confidence: hardSignal ? "high" : (confidence ?? "low"),
     title: fallbackTitle(raw, blacklist_source, score),
     description: firstSentence(ai_verdict),
     tags: cleanTags(null, raw, bucket, blacklist_source),

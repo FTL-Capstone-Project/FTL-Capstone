@@ -36,6 +36,24 @@ const BRANDS = [
 // Every legit domain across all brands — a host that IS one of these is the real thing, never a lookalike.
 const LEGIT_DOMAINS = new Set(BRANDS.flatMap((b) => b.domains));
 
+// Is this host (or its registered domain) an EXACT known-brand domain? Used by the sender
+// report to tell "this IS linkedin.com" (trusted) from "this merely resembles it".
+// Returns the brand name, or null. Defined after registeredDomain below is hoisted via
+// function-expression order — so we compute the registered domain inline here.
+export const knownBrandDomain = (host) => {
+  const h = String(host || "").toLowerCase().replace(/^www\./, "");
+  const labels = h.split(".").filter(Boolean);
+  // check the full host and its registered domain against the legit set
+  for (let i = 0; i < labels.length - 1; i++) {
+    const candidate = labels.slice(i).join(".");
+    if (LEGIT_DOMAINS.has(candidate)) {
+      const b = BRANDS.find((x) => x.domains.includes(candidate));
+      return b ? b.brand : null;
+    }
+  }
+  return null;
+};
+
 // Multi-part public suffixes we care about, so "amazon.co.uk" → registered "amazon.co.uk"
 // (not "co.uk") and "amazon.com.evil.ru" → registered "evil.ru" (not "amazon.com").
 const MULTIPART_SUFFIXES = new Set([
