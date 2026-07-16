@@ -3,6 +3,8 @@ import {
   ShieldCheck, Building2, ScatterChart, Zap, Link2, BarChart3,
   Twitter, Linkedin, Github, ArrowRight, Download, Send,
 } from "lucide-react";
+// Auth entry points: "Login" → sign-in; "Get Started" → the account-type chooser
+// (personal / organizational / analyst), which then routes to the right auth screen.
 import OrbisLogo from "../../components/OrbisLogo.jsx";
 import OrboAvatar from "../../components/OrboAvatar.jsx";
 
@@ -65,8 +67,8 @@ const Nav = () => {
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           {/* Placeholder until the browser extension ships; wire to the store URL later. */}
           <a href="#" style={outlineBtnStyle}><Download size={16} /> Download Extension</a>
-          <Link to="/login" style={ghostBtnStyle}>Login</Link>
-          <Link to="/register" style={primaryBtnStyle}>Get Started</Link>
+          <Link to="/signin?type=personal" style={ghostBtnStyle}>Login</Link>
+          <Link to="/get-started" style={primaryBtnStyle}>Get Started</Link>
         </div>
       </div>
     </nav>
@@ -139,8 +141,8 @@ const Hero = () => (
         </p>
 
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-          <Link to="/register" style={{ ...primaryBtnStyle, padding: "14px 30px", fontSize: 16 }}>Get Started</Link>
-          <Link to="/login" style={{ ...ghostBtnStyle, padding: "14px 30px", fontSize: 16 }}>Login</Link>
+          <Link to="/get-started" style={{ ...primaryBtnStyle, padding: "14px 30px", fontSize: 16 }}>Get Started</Link>
+          <Link to="/signin?type=personal" style={{ ...ghostBtnStyle, padding: "14px 30px", fontSize: 16 }}>Login</Link>
           <a href="#" style={{ ...outlineBtnStyle, padding: "14px 24px", fontSize: 16 }}><Download size={18} /> Download Extension</a>
         </div>
       </div>
@@ -181,7 +183,7 @@ const Roles = () => {
               </div>
               <h3 style={{ fontSize: 22, fontWeight: 700, color: "var(--navy)", marginBottom: 12 }}>{title}</h3>
               <p style={{ color: "var(--text-dim)", marginBottom: 24, lineHeight: 1.6 }}>{body}</p>
-              <Link to="/register" style={{ fontWeight: 700, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Link to="/get-started" style={{ fontWeight: 700, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: 6 }}>
                 {cta} <ArrowRight size={16} />
               </Link>
             </div>
@@ -273,7 +275,7 @@ const FinalCta = () => (
         Check any link or email for scams in seconds, with Orbo by your side.
       </p>
       <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
-        <Link to="/register" style={{
+        <Link to="/get-started" style={{
           background: "#fff", color: "var(--primary)", fontWeight: 700, padding: "14px 30px",
           borderRadius: 10, fontSize: 16,
         }}>Get Started</Link>
