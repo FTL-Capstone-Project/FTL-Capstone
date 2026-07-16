@@ -23,6 +23,10 @@ npm-debug.log*
 *.bak
 coverage/
 
+# presentation tooling (deck + its generator — regenerated locally, not app code)
+*.pptx
+scripts/build_deck.py
+
 # editor / IDE
 .vscode/
 .idea/

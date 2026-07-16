@@ -110,3 +110,64 @@ describe("GET /api/history?org=1 (Team History)", () => {
     expect(res.body.reports[0].review.shared_with_org).toBe(true);
   });
 });
+
+describe("GET /api/history?mine=1 (My History)", () => {
+  it("returns the caller's own reports, scoped to their user id", async () => {
+    submissionFindMany.mockResolvedValue([
+      sub({ id: 1, indicatorId: 10, aiScore: 91, name: "Me", createdAt: new Date("2026-07-10") }),
+    ]);
+
+    const res = await request(appAs({ id: 7, orgId: null, name: "Sofia R." })).get("/api/history?mine=1");
+
+    expect(res.status).toBe(200);
+    // The query is filtered by the verified caller's id, never by client input.
+    expect(submissionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 7 } })
+    );
+    expect(res.body.reports).toHaveLength(1);
+    expect(res.body.reports[0].kind).toBe("safe"); // score 91 → safe
+  });
+
+  it("individual (no org) gets review: null and never queries orgReview", async () => {
+    submissionFindMany.mockResolvedValue([
+      sub({ id: 1, indicatorId: 10, aiScore: 22, name: "Me", createdAt: new Date("2026-07-10") }),
+    ]);
+
+    const res = await request(appAs({ id: 7, orgId: null, name: "Sofia R." })).get("/api/history?mine=1");
+
+    expect(res.body.reports[0].review).toBeNull();
+    // No org → the private org-review join is skipped entirely.
+    expect(orgReviewFindMany).not.toHaveBeenCalled();
+  });
+
+  it("merges the org review for a member's own checks", async () => {
+    submissionFindMany.mockResolvedValue([
+      sub({ id: 1, indicatorId: 10, aiScore: 22, name: "Me", createdAt: new Date("2026-07-10") }),
+    ]);
+    orgReviewFindMany.mockResolvedValue([
+      { indicatorId: 10, reviewStatus: "confirmed malicious", humanScore: 15, sharedWithOrg: false, reviewedByUser: { name: "Priya S." } },
+    ]);
+
+    const res = await request(appAs({ id: 7, orgId: 99, name: "David M." })).get("/api/history?mine=1");
+
+    // Members DO see their own review even if it isn't shared org-wide (?mine=1
+    // has no sharedWithOrg gate — that gate is only for ?org=1 Team History).
+    expect(orgReviewFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ orgId: 99 }) })
+    );
+    expect(res.body.reports[0].review.review_status).toBe("confirmed malicious");
+    expect(res.body.reports[0].review.reviewed_by).toBe("Priya S.");
+  });
+
+  it("dedups to one card per indicator (keeps the newest submission)", async () => {
+    // Same link checked twice by me; the findMany is ordered newest-first.
+    submissionFindMany.mockResolvedValue([
+      sub({ id: 2, indicatorId: 10, aiScore: 54, name: "Me", createdAt: new Date("2026-07-10") }),
+      sub({ id: 1, indicatorId: 10, aiScore: 54, name: "Me", createdAt: new Date("2026-07-06") }),
+    ]);
+
+    const res = await request(appAs({ id: 7, orgId: null, name: "Sofia R." })).get("/api/history?mine=1");
+
+    expect(res.body.reports).toHaveLength(1); // one card, newest kept
+  });
+});

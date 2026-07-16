@@ -36,4 +36,23 @@ describe("escalateSubmission (O9)", () => {
     await expect(escalateSubmission(p, { submissionId: 5, indicatorId: 3 })).rejects.toThrow(/orgId/);
     await expect(escalateSubmission(p, { submissionId: 5, orgId: 2 })).rejects.toThrow(/indicatorId/);
   });
+
+  it("re-escalation preserves an existing analyst verdict (upsert update is a no-op)", async () => {
+    // The unique key means a second escalation of the same URL for the same org
+    // must NOT reset the analyst's work — update: {} leaves their verdict intact.
+    const p = mockPrisma();
+    // Simulate a row the analyst already reviewed being returned by the upsert.
+    p.orgReview.upsert = vi.fn(async () => ({
+      id: 1, orgId: 2, indicatorId: 3, reviewStatus: "confirmed malicious", humanScore: 12,
+    }));
+
+    const result = await escalateSubmission(p, { submissionId: 5, orgId: 2, indicatorId: 3 });
+
+    // The upsert is called with an EMPTY update body (don't touch existing review).
+    expect(p.orgReview.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: {} })
+    );
+    // The analyst's verdict survives.
+    expect(result.orgReview.reviewStatus).toBe("confirmed malicious");
+  });
 });
