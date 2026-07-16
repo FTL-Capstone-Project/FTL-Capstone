@@ -22,6 +22,31 @@ const NAV_ICON = {
   "/reports": FileText,
 };
 
+// Clerk components (OrganizationSwitcher, UserButton) render their own DOM and DON'T
+// read our CSS variables, so in dark mode their default near-black text/surfaces blend
+// into the dark sidebar. We hand Clerk our theme tokens via `variables` so it follows
+// the active theme. Passing var(--...) means it re-themes automatically on toggle.
+const clerkAppearance = {
+  variables: {
+    colorText: "var(--text)",
+    colorTextSecondary: "var(--text-dim)",
+    colorBackground: "var(--surface)",
+    colorInputBackground: "var(--surface)",
+    colorInputText: "var(--text)",
+    colorPrimary: "var(--primary)",
+    borderRadius: "10px",
+  },
+  elements: {
+    // The switcher trigger sits on the sidebar; give it a visible border so it reads
+    // in both themes instead of melting into the surface.
+    organizationSwitcherTrigger: {
+      color: "var(--text)",
+      border: "1px solid var(--border)",
+      padding: "6px 10px",
+    },
+  },
+};
+
 const AppShell = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState("");
@@ -70,7 +95,7 @@ const AppShell = () => {
 
           {inOrg && !collapsed && (
             <div style={{ margin: "2px 0" }}>
-              <OrganizationSwitcher hidePersonal={false} />
+              <OrganizationSwitcher hidePersonal={false} appearance={clerkAppearance} />
             </div>
           )}
 
@@ -150,7 +175,7 @@ const AppShell = () => {
               <Inbox size={20} />
             </button>
             <NotificationBell />
-            <UserButton afterSignOutUrl="/" />
+            <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
           </header>
           {/* minWidth:0 lets the content shrink instead of pushing wide children (long
               URLs / text) off-screen; overflow:auto makes this the page scroll area. */}
