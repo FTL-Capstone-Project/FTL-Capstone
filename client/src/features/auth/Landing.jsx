@@ -7,6 +7,7 @@ import {
 // (personal / organizational / analyst), which then routes to the right auth screen.
 import OrbisLogo from "../../components/OrbisLogo.jsx";
 import OrboAvatar from "../../components/OrboAvatar.jsx";
+import ThemeToggle from "../../components/ThemeToggle.jsx";
 
 // ── feature: landing · owner: David ──
 // Public marketing page at "/". Product = "Orbis"; Orbo is the assistant/bot.
@@ -65,6 +66,7 @@ const Nav = () => {
           ))}
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <ThemeToggle />
           {/* Placeholder until the browser extension ships; wire to the store URL later. */}
           <a href="#" style={outlineBtnStyle}><Download size={16} /> Download Extension</a>
           <Link to="/signin?type=personal" style={ghostBtnStyle}>Login</Link>
