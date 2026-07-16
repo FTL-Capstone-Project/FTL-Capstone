@@ -81,6 +81,9 @@ model Indicator {
   aiReasons       Json? // "why" rows: [{ text, severity: safe|review|dangerous }]
   screenshotUrl   String? // from urlscan.io
   urlscanUuid     String?
+  finalUrl        String? // where the link ACTUALLY landed after redirects (urlscan page.url)
+  finalHost       String? // just the landing host, e.g. "amazon.com" (for the "goes to X" UI cue)
+  redirectedToDifferentHost Boolean @default(false) // did it leave the domain it started on?
   domainAgeDays   Int?
   blacklistHit    Boolean  @default(false) // Google Safe Browsing known-bad?
   blacklistSource String? // e.g. google_safe_browsing:SOCIAL_ENGINEERING

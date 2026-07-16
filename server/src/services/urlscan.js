@@ -56,21 +56,41 @@ export const scanUrl = async (rawUrl) => {
   const deadline = Date.now() + MAX_WAIT_MS;
   while (Date.now() < deadline) {
     const r = await fetch(resultApi, { headers: { "API-Key": env.urlscanApiKey } });
-    if (r.status === 200) return distill(await r.json(), uuid);
+    if (r.status === 200) return distill(await r.json(), uuid, rawUrl);
     if (r.status === 404) { await sleep(POLL_EVERY_MS); continue; } // not ready yet
     throw new Error(`urlscan result ${r.status} for ${uuid}`); // 410/429/etc.
   }
   throw new Error(`urlscan scan ${uuid} did not finish within ${MAX_WAIT_MS / 1000}s`);
 }
 
+// Bare hostname (lowercased, no "www.") from a URL string, or null if unparseable.
+const hostOf = (u) => {
+  if (!u) return null;
+  try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ""); }
+  catch { return null; }
+}
+
 // Turn urlscan's huge result JSON into a small evidence list our verdict + UI can use.
-const distill = (result, uuid) => {
+// `submittedUrl` is the URL we asked urlscan to scan — comparing its host to the final
+// landing host tells us whether the link redirected somewhere ELSE (the key fact for a
+// typosquat: does "amzon.com" actually land on "amazon.com", or on a lookalike phishing page?).
+export const distill = (result, uuid, submittedUrl) => {
   const page = result.page ?? {};
   const verdicts = result.verdicts?.overall ?? {};
   const lists = result.lists ?? {};
 
   // urlscan's "first seen" age is our best free proxy for "new/suspicious domain".
   const domain_age_days = page.domainAgeDays ?? page.apexDomainAgeDays ?? null;
+
+  // ── The redirect destination (first-class fact, not just a hop count) ──
+  const final_url = page.url ?? null;
+  // Prefer urlscan's record of what we submitted; fall back to the arg we passed in.
+  const submitted_host = hostOf(result.task?.url) ?? hostOf(submittedUrl);
+  const final_host = hostOf(final_url);
+  // Did the link end up on a DIFFERENT registered domain than where it started?
+  const redirected_to_different_host =
+    submitted_host != null && final_host != null && submitted_host !== final_host;
+  const redirect_count = Array.isArray(result.data?.redirects) ? result.data.redirects.length : 0;
 
   const evidence = [];
   const sev = (s) => (s === "dangerous" || s === "review" || s === "safe" ? s : "review");
@@ -90,8 +110,13 @@ const distill = (result, uuid) => {
   if (page.tlsValidDays == null && (page.url || "").startsWith("http://")) {
     evidence.push({ text: "Page served over insecure HTTP (no encryption)", severity: "review" });
   }
-  if (Array.isArray(result.data?.redirects) && result.data.redirects.length > 0) {
-    evidence.push({ text: `Redirects through ${result.data.redirects.length} hop(s) before landing`, severity: "review" });
+  // Name the actual landing domain, not just "N hops". This is what lets the verdict
+  // distinguish a brand-owned redirect (amzon.com → amazon.com, safe) from a lookalike
+  // that stays on its own domain (zon.com → zon.com, no redirect at all).
+  if (redirected_to_different_host) {
+    evidence.push({ text: `Redirects to a different domain: ${final_host}`, severity: "review" });
+  } else if (redirect_count > 0) {
+    evidence.push({ text: `Stays on ${final_host ?? "the same domain"} after ${redirect_count} redirect hop(s)`, severity: "review" });
   }
   const domainCount = (lists.domains ?? []).length;
   if (domainCount > 15) {
@@ -104,7 +129,12 @@ const distill = (result, uuid) => {
   return {
     screenshot_url: `https://urlscan.io/screenshots/${uuid}.png`,
     urlscan_uuid: uuid,
-    final_url: page.url ?? null,
+    final_url,
+    // Redirect facts surfaced at top level so the pipeline can persist them (step 2).
+    final_host,
+    submitted_host,
+    redirected_to_different_host,
+    redirect_count,
     domain_age_days,
     // pass a compact raw summary through for the AI verdict step (Claude) later
     _raw: {
@@ -112,7 +142,11 @@ const distill = (result, uuid) => {
       score: verdicts.score ?? null,
       categories: verdicts.categories ?? [],
       brands: (verdicts.brands ?? []).map((b) => (typeof b === "string" ? b : b?.name)).filter(Boolean),
-      final_url: page.url ?? null,
+      final_url,
+      final_host,
+      submitted_host,
+      redirected_to_different_host,
+      redirect_count,
       server_country: page.country ?? null,
       domain_age_days,
     },

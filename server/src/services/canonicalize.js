@@ -19,17 +19,37 @@ const isTracking = (name) => {
   return TRACKING_PREFIXES.some((p) => n.startsWith(p));
 }
 
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+const BARE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Normalize raw user input into a parseable URL string.
+ * People paste bare domains ("amzon.com"), which the URL parser rejects because it needs a
+ * scheme — so we prepend "https://". But a scheme-less email ("foo@bar.com") would then parse
+ * as a URL (host bar.com, user "foo"), which is wrong: emails belong to the sender-report path,
+ * not the scanner. So we reject bare emails here and let the caller route them elsewhere.
+ * @param {string} raw - input exactly as submitted
+ * @returns {string} a URL string with a scheme; throws INVALID_URL for emails / unparseable input
+ */
+export const normalizeUrl = (raw) => {
+  const trimmed = String(raw).trim();
+  const hasScheme = HAS_SCHEME.test(trimmed);
+  if (!hasScheme && BARE_EMAIL.test(trimmed)) throw new Error("INVALID_URL");
+  const candidate = hasScheme ? trimmed : `https://${trimmed}`;
+  try {
+    new URL(candidate);
+  } catch {
+    throw new Error("INVALID_URL");
+  }
+  return candidate;
+}
+
 /**
  * @param {string} rawUrl - the URL exactly as submitted
  * @returns {string} canonical_key, or throws if the URL is unparseable
  */
 export const canonicalize = (rawUrl) => {
-  let u;
-  try {
-    u = new URL(rawUrl.trim());
-  } catch {
-    throw new Error("INVALID_URL");
-  }
+  const u = new URL(normalizeUrl(rawUrl));
 
   // 1. host: lowercase, drop leading "www." (http/https treated the same → we ignore scheme)
   let host = u.hostname.toLowerCase().replace(/^www\./, "");

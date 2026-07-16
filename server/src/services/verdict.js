@@ -14,19 +14,26 @@
 // Owner: David.
 // ============================================================
 import { chatJSON } from "./llm.js";
+import { assessTyposquat } from "./typosquat.js";
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 
 export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_source, domain_age_days, raw = {}, contextText }) => {
+  // ── Typosquat/lookalike check: is the submitted host a lookalike of a known brand, and does
+  // it actually land on that brand's real domain? Prepend the finding as evidence so Claude and
+  // the fallback both see it, and treat CONFIRMED impersonation as a hard danger signal. ──
+  const typo = assessTyposquat({ submittedHost: raw.submitted_host, finalHost: raw.final_host });
+  if (typo.evidence.length) evidence = [...typo.evidence, ...evidence];
+
   // ── Hard-signal ceiling (computed regardless of who writes the verdict) ──
   const credFormOnNewDomain =
     evidence.some((e) => /password|credential|login form/i.test(e.text)) &&
     domain_age_days != null && domain_age_days < 7;
-  const hardSignal = blacklist_hit || credFormOnNewDomain;
+  const hardSignal = blacklist_hit || credFormOnNewDomain || typo.impersonation;
 
   // ── Try Claude first; fall back to rules on any failure ──
   try {
-    const ai = await claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, contextText });
+    const ai = await claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, contextText, typo });
     let score = clamp(ai.score);
     if (hardSignal) score = Math.min(score, 20); // ceiling: known-bad can't score "safe"
     return {
@@ -48,7 +55,7 @@ export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_
 }
 
 // ── Claude call: reason over evidence, return {score, verdict, confidence} ──
-const claudeVerdict = async ({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, contextText }) => {
+const claudeVerdict = async ({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, contextText, typo }) => {
   const system =
     "You are Orbo, a friendly phishing-triage assistant that explains link safety to non-experts. " +
     "Given technical evidence about a URL, decide how SAFE it is. " +
@@ -64,7 +71,16 @@ const claudeVerdict = async ({ evidence, blacklist_hit, blacklist_source, domain
     "If it is SUSPICIOUS or DANGEROUS, give MORE — list EVERY red flag you can justify from the evidence " +
     "(aim for 4-6) so the user sees the full case for not clicking. Each reason short and concrete. " +
     "No markdown, no extra text. REMEMBER: higher score = SAFER (100 = safe, 0 = malicious). " +
-    "If it is on a known-bad blacklist, it is confirmed malicious — score it near 0 and say so plainly.";
+    "If it is on a known-bad blacklist, it is confirmed malicious — score it near 0 and say so plainly. " +
+    // Anti-confabulation: the destination is a FACT we give you, not something to infer.
+    "DESTINATION RULE: judge only from the evidence provided. The URL's query parameters (things like " +
+    "tag=, ref=, hvadid=) are NEVER proof of where a link goes — a domain does not become Amazon just " +
+    "because it carries Amazon-style tracking params. Use the `final_host` and `redirected_to_different_host` " +
+    "facts for where the link actually lands. Never claim a link redirects somewhere unless the evidence says so. " +
+    "TYPOSQUAT RULE: if the submitted domain is a misspelling/lookalike of a well-known brand (e.g. amzon.com " +
+    "for amazon.com) BUT the evidence shows it actually lands on that brand's real domain, that is typically the " +
+    "brand defensively owning the typo — explain that and treat it as safe. If a lookalike does NOT redirect to " +
+    "the real brand (it stays on its own domain), treat it as suspicious/dangerous impersonation.";
 
   const facts = {
     on_known_bad_blacklist: !!blacklist_hit,
@@ -74,6 +90,17 @@ const claudeVerdict = async ({ evidence, blacklist_hit, blacklist_source, domain
     categories: raw.categories ?? [],
     impersonated_brands: raw.brands ?? [],
     final_url: raw.final_url ?? null,
+    // Where the link ACTUALLY lands + whether it left the domain it started on. This is the
+    // evidence the model must use for "where does it go" — not the query params.
+    final_host: raw.final_host ?? null,
+    submitted_host: raw.submitted_host ?? null,
+    redirected_to_different_host: raw.redirected_to_different_host ?? false,
+    redirect_count: raw.redirect_count ?? 0,
+    // Deterministic lookalike verdict (already reflected in `evidence`): does the submitted host
+    // resemble a known brand, and does it actually reach that brand's real domain?
+    lookalike_of_brand: typo?.isLookalike ? typo.brand : null,
+    lands_on_real_brand: typo?.landsOnBrand ?? false,
+    confirmed_impersonation: typo?.impersonation ?? false,
     domain_age_days: domain_age_days ?? null,
     evidence: evidence.map((e) => e.text),
     user_context: contextText || null,
