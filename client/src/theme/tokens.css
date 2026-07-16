@@ -29,6 +29,13 @@
   /* ── Orbo accent ── */
   --ring: #21C7E6;           /* Orbo's orbital glow / cyan accents */
 
+  /* ── Verdict card LED-glow colors (shared by both themes for a consistent look) ──
+     The verdict card renders as a glowing "LED strip" frame in the verdict color.
+     Safe = a soft "matcha milk" green. Used by .verdict-frame in global.css. */
+  --led-safe: #9BE8B4;       /* matcha-milk green */
+  --led-review: #F0CE7A;
+  --led-danger: #F58A90;
+
   /* ── Shape ── */
   --radius: 12px;
   --shadow: 0 6px 22px rgba(10, 37, 64, 0.08);
@@ -72,11 +79,8 @@
   /* ── Shape ── */
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 
-  /* Verdict LED-glow colors for the dark-mode card border (soft, "matcha milk" green
-     for safe). These read as a glowing strip, not a murky fill. */
-  --led-safe: #9BE8B4;       /* matcha-milk green */
-  --led-review: #F0CE7A;
-  --led-danger: #F58A90;
+  /* LED-glow colors (--led-*) are shared from :root above; both themes use the same
+     matcha-milk green so the verdict card looks consistent in light and dark. */
 
   /* Dark theme = the light (white) wordmark. */
   --logo: "dark";

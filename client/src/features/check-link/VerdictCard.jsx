@@ -33,9 +33,9 @@ const VerdictCard = ({ indicator, onAskMore, onAction }) => {
   }
 
   return (
-    // Light mode: the tinted frame (style.bg) below. Dark mode: global.css turns this
-    // into a clean surface card with a glowing LED-strip border in the verdict color
-    // (matcha-milk green for Safe) — see [data-theme="dark"] .verdict-frame.
+    // The inline background/border below are the fallback; global.css .verdict-frame
+    // overrides them (both themes) into a glowing LED-strip border in the verdict color
+    // (matcha-milk green for Safe). data-kind selects which LED color.
     <div className="verdict-frame" data-kind={kind}
       style={{ background: style.bg, border: `1px solid ${style.color}33`,
       borderRadius: 16, boxShadow: "var(--shadow)", padding: 18, width: "100%" }}>

@@ -58,12 +58,13 @@ a:hover { text-decoration: underline; }
   .landing-footer { grid-template-columns: 1fr !important; }
 }
 
-/* ── Verdict card LED glow (dark mode only) ──
-   In light mode the verdict card keeps its soft tinted frame (set inline). In dark
-   mode that tint reads as a murky block, so here we drop the fill and turn the frame
-   into a glowing "LED strip": a bright verdict-colored border + a soft outer glow.
-   Safe = matcha-milk green. The inline background/border are overridden. */
-:root[data-theme="dark"] .verdict-frame {
+/* ── Verdict card LED glow (both themes) ──
+   The verdict card renders as a glowing "LED strip" frame instead of a filled tint,
+   in BOTH light and dark mode for a consistent look. We drop the inline fill and give
+   the frame a bright verdict-colored border + a soft layered outer glow. Safe =
+   matcha-milk green; review/danger use amber/red. The inline background/border set in
+   VerdictCard.jsx are overridden here. */
+.verdict-frame {
   --led: var(--led-safe);                  /* default; overridden per kind below */
   background: transparent !important;
   padding: 3px !important;                 /* thin so the glow hugs the inner card */
@@ -73,6 +74,6 @@ a:hover { text-decoration: underline; }
     0 0 18px color-mix(in srgb, var(--led) 50%, transparent),
     0 0 42px color-mix(in srgb, var(--led) 28%, transparent) !important;
 }
-:root[data-theme="dark"] .verdict-frame[data-kind="safe"]      { --led: var(--led-safe); }
-:root[data-theme="dark"] .verdict-frame[data-kind="review"]    { --led: var(--led-review); }
-:root[data-theme="dark"] .verdict-frame[data-kind="dangerous"] { --led: var(--led-danger); }
+.verdict-frame[data-kind="safe"]      { --led: var(--led-safe); }
+.verdict-frame[data-kind="review"]    { --led: var(--led-review); }
+.verdict-frame[data-kind="dangerous"] { --led: var(--led-danger); }
