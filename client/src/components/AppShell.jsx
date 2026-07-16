@@ -5,6 +5,7 @@ import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, P
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import OrbisLogo from "./OrbisLogo.jsx";
+import ThemeToggle from "./ThemeToggle.jsx";
 import { NAV_BY_ROLE } from "../config/constants.js";
 import { useOrbisRole } from "../lib/useOrbisRole.js";
 import { listConversations, searchConversations, subscribe, deleteConversation, renameConversation, togglePin, groupConversations } from "../lib/conversations.js";
@@ -19,6 +20,31 @@ const NAV_ICON = {
   "/ask-orbo": Sparkles,
   "/dashboard": LayoutGrid,
   "/reports": FileText,
+};
+
+// Clerk components (OrganizationSwitcher, UserButton) render their own DOM and DON'T
+// read our CSS variables, so in dark mode their default near-black text/surfaces blend
+// into the dark sidebar. We hand Clerk our theme tokens via `variables` so it follows
+// the active theme. Passing var(--...) means it re-themes automatically on toggle.
+const clerkAppearance = {
+  variables: {
+    colorText: "var(--text)",
+    colorTextSecondary: "var(--text-dim)",
+    colorBackground: "var(--surface)",
+    colorInputBackground: "var(--surface)",
+    colorInputText: "var(--text)",
+    colorPrimary: "var(--primary)",
+    borderRadius: "10px",
+  },
+  elements: {
+    // The switcher trigger sits on the sidebar; give it a visible border so it reads
+    // in both themes instead of melting into the surface.
+    organizationSwitcherTrigger: {
+      color: "var(--text)",
+      border: "1px solid var(--border)",
+      padding: "6px 10px",
+    },
+  },
 };
 
 const AppShell = () => {
@@ -69,7 +95,7 @@ const AppShell = () => {
 
           {inOrg && !collapsed && (
             <div style={{ margin: "2px 0" }}>
-              <OrganizationSwitcher hidePersonal={false} />
+              <OrganizationSwitcher hidePersonal={false} appearance={clerkAppearance} />
             </div>
           )}
 
@@ -143,12 +169,13 @@ const AppShell = () => {
           <header style={{ height: 56, borderBottom: "1px solid var(--border)", background: "var(--surface)",
             display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, padding: "0 22px", flexShrink: 0 }}>
             {orgName && <span style={{ marginRight: "auto", color: "var(--text-dim)", fontSize: "0.9em" }}>{orgName}</span>}
+            <ThemeToggle />
             <button title="Inbox" aria-label="Inbox"
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
               <Inbox size={20} />
             </button>
             <NotificationBell />
-            <UserButton afterSignOutUrl="/" />
+            <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
           </header>
           {/* minWidth:0 lets the content shrink instead of pushing wide children (long
               URLs / text) off-screen; overflow:auto makes this the page scroll area. */}

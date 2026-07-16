@@ -1,29 +1,43 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { SignedIn, SignedOut } from "@clerk/clerk-react";
 import ProtectedRoute from "./features/auth/ProtectedRoute.jsx";
 import AppShell from "./components/AppShell.jsx";
 import ComingSoon from "./components/ComingSoon.jsx";
 
 import Landing from "./features/auth/Landing.jsx";
-import Login from "./features/auth/Login.jsx";
-import Register from "./features/auth/Register.jsx";
+import ChooseAccountType from "./features/auth/ChooseAccountType.jsx";
+import SignIn from "./features/auth/SignIn.jsx";
+import CreateAccount from "./features/auth/CreateAccount.jsx";
+import CreateTeam from "./features/auth/CreateTeam.jsx";
+import SsoCallback from "./features/auth/SsoCallback.jsx";
 import Home from "./features/check-link/Home.jsx";
 import Reports from "./features/reports/Reports.jsx";
 import Dashboard from "./features/dashboard/Dashboard.jsx";
 
 // Route map:
-//  Public:    /  /login  /register
-//  Protected: everything inside <AppShell> (redirects to /login if signed out)
+//  Public:  /  (marketing Landing) → /get-started (account-type chooser) → /signin,
+//           /create-account, /create-team.  OAuth returns at /sso-callback.
+//  Protected: everything inside <AppShell> (redirects to / if signed out).
 //
-// /ask-orbo is the CANONICAL chat Home (Home.jsx = the Ask-Orbo chat). /home and legacy
-// /check/:id redirect to it. Unbuilt routes (dashboard/settings) + any unknown path render
-// a "Coming soon" page INSIDE the shell, so you can always navigate away (no blank dead-ends).
-export default function App() {
+// Landing's "Login"/"Get Started" buttons route into the account-type chooser, which
+// tags the sign-in with the chosen type. A signed-in user visiting a public auth page
+// is bounced into the app (<PublicOnly>). /ask-orbo is the canonical chat Home.
+const App = () => {
   return (
     <Routes>
+      {/* Public marketing + auth flow. */}
       <Route path="/" element={<Landing />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/get-started" element={<PublicOnly><ChooseAccountType /></PublicOnly>} />
+      <Route path="/signin" element={<PublicOnly><SignIn /></PublicOnly>} />
+      <Route path="/create-account" element={<PublicOnly><CreateAccount /></PublicOnly>} />
+      <Route path="/create-team" element={<PublicOnly><CreateTeam /></PublicOnly>} />
+      <Route path="/sso-callback" element={<SsoCallback />} />
 
+      {/* Legacy auth paths → new flow. */}
+      <Route path="/login" element={<Navigate to="/signin?type=personal" replace />} />
+      <Route path="/register" element={<Navigate to="/get-started" replace />} />
+
+      {/* Protected app. */}
       <Route
         element={
           <ProtectedRoute>
@@ -42,4 +56,18 @@ export default function App() {
       </Route>
     </Routes>
   );
-}
+};
+
+// Renders children only when signed OUT; a signed-in visitor is sent into the app.
+const PublicOnly = ({ children }) => {
+  return (
+    <>
+      <SignedOut>{children}</SignedOut>
+      <SignedIn>
+        <Navigate to="/ask-orbo" replace />
+      </SignedIn>
+    </>
+  );
+};
+
+export default App;

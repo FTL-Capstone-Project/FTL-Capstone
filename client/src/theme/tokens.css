@@ -32,4 +32,46 @@
   /* ── Shape ── */
   --radius: 12px;
   --shadow: 0 6px 22px rgba(10, 37, 64, 0.08);
+
+  /* Which Orbis logo the OrbisLogo component picks. Light theme = the dark wordmark. */
+  --logo: "light";
+}
+
+/* ============================================================
+   DARK THEME — same token NAMES, dark VALUES. Because the whole app reads these
+   variables (never hard-coded hex), flipping <html data-theme="dark"> re-themes
+   every screen at once. Values match the Figma dark mock: a deep blue-tinted base
+   (not pure black), surfaces that get LIGHTER as they rise (base → panel → raised),
+   soft off-white text (not pure white), and slightly lifted brand/status colors so
+   they stay legible on dark. Contrast targets WCAG AA.
+   ============================================================ */
+:root[data-theme="dark"] {
+  /* ── Brand ── */
+  --primary: #3B82F6;        /* lifted a touch so it reads on the dark base */
+  --primary-dark: #2563EB;
+  --navy: #E6ECF5;           /* "navy" now means the HEADING color → light on dark */
+
+  /* ── Surfaces (elevation gets lighter, never pure black) ── */
+  --canvas: #0B1220;         /* app background / page base */
+  --surface: #131C2B;        /* cards, panels, sidebar, top bar */
+  --border: #24304A;         /* dividers, card edges */
+  --text: #E4E8EF;           /* body text (~87% white, not #FFF) */
+  --text-dim: #93A0B5;       /* secondary/labels */
+
+  /* ── Status (desaturated/lifted for dark; still icon+word, never color alone) ── */
+  --safe: #34D07F;
+  --safe-bg: #10241A;
+  --review: #E0A93A;
+  --review-bg: #2A2110;
+  --danger: #F26B72;
+  --danger-bg: #2A1315;
+
+  /* ── Orbo accent ── */
+  --ring: #21C7E6;
+
+  /* ── Shape ── */
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+
+  /* Dark theme = the light (white) wordmark. */
+  --logo: "dark";
 }
