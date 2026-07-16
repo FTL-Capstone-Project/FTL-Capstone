@@ -41,3 +41,19 @@ a:hover { text-decoration: underline; }
   0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
   30%           { opacity: 1;    transform: translateY(-3px); }
 }
+
+/* ── Landing page (public marketing "/") responsive stacking ──
+   Inline styles can't hold @media rules, so the landing grids collapse to a single
+   column here on tablet/phone. Feature rows also reset `order` so the text always
+   leads above its image when stacked, and the center nav links hide on mobile. */
+@media (max-width: 900px) {
+  .landing-hero,
+  .landing-feature,
+  .landing-grid-3 { grid-template-columns: 1fr !important; }
+  .landing-feature > * { order: 0 !important; }
+  .landing-navlinks { display: none !important; }
+  .landing-footer { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 560px) {
+  .landing-footer { grid-template-columns: 1fr !important; }
+}
