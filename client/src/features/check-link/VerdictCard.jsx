@@ -33,7 +33,11 @@ const VerdictCard = ({ indicator, onAskMore, onAction }) => {
   }
 
   return (
-    <div style={{ background: style.bg, border: `1px solid ${style.color}33`,
+    // Light mode: the tinted frame (style.bg) below. Dark mode: global.css turns this
+    // into a clean surface card with a glowing LED-strip border in the verdict color
+    // (matcha-milk green for Safe) — see [data-theme="dark"] .verdict-frame.
+    <div className="verdict-frame" data-kind={kind}
+      style={{ background: style.bg, border: `1px solid ${style.color}33`,
       borderRadius: 16, boxShadow: "var(--shadow)", padding: 18, width: "100%" }}>
       <div style={{ background: "var(--surface)", borderRadius: 12, padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>

@@ -72,6 +72,12 @@
   /* ── Shape ── */
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
 
+  /* Verdict LED-glow colors for the dark-mode card border (soft, "matcha milk" green
+     for safe). These read as a glowing strip, not a murky fill. */
+  --led-safe: #9BE8B4;       /* matcha-milk green */
+  --led-review: #F0CE7A;
+  --led-danger: #F58A90;
+
   /* Dark theme = the light (white) wordmark. */
   --logo: "dark";
 }
