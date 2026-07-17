@@ -10,13 +10,13 @@ export const POLL_INTERVAL_MS = 1500;
 export const NAV_BY_ROLE = {
   individual: [
     { label: "Ask Orbo", sub: "Chat with Orbo", to: "/ask-orbo", icon: "✦" },
-    { label: "Dashboard", sub: "Your safety stats", to: "/dashboard", icon: "▦" },
     { label: "Reports", sub: "Full check history", to: "/reports", icon: "🗎" },
+    { label: "Dashboard", sub: "Your safety stats", to: "/dashboard", icon: "▦" },
   ],
   member: [
     { label: "Ask Orbo", sub: "Chat with Orbo", to: "/ask-orbo", icon: "✦" },
-    { label: "Dashboard", sub: "Your safety stats", to: "/dashboard", icon: "▦" },
     { label: "Reports", sub: "Full check history", to: "/reports", icon: "🗎" },
+    { label: "Dashboard", sub: "Your safety stats", to: "/dashboard", icon: "▦" },
   ],
   analyst: [
     { label: "Dashboard", sub: "Your safety stats", to: "/dashboard", icon: "▦" },
