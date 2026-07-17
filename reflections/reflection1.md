@@ -1,4 +1,4 @@
-# Reflection #1 — Week 7: Capstone Sprint 1
+# Reflection #1: Week 7 Capstone Sprint 1
 
 Pod Members: **David Gonzalez-Cesar, Michael, Ozias**
 
