@@ -107,7 +107,9 @@ const Composer = ({ onSend, onSendImage, disabled }) => {
             onPaste={onPaste}
             placeholder={placeholder}
             disabled={disabled}
-            style={{ flex: 1, border: "none", outline: "none", fontSize: "1em", background: "transparent" }}
+            // color must be the theme's text token — without it the input inherits the
+            // browser default (near-black), which is invisible on the dark-mode surface.
+            style={{ flex: 1, border: "none", outline: "none", fontSize: "1em", background: "transparent", color: "var(--text)" }}
           />
           <button type="submit" disabled={!canSend} aria-label="Send"
             style={{ flexShrink: 0, width: 40, height: 40, borderRadius: "50%", border: "none",

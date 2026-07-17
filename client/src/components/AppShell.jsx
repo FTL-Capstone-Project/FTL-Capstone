@@ -111,7 +111,9 @@ const AppShell = () => {
               <Search size={16} />
               <input value={search} onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search your past chats…"
-                style={{ border: "none", outline: "none", background: "transparent", fontSize: "0.85em", width: "100%" }} />
+                // color:var(--text) so typed search text is visible in dark mode (else it
+                // inherits the browser default near-black and disappears on the dark sidebar).
+                style={{ border: "none", outline: "none", background: "transparent", fontSize: "0.85em", width: "100%", color: "var(--text)" }} />
             </div>
           )}
 
