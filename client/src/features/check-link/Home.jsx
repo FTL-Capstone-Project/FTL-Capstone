@@ -21,6 +21,28 @@ const looksCheckable = (text) => {
   return urlish || emailish;
 }
 
+// Common TLDs — used to tell a space-polluted domain ("Ucoz. com") from ordinary prose
+// ("Mr. Smith"). Conservative on purpose: we only auto-collapse the space when the tail is
+// a real TLD, so we never mangle a sentence.
+const COMMON_TLDS = new Set([
+  "com", "co", "net", "org", "io", "gov", "edu", "info", "biz", "app", "dev", "me", "us",
+  "uk", "ru", "cn", "de", "pt", "nu", "ca", "au", "nz", "jp", "in", "br", "mx", "eu", "tv",
+  "cc", "xyz", "online", "site", "ai", "gg", "to", "ly",
+]);
+
+// People paste domains with a stray space after the dot ("Ucoz. com", "amazon . com").
+// That space used to demote the whole thing to a CHAT message (no scan). Here we collapse
+// spaces around dots/@ — but ONLY accept the result if it's a single space-free token whose
+// final label is a known TLD. So "Ucoz. com" → "Ucoz.com" (scanned), while "is this legit?
+// x.com" (still multi-word) and "Mr. Smith" (tail not a TLD) are left as-is → chat.
+const collapseSpacedDomain = (text) => {
+  const original = text.trim();
+  const collapsed = original.replace(/\s*\.\s*/g, ".").replace(/\s*@\s*/g, "@");
+  if (/\s/.test(collapsed)) return original;            // still multi-word → a real sentence
+  const tld = collapsed.split(".").pop()?.toLowerCase();
+  return COMMON_TLDS.has(tld) ? collapsed : original;   // only trust it if the tail is a TLD
+}
+
 // Module-level (survives Home unmount/remount as you navigate around the app): the id of the
 // last conversation the user was in, so returning to /ask-orbo with no ?c= resumes it.
 let lastActiveConvoId = null;
@@ -153,7 +175,10 @@ const Home = () => {
   // emails), so a typed "foo@bar.com" gets a report instead of a failed URL scan.
   const handleSend = async (text) => {
     add({ role: "user", kind: "text", text });
-    if (looksCheckable(text)) await checkTarget(text.trim());
+    // Repair a stray space in an otherwise-bare domain ("Ucoz. com" → "Ucoz.com") so it gets
+    // SCANNED instead of silently falling through to chat. Real sentences are left untouched.
+    const repaired = collapseSpacedDomain(text);
+    if (looksCheckable(repaired)) await checkTarget(repaired);
     else await askOrbo(text, extractTarget(text));
   }
 
