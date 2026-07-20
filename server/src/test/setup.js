@@ -9,3 +9,6 @@ process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://test:test@l
 process.env.CLERK_SECRET_KEY = "";
 process.env.CLERK_PUBLISHABLE_KEY = "";
 process.env.CLERK_WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET || "whsec_testsecret";
+// Allow the dev-stub in tests (Clerk keys are intentionally empty above). Real code
+// now fails closed unless this is explicitly set — tests are a legitimate opt-in.
+process.env.ORBIS_DEV_STUB = "1";

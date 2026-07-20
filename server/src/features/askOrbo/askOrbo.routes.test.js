@@ -7,7 +7,7 @@ import request from "supertest";
 //   chatText — the Claude call; return canned text or throw.
 //   getIndicatorContext — the grounding lookup for a specific check.
 //   generateSenderReport — used by the sibling /sender-report route (stub so import works).
-const env = { anthropicApiKey: "test-key", llmModel: "claude" };
+const env = { anthropicApiKey: "test-key", llmModel: "claude", clerkEnabled: false, devStubAllowed: true };
 const chatText = vi.fn();
 const getIndicatorContext = vi.fn();
 

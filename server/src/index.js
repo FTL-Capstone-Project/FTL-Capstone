@@ -73,10 +73,16 @@ export function createApp() {
   app.use("/api/nlp-query", nlpQueryRouter);   // David: AI Feature B (NL question → chart)
 
   // 6) Central error handler.
+  // Only surface a message for deliberate CLIENT errors (a 4xx status our own code
+  // set). For 5xx / unexpected errors we return a generic message and keep the real
+  // detail in the server log — so a Prisma/DB error can't leak table names or the DB
+  // host to the client.
   // eslint-disable-next-line no-unused-vars
   app.use((err, _req, res, _next) => {
     console.error("[orbis] unhandled error:", err);
-    res.status(err.status || 500).json({ error: err.message || "Internal error" });
+    const status = err.status || 500;
+    const clientSafe = status >= 400 && status < 500 && err.message;
+    res.status(status).json({ error: clientSafe ? err.message : "Internal error" });
   });
 
   return app;

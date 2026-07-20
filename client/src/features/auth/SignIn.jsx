@@ -71,12 +71,18 @@ const SignIn = () => {
       if (res.status === "complete") {
         await setActive({ session: res.createdSessionId });
         navigate(AFTER_AUTH);
-      } else if (res.status === "needs_first_factor") {
-        // Password alone wasn't enough (e.g. email-code required) → verify step.
-        await signIn.prepareFirstFactor({ strategy: "email_code" });
+        return;
+      }
+      // Not complete → Clerk wants an email code. Prepare it with the REQUIRED
+      // emailAddressId, read off the matching supported factor (sending only
+      // { strategy } is rejected by Clerk). Covers "needs_first_factor" and any
+      // other not-complete status that offers an email_code factor.
+      const emailFactor = signIn.supportedFirstFactors?.find((f) => f.strategy === "email_code");
+      if (emailFactor?.emailAddressId) {
+        await signIn.prepareFirstFactor({ strategy: "email_code", emailAddressId: emailFactor.emailAddressId });
         setStep("verify");
       } else {
-        setError("Additional verification is required to sign in.");
+        setError("This account needs a different sign-in method. Try 'Continue with Google', or reset your password.");
       }
     } catch (err) {
       setError(errMsg(err, "Sign in failed. Check your email and password."));

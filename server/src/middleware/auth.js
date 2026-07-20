@@ -39,10 +39,21 @@ export const makeRequireAuth = (deps = {}) => {
   // clerkEnabled can be forced in tests; defaults to the env-derived flag.
   const clerkEnabled = deps.clerkEnabled ?? env.clerkEnabled;
 
+  // FAIL CLOSED by default: the dev stub logs everyone in as one fake user, so it must
+  // be EXPLICITLY opted into (ORBIS_DEV_STUB=1) and never activate by accident. We do
+  // NOT infer safety from NODE_ENV (nothing in the app sets it) — a deploy that simply
+  // forgot the Clerk keys must refuse, not silently expose the whole API under one
+  // shared identity. devStubAllowed can be forced in tests via deps.devStubAllowed.
+  const devStubAllowed = deps.devStubAllowed ?? env.devStubAllowed;
+
   return async (req, res, next) => {
     try {
-      // ---- Dev stub: no Clerk configured → fake identity. ----
+      // ---- Dev stub: no Clerk configured → fake identity (LOCAL, opt-in ONLY). ----
       if (!clerkEnabled) {
+        if (!devStubAllowed) {
+          console.error("[orbis] SECURITY: Clerk keys missing and ORBIS_DEV_STUB!=1 — refusing to auth (no dev-stub fallback).");
+          return res.status(401).json({ error: "Unauthenticated" });
+        }
         // Resolve (create-or-fetch) the dev user's REAL mirror row so req.user.id is a
         // valid DB id — otherwise writes (submissions) and reads (history) disagree on
         // which user this is. Best-effort: if the DB is unavailable (e.g. unit tests),

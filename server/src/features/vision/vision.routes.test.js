@@ -4,7 +4,7 @@ import request from "supertest";
 
 // Mock the vision LLM + env so no network/key is needed. visionJSON returns whatever the model
 // "saw"; the deterministic scorer must own the resulting number regardless.
-const env = { anthropicApiKey: "test-key", llmModel: "claude", urlscanApiKey: "" };
+const env = { anthropicApiKey: "test-key", llmModel: "claude", urlscanApiKey: "", clerkEnabled: false, devStubAllowed: true };
 const visionJSON = vi.fn();
 const visionText = vi.fn();
 

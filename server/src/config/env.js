@@ -37,6 +37,14 @@ export const env = {
   get isProd() {
     return process.env.NODE_ENV === "production";
   },
+  // The dev-stub (fake user when Clerk keys are absent) is a SECURITY-SENSITIVE
+  // fallback: it logs everyone in as one identity. It must be EXPLICITLY opted into
+  // and NEVER activate by accident. We do NOT infer this from NODE_ENV (which nothing
+  // in the app sets) — a deploy that simply forgot the Clerk keys must fail closed,
+  // not silently expose the whole API. Set ORBIS_DEV_STUB=1 locally to allow it.
+  get devStubAllowed() {
+    return process.env.ORBIS_DEV_STUB === "1";
+  },
 };
 
 // Warn (don't crash) if a key is missing — lets us build/stub before all keys exist.

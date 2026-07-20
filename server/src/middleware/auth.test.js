@@ -12,14 +12,27 @@ const mockRes = () => {
 }
 
 describe("requireAuth (dev-stub mode)", () => {
-  it("injects a fake individual user when Clerk is disabled", async () => {
-    const mw = makeRequireAuth({ clerkEnabled: false });
+  it("injects a fake individual user when Clerk is disabled AND the stub is explicitly allowed", async () => {
+    const mw = makeRequireAuth({ clerkEnabled: false, devStubAllowed: true });
     const req = {};
     const res = mockRes();
     const next = vi.fn();
     await mw(req, res, next);
     expect(next).toHaveBeenCalledOnce();
     expect(req.user).toMatchObject({ role: "individual", orgId: null });
+  });
+
+  it("FAILS CLOSED (401, no fake user) when Clerk is disabled and the stub is NOT opted in", async () => {
+    // Guards the fail-open case: a deploy missing Clerk keys must NOT serve a shared
+    // fake identity just because the dev-stub exists.
+    const mw = makeRequireAuth({ clerkEnabled: false, devStubAllowed: false });
+    const req = {};
+    const res = mockRes();
+    const next = vi.fn();
+    await mw(req, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(401);
+    expect(req.user).toBeUndefined();
   });
 });
 
