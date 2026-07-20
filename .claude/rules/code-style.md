@@ -33,6 +33,11 @@ does — when in doubt, open a neighboring file and copy its style rather than i
 - Use correct HTTP status codes: 200 GET, 201 create, 400 bad request, 404 not found, 500 server error.
 - Use Prisma (parameterized) queries — never build SQL by concatenating user input.
 - Don't leak internal error details to the client; log server-side, return a safe message.
+- **Never fetch a user-submitted URL from our server without a strict allowlist.** The
+  submitted link goes to urlscan/Safe Browsing (external sandboxes), never to our own
+  `fetch()`. If you ever add a server-side "preview fetch" of a user URL, gate it to an exact
+  hostname allowlist (like the vision screenshot fetch does) — otherwise it's instant SSRF
+  (localhost / 169.254.169.254 cloud-metadata / internal IPs).
 
 ## Frontend (React)
 

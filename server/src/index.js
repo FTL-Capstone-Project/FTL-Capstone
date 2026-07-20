@@ -35,8 +35,12 @@ export function createApp() {
   // 1) RAW body for the Clerk webhook (svix signature verification needs it).
   app.use("/api/webhooks/clerk", express.raw({ type: "*/*" }));
 
-  // 2) JSON for everything else. 12mb: uploaded screenshots arrive as base64 (vision feature).
-  app.use(express.json({ limit: "12mb" }));
+  // 2) JSON body limits. Only the vision routes accept large payloads (base64 screenshots
+  //    ~ up to ~9MB raw). Every OTHER route takes small JSON, so give them a tight default —
+  //    a 12mb limit everywhere is a needless DoS surface (an attacker could POST 12mb of JSON
+  //    to any endpoint). Mount the big parser on /api/vision FIRST so it wins for that path.
+  app.use("/api/vision", express.json({ limit: "12mb" }));
+  app.use(express.json({ limit: "256kb" }));
 
   // 3) CORS for the Vite client.
   app.use(
