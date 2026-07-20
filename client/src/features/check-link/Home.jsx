@@ -220,8 +220,16 @@ const Home = () => {
       // whatever Orbo answers, so the user can always escalate to a full scan (interaction key).
       const reportTarget = hasUrl ? urls[0] : null;
 
-      // Nothing scannable at all → answer about the image itself.
+      // Nothing scannable, but the image IS a message/login page → the server already scored the
+      // red-flag signals it saw into a verdict card. This is the win: a link-LESS phishing
+      // screenshot ("your account is locked, confirm your password") is now scorable, not a shrug.
       if (!hasUrl && !hasEmail) {
+        if (raw.report) {
+          add({ role: "orbo", kind: "senderReport", indicator: raw.report,
+            pose: raw.report.ai_score >= 70 ? "safe" : raw.report.ai_score >= 35 ? "caution" : "danger" });
+          return;
+        }
+        // Not a message (an unrelated photo) → just chat about what we see.
         const q = instruction
           ? `${instruction} (About an image the user uploaded — summary: ${summary || "n/a"})`
           : `The user uploaded an image (summary: ${summary || "n/a"}) but there's no link or email in it. Briefly say what you see and ask what they'd like checked.`;
