@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { registeredDomain, detectLookalike, detectConfusableScript, assessTyposquat, knownBrandDomain } from "./typosquat.js";
+import { registeredDomain, detectLookalike, detectConfusableScript, assessTyposquat, knownBrandDomain, isFreeWebmail, containsBidiControl } from "./typosquat.js";
 
 describe("knownBrandDomain", () => {
   it("recognizes a real brand domain (and its subdomains)", () => {
@@ -11,6 +11,45 @@ describe("knownBrandDomain", () => {
     expect(knownBrandDomain("paypa1.com")).toBeNull();     // lookalike, not the real domain
     expect(knownBrandDomain("linkedln.com")).toBeNull();
     expect(knownBrandDomain("some-random-startup.io")).toBeNull();
+  });
+});
+
+describe("isFreeWebmail", () => {
+  it("flags consumer webmail providers", () => {
+    expect(isFreeWebmail("gmail.com")).toBe(true);
+    expect(isFreeWebmail("outlook.com")).toBe(true);
+    expect(isFreeWebmail("icloud.com")).toBe(true);
+    expect(isFreeWebmail("proton.me")).toBe(true);
+    expect(isFreeWebmail("mail.gmail.com")).toBe(true); // matched via registered domain
+  });
+  it("does NOT flag real company domains", () => {
+    expect(isFreeWebmail("microsoft.com")).toBe(false);
+    expect(isFreeWebmail("some-startup.io")).toBe(false);
+  });
+  it("does not disturb the URL path — gmail.com is still Google for links", () => {
+    // A LINK to gmail.com genuinely is Google; only the SENDER path treats it as neutral.
+    expect(knownBrandDomain("gmail.com")).toBe("google");
+    expect(detectLookalike("gmail.com")).toBeNull();
+  });
+});
+
+describe("containsBidiControl / RLO detection", () => {
+  it("detects a right-to-left override character", () => {
+    expect(containsBidiControl("document‮txt.exe")).toBe(true); // U+202E RLO
+    expect(containsBidiControl("⁦isolate⁩")).toBe(true);   // bidi isolates
+  });
+  it("does not flag normal text", () => {
+    expect(containsBidiControl("document.exe")).toBe(false);
+    expect(containsBidiControl("normal-domain.com")).toBe(false);
+  });
+  it("detectConfusableScript flags a host containing an RLO character", () => {
+    const r = detectConfusableScript("paypal‮moc.evil.com");
+    expect(r?.bidi).toBe(true);
+  });
+  it("assessTyposquat treats an RLO host as impersonation with clear wording", () => {
+    const r = assessTyposquat({ submittedHost: "a‮b.com", finalHost: null });
+    expect(r.impersonation).toBe(true);
+    expect(r.evidence[0].text).toMatch(/right-to-left override/i);
   });
 });
 

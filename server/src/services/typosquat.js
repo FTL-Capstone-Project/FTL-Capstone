@@ -71,6 +71,25 @@ const BRANDS = [
 // Every legit domain across all brands — a host that IS one of these is the real thing, never a lookalike.
 const LEGIT_DOMAINS = new Set(BRANDS.flatMap((b) => b.domains));
 
+// FREE / CONSUMER webmail providers. These ARE real domains (a link to gmail.com is genuinely
+// Google), so they stay in the brand list for URL lookalike purposes. But as a SENDER domain they
+// mean the opposite of trust: a message claiming to be official business/legal/corporate from a
+// free webmail account is a classic red flag (real orgs send from their own domain). The sender
+// report uses isFreeWebmail() to avoid falsely flooring these to "trusted brand domain".
+const FREE_WEBMAIL = new Set([
+  "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com",
+  "yahoo.com", "ymail.com", "rocketmail.com", "icloud.com", "me.com", "mac.com",
+  "aol.com", "proton.me", "protonmail.com", "pm.me", "gmx.com", "gmx.net", "mail.com",
+  "zoho.com", "yandex.com", "yandex.ru", "hey.com", "fastmail.com", "tutanota.com",
+]);
+
+// Is the sender's registered domain a free/consumer webmail provider? (Checked against the
+// registered domain so "foo.gmail.com" style tricks still resolve to gmail.com.)
+export const isFreeWebmail = (host) => {
+  const reg = registeredDomain(host);
+  return reg != null && FREE_WEBMAIL.has(reg);
+};
+
 // Is this host (or its registered domain) an EXACT known-brand domain? Used by the sender
 // report to tell "this IS linkedin.com" (trusted) from "this merely resembles it".
 // Returns the brand name, or null. Defined after registeredDomain below is hoisted via
@@ -137,12 +156,28 @@ const fold = (s) => {
     .replace(/5/g, "s");
 }
 
+// Unicode BIDI CONTROL characters: LRE/RLE/PDF/LRO/RLO (U+202A–202E) and the isolates
+// (U+2066–2069). These flip text direction and have NO legitimate use in a hostname, an email
+// address, or a filename — their only purpose in phishing is the "right-to-left override" (RLO)
+// trick that makes "photo_exe.scr" render on screen as "photo_rcs.exe". Any presence is a flag.
+const BIDI_CONTROL = /[‪-‮⁦-⁩]/;
+
+// Does this text contain a bidi-control character (RLO/LRO/etc.)? Standalone so the sender/vision
+// paths can screen an address or a filename, not just a host.
+export const containsBidiControl = (text) => BIDI_CONTROL.test(String(text || ""));
+
 // LIST-FREE homoglyph signal: does any label MIX Latin with Cyrillic/Greek letters (the
-// classic "аpple" trick), OR spell a Latin-looking word ENTIRELY in Cyrillic/Greek confusables
-// ("раураl")? Both mean the human-readable name is forged out of look-alike characters — an
-// attack that needs NO brand list, because no legitimate domain disguises Latin letters this
-// way. Returns the offending decoded label + which foreign script it used, or null.
+// classic "аpple" trick), spell a Latin-looking word ENTIRELY in Cyrillic/Greek confusables
+// ("раураl"), or hide a bidi-override (RLO) character? All mean the human-readable name is
+// forged from look-alike/invisible characters — an attack that needs NO brand list, because no
+// legitimate domain disguises Latin letters this way. Returns the offending label + how, or null.
 export const detectConfusableScript = (host) => {
+  // Bidi-control characters are illegitimate anywhere in a host — check the raw input first
+  // (before decoding/normalizing, which could strip or reorder them).
+  if (containsBidiControl(host)) {
+    const firstLabel = String(host).split(".")[0] || String(host);
+    return { label: firstLabel, script: "bidi-override", mixed: true, bidi: true };
+  }
   const unicodeHost = toUnicodeHost(host);
   const labels = unicodeHost.split(".").filter(Boolean);
   // Skip the TLD label: a Cyrillic TLD like ".рф" is legitimate, the spoofing happens in the
@@ -250,7 +285,9 @@ export const assessTyposquat = ({ submittedHost, finalHost }) => {
     // sites don't spell their name in look-alike foreign letters.
     const confusable = detectConfusableScript(submittedHost);
     if (confusable) {
-      const how = confusable.mixed
+      const how = confusable.bidi
+        ? "contains a hidden right-to-left override character that secretly reorders the text you see"
+        : confusable.mixed
         ? `mixes Latin with ${confusable.script} look-alike characters`
         : `spells a Latin-looking name entirely in ${confusable.script} look-alike characters`;
       return {

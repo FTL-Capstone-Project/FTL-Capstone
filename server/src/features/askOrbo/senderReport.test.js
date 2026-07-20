@@ -57,6 +57,25 @@ describe("generateSenderReport — deterministic domain backstop", () => {
     expect(r.evidence[0].severity).toBe("safe");
   });
 
+  it("free webmail is NOT floored to trusted — capped below 'safe' with a caveat (bug fix)", async () => {
+    // Regression: gmail.com used to classify as brand:google and floor to >=55 + "genuine Google
+    // domain". A "legal dept" on Gmail is a red flag, not a trust signal.
+    const r = await generateSenderReport({ email: "official-legal-dept@gmail.com" });
+    expect(r.ai_score).toBeLessThanOrEqual(60);            // capped, never the safe band
+    expect(r.tags).toContain("Free webmail");
+    expect(r.evidence[0].severity).toBe("review");
+    expect(r.evidence[0].text).toMatch(/free\/consumer webmail/i);
+    // must NOT reassure the user it's a genuine Google domain
+    expect(JSON.stringify(r.evidence)).not.toMatch(/genuine Google domain/i);
+    // and it never consults DNS for a webmail domain
+    expect(checkSenderDns).not.toHaveBeenCalled();
+  });
+
+  it("free webmail defers confidence to the model (a personal Gmail may be fine or a scam)", async () => {
+    const r = await generateSenderReport({ email: "john.smith1988@gmail.com" });
+    expect(r.ai_confidence).toBe("medium"); // model's confidence, not a forced "high"
+  });
+
   it("an unknown domain with healthy DNS defers to the model's number", async () => {
     const r = await generateSenderReport({ email: "hello@some-random-startup.io" });
     expect(r.ai_score).toBe(90);        // model's number, unclamped (no DNS penalty)

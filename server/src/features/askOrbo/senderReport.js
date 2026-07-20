@@ -7,7 +7,7 @@
 // only writes the words. A real, well-known brand domain nudges toward trust. Returns the
 // SAME shape as the URL verdict so the client reuses VerdictCard.
 import { chatJSON } from "../../services/llm.js";
-import { detectLookalike, registeredDomain, knownBrandDomain } from "../../services/typosquat.js";
+import { detectLookalike, registeredDomain, knownBrandDomain, isFreeWebmail } from "../../services/typosquat.js";
 import { checkSenderDns } from "../../services/senderDns.js";
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
@@ -15,13 +15,20 @@ const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 // Deterministically classify a sender's domain (no LLM). This is the backstop that makes
 // the safe/dangerous call in CODE:
 //   - "lookalike"  → domain resembles a known brand but isn't it (paypa1.com) → dangerous
+//   - "webmail"    → free/consumer webmail (gmail.com, outlook.com) → NEUTRAL, never floored safe
 //   - "brand"      → domain IS a known brand's real domain (linkedin.com)     → lean safe
 //   - "unknown"    → not in our brand list → no strong signal, defer to the model's wording
+//
+// ORDER MATTERS: check free-webmail BEFORE the brand check. gmail.com/outlook.com/icloud.com are
+// in the brand list (a LINK to gmail.com really is Google), but a SENDER using free webmail is the
+// opposite of a trust signal — a "legal dept" emailing from gmail.com is a classic scam tell. So
+// we must NOT floor these to "genuine Google domain". They get treated as neutral-with-a-caveat.
 const assessSenderDomain = (email) => {
   const at = String(email).lastIndexOf("@");
   if (at < 0) return { kind: "unknown", domain: null, brand: null };
   const host = email.slice(at + 1);
   const domain = registeredDomain(host);
+  if (isFreeWebmail(host)) return { kind: "webmail", domain, brand: null };
   const brand = knownBrandDomain(host);
   if (brand) return { kind: "brand", domain, brand };
   const look = detectLookalike(host); // {brand, domains} | null — fires only on lookalikes
@@ -84,6 +91,7 @@ export const generateSenderReport = async ({ email, context = "" }) => {
     `Sender email: ${email}${contextBlock}\n` +
     `Deterministic domain check: ${
       dom.kind === "lookalike" ? `LOOKALIKE of ${cap(dom.brand)} — the domain "${dom.domain}" is NOT a real ${cap(dom.brand)} domain (impersonation).`
+      : dom.kind === "webmail" ? `"${dom.domain}" is a FREE / consumer webmail provider (Gmail, Outlook, iCloud, etc.). This is NOT a company domain — anyone can create such an address. A message claiming to be official business, legal, corporate, HR, or from a well-known brand while using free webmail is a classic red flag. Judge the CLAIM against the free address; do not treat the provider as trustworthy just because Gmail/Microsoft is well known.`
       : dom.kind === "brand" ? `the domain "${dom.domain}" IS a real ${cap(dom.brand)} domain (but display addresses can still be spoofed).`
       : `"${dom.domain}" is not a known brand domain; judge from the address + context.`
     }${dnsLine}\n\nGive the sender report as JSON.`;
@@ -106,6 +114,16 @@ export const generateSenderReport = async ({ email, context = "" }) => {
     score = Math.min(score, 15);
     reasons = [{ text: `The domain "${dom.domain}" is a lookalike of ${cap(dom.brand)}, not a real ${cap(dom.brand)} address — this is impersonation`, severity: "dangerous" }, ...reasons];
     forcedTag = "Impersonation";
+  } else if (dom.kind === "webmail") {
+    // Free/consumer webmail: NEUTRAL, never "trusted". A personal Gmail can be perfectly innocent,
+    // so we don't force it dangerous — but the provider being well-known is NOT a trust signal, so
+    // we CAP it just below the "safe" band (a free address can never read as a verified sender) and
+    // prepend the caveat. The model still owns the number below that cap (it can go lower on
+    // context like urgency/impersonation claims). This is the fix for the old bug that floored
+    // gmail.com to >=55 and called it a "genuine Google domain".
+    score = Math.min(score, 60);
+    reasons = [{ text: `"${dom.domain}" is a free/consumer webmail address, not a company domain — anyone can create one, so it's no proof of who the sender is (be extra wary if it claims to be official business, legal, or a known brand)`, severity: "review" }, ...reasons];
+    forcedTag = "Free webmail";
   } else if (dom.kind === "brand") {
     // A real, well-known brand domain shouldn't be scored as dangerous by the model; floor
     // it into "review" at worst (still not a blanket "safe" — headers can be spoofed).
@@ -130,9 +148,12 @@ export const generateSenderReport = async ({ email, context = "" }) => {
     status: "done",
     ai_score: score,
     ai_verdict: out.verdict.trim(),
-    // Confidence is high when a deterministic signal decided it — a known brand/lookalike verdict,
-    // OR a hard DNS fact (the domain doesn't even resolve). Otherwise defer to the model's guess.
-    ai_confidence: dom.kind !== "unknown" || (dns.checked && !dns.resolves) ? "high" : (out.confidence ?? "medium"),
+    // Confidence is high when a deterministic signal DECIDED the verdict — a known brand or a
+    // lookalike, OR a hard DNS fact (the domain doesn't even resolve). "webmail" is a certain
+    // classification but NOT a decided verdict (a personal Gmail may be fine or a scam depending
+    // on the claim), so it defers to the model's confidence like the unknown case.
+    ai_confidence: dom.kind === "brand" || dom.kind === "lookalike" || (dns.checked && !dns.resolves)
+      ? "high" : (out.confidence ?? "medium"),
     title: (out.title || "").trim() || "Sender report",
     tags: [...new Set(tags)].slice(0, 3),
     evidence: (reasons.length ? reasons : [{ text: "Assessed the sender address and available context", severity: "review" }]).slice(0, 6),
