@@ -230,12 +230,30 @@ const labelLooksLikeBrand = (label, brand) => {
   if (f === b) return true; // exact after folding (arnazon → amazon)
   // near-miss typo threshold. VERY short brands (visa, ups, irs) get NO fuzzy budget: one edit
   // is a huge fraction of a 3-4 letter word, so "vista"≈"visa" / "ips"≈"ups" would be constant
-  // false positives. They rely on exact-fold + the delimited-token match below instead. Medium
-  // brands allow 1 edit, longer ones 2 (amzon, amazn, amazom → amazon).
-  const threshold = brand.length <= 4 ? 0 : brand.length <= 5 ? 1 : 2;
+  // false positives. Brands up to 7 chars allow 1 edit (amzon, amazn → amazon; dropbex → dropbox);
+  // only long brands (>=8) get 2, where two edits is still a small fraction of the word. Giving
+  // 6-char brands a budget of 2 was too loose — it wrongly matched real domains like "goggles"
+  // (→google) and "plusbank" (→usbank). Rare double-typos fall through to the urlscan/LLM layers.
+  const threshold = brand.length <= 4 ? 0 : brand.length <= 7 ? 1 : 2;
   if (threshold > 0 && Math.abs(f.length - b.length) <= threshold && editDistance(f, b) <= threshold) return true;
-  // brand embedded as a delimited token: "secure-paypal", "paypal-verify", "login.apple-id"
-  if (new RegExp(`(^|[-_.])${b}([-_.]|$)`).test(f)) return true;
+
+  // COMBOSQUAT: the brand appears as one word inside a multi-word label. Split on the usual
+  // delimiters and inspect each token. Catches "secure-paypal", "netflix-billing-update", plus
+  // the two trickier shapes below that plain exact-token matching used to miss.
+  for (const tok of f.split(/[-_.]+/).filter(Boolean)) {
+    if (tok === b) return true;                                       // exact token: "secure-paypal"
+    // (a) MISSPELLED brand token: "amazoon-rewards" (amazoon ≈ amazon). Tight guard on purpose —
+    // only ONE edit, and only for brands long enough (>=6) that a single typo can't collide with
+    // an everyday word (this keeps "this-is-amazing"/"use-case" from matching amazon/chase).
+    if (brand.length >= 6 && Math.abs(tok.length - b.length) <= 1 && editDistance(tok, b) === 1) return true;
+    // (b) GLUED brand: fused to a descriptor with no delimiter ("paypalsupport", "microsoftonline",
+    // "microsoftsupport"). Brand-FIRST (prefix) for >=6-char brands; brand-LAST (suffix) only for
+    // >=9-char brands, since a short suffix like "...usbank" would false-match innocent "plusbank".
+    if (tok.length > b.length) {
+      if (brand.length >= 6 && tok.startsWith(b)) return true;
+      if (brand.length >= 9 && tok.endsWith(b)) return true;
+    }
+  }
   return false;
 }
 

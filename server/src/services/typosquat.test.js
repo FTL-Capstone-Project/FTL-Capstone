@@ -105,6 +105,24 @@ describe("detectLookalike", () => {
     expect(detectLookalike("coinbaze.com")?.brand).toBe("coinbase");
     expect(detectLookalike("dropbex.com")?.brand).toBe("dropbox");
   });
+
+  it("catches combosquats: misspelled brand token and glued brand words", () => {
+    // misspelled brand token inside a delimited combosquat (amazoon ≈ amazon)
+    expect(detectLookalike("amazoon-rewards.com")?.brand).toBe("amazon");
+    // brand glued to a descriptor with no delimiter (prefix + inside a token)
+    expect(detectLookalike("paypalsupport.com")?.brand).toBe("paypal");
+    expect(detectLookalike("microsoftsupport.com")?.brand).toBe("microsoft");
+    expect(detectLookalike("login-microsoftonline-secure.com")?.brand).toBe("microsoft");
+  });
+
+  it("does NOT false-positive on innocent real domains (the deployment-critical guard)", () => {
+    // A verdict that cries wolf on a legitimate site is worse than a rare missed double-typo.
+    expect(detectLookalike("goggles.com")).toBeNull();        // was wrongly matching google
+    expect(detectLookalike("plusbank.com")).toBeNull();       // was wrongly matching usbank
+    expect(detectLookalike("this-is-amazing.com")).toBeNull();
+    expect(detectLookalike("payroll-services.com")).toBeNull();
+    expect(detectLookalike("use-case-studies.com")).toBeNull();
+  });
 });
 
 // LIST-FREE homoglyph detection: a domain whose readable name is forged out of confusable
