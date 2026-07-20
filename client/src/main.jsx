@@ -4,6 +4,10 @@ import { BrowserRouter } from "react-router-dom";
 import { ClerkProvider } from "@clerk/clerk-react";
 import App from "./App.jsx";
 import "./theme/global.css";
+import { watchSystemTheme } from "./lib/theme.js";
+
+// Keep the app in sync with the OS theme while the user's preference is "system".
+watchSystemTheme();
 
 // Clerk publishable key comes from client/.env.local (see .env.example).
 const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;

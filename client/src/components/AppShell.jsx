@@ -5,7 +5,6 @@ import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, P
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import OrbisLogo from "./OrbisLogo.jsx";
-import ThemeToggle from "./ThemeToggle.jsx";
 import { NAV_BY_ROLE } from "../config/constants.js";
 import { useOrbisRole } from "../lib/useOrbisRole.js";
 import { listConversations, searchConversations, subscribe, deleteConversation, renameConversation, togglePin, groupConversations } from "../lib/conversations.js";
@@ -172,7 +171,6 @@ const AppShell = () => {
           <header style={{ height: 56, borderBottom: "1px solid var(--border)", background: "var(--surface)",
             display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, padding: "0 22px", flexShrink: 0 }}>
             {orgName && <span style={{ marginRight: "auto", color: "var(--text-dim)", fontSize: "0.9em" }}>{orgName}</span>}
-            <ThemeToggle />
             <button title="Inbox" aria-label="Inbox"
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
               <Inbox size={20} />

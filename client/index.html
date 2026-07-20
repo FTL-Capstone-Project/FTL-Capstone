@@ -4,13 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Orbis</title>
-    <!-- Set the theme BEFORE React/CSS paint so there's no light-mode flash on a
-         dark-mode reload. Reads the saved choice; falls back to the OS preference. -->
+    <!-- Set the theme BEFORE React/CSS paint so there's no flash on reload. The saved
+         PREFERENCE is "light" | "dark" | "system" (default system = follow the OS). An
+         explicit light/dark wins; system resolves against prefers-color-scheme. -->
     <script>
       (function () {
         try {
-          var saved = localStorage.getItem("orbis-theme");
-          var theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          var pref = localStorage.getItem("orbis-theme"); // light | dark | system | null
+          var theme = (pref === "light" || pref === "dark")
+            ? pref
+            : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
           document.documentElement.setAttribute("data-theme", theme);
         } catch (e) {}
       })();

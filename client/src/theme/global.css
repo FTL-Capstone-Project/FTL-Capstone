@@ -56,6 +56,8 @@ a:hover { text-decoration: underline; }
 }
 @media (max-width: 560px) {
   .landing-footer { grid-template-columns: 1fr !important; }
+  /* Settings appearance cards stack on narrow screens. */
+  .settings-theme-grid { grid-template-columns: 1fr !important; }
 }
 
 /* ── Verdict card LED glow (both themes) ──
