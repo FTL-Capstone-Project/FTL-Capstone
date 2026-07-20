@@ -88,6 +88,13 @@ model Indicator {
   blacklistHit    Boolean  @default(false) // Google Safe Browsing known-bad?
   blacklistSource String? // e.g. google_safe_browsing:SOCIAL_ENGINEERING
   reportCount     Int      @default(0) // total submissions across all orgs + individuals
+  // Global "a user reported this verdict for review" flow (VerdictCard "Report it").
+  // Because indicators are GLOBAL, a report escalates to a (portrayed) global security
+  // team review. Lifecycle: null = not reported · "pending review" · "confirmed safe" ·
+  // "confirmed dangerous". reportedCount = how many users flagged it. Additive/nullable
+  // so this migration can't disturb existing rows.
+  globalReviewStatus String? // null | pending review | confirmed safe | confirmed dangerous
+  reportedCount      Int     @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

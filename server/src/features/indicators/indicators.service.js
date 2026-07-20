@@ -185,8 +185,31 @@ export const readIndicatorForClient = async (indicatorId, user) => {
     final_url: indicator.finalUrl,
     final_host: indicator.finalHost,
     redirected_to_different_host: indicator.redirectedToDifferentHost,
+    // "Report it" → global review flow: lets the card show an "under review" banner.
+    global_review_status: indicator.globalReviewStatus,
+    reported_count: indicator.reportedCount,
   };
 }
+
+// "Report it": a user flags this global indicator's verdict for review by the (portrayed)
+// global security team. Sets it to "pending review" if it isn't already resolved, and bumps
+// the reported counter. Because the indicator is GLOBAL, one user's report is visible to all
+// as "under review" — but it NEVER changes aiScore/the verdict (a report is a request for a
+// human look, not a re-scoring). Returns the updated review status + count.
+export const reportIndicator = async (indicatorId) => {
+  const i = await prisma.indicator.findUnique({ where: { id: indicatorId } });
+  if (!i) return null;
+  // Don't reopen something a reviewer already confirmed; just count the extra report.
+  const alreadyResolved = i.globalReviewStatus === "confirmed safe" || i.globalReviewStatus === "confirmed dangerous";
+  const updated = await prisma.indicator.update({
+    where: { id: indicatorId },
+    data: {
+      reportedCount: { increment: 1 },
+      ...(alreadyResolved ? {} : { globalReviewStatus: "pending review" }),
+    },
+  });
+  return { global_review_status: updated.globalReviewStatus, reported_count: updated.reportedCount };
+};
 
 // Lightweight read for context (askOrbo): just the verdict facts, no org_review.
 export const getIndicatorContext = async (indicatorId) => {

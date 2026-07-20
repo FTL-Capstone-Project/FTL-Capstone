@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Eye, ShieldCheck } from "lucide-react";
+import { useAuth } from "@clerk/clerk-react";
+import { Eye, ShieldCheck, Flag, Clock } from "lucide-react";
+import { api } from "../../lib/api.js";
 import { VERDICT_STYLES } from "../../config/constants.js";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import ScoreGauge from "./ScoreGauge.jsx";
@@ -17,11 +19,34 @@ const bucket = (score) => {
 
 // The verdict card, rendered INSIDE the chat as Orbo's response (wireframe: Report_Response).
 // badge + safety gauge + plain-English verdict + safe screenshot + "why" + action buttons.
-// onAskMore(): lets the chat start a follow-up question. onAction(kind): Report it / Mark safe.
-const VerdictCard = ({ indicator, onAskMore, onAction }) => {
+//   onAskMore()  — lets the chat start a follow-up question.
+//   indicatorId  — the DB id of this check. Needed for "Report it". Sender reports are
+//                  ephemeral (no persisted indicator), so they pass none → no Report button.
+const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
+  const { getToken } = useAuth();
   const { ai_score, ai_verdict, ai_confidence, screenshot_url, report_count, evidence } = indicator;
   const kind = bucket(ai_score);
   const style = VERDICT_STYLES[kind];
+
+  // "Report it" state: an indicator can be flagged for the global security-team review.
+  // Seed from the server so a URL already under review shows that on load.
+  const [reviewStatus, setReviewStatus] = useState(indicator.global_review_status ?? null);
+  const [reporting, setReporting] = useState(false);
+  const canReport = indicatorId != null;                 // sender reports have no id
+  const underReview = reviewStatus === "pending review";
+
+  const handleReport = async () => {
+    if (!canReport || reporting || underReview) return;
+    setReporting(true);
+    try {
+      const res = await api.post(`/api/indicators/${indicatorId}/report`, {}, { getToken });
+      setReviewStatus(res.global_review_status ?? "pending review");
+    } catch {
+      // Non-fatal: show a soft failure by leaving the button as-is; the user can retry.
+    } finally {
+      setReporting(false);
+    }
+  }
 
   // urlscan screenshots are best-effort and can lag the verdict: retry once, then hide.
   const [shotSrc, setShotSrc] = useState(screenshot_url);
@@ -76,10 +101,24 @@ const VerdictCard = ({ indicator, onAskMore, onAction }) => {
 
         <EvidenceList items={evidence} />
 
-        {/* Action buttons (wireframe: Report it · Mark safe · Ask Orbo more) */}
+        {/* "Under review" banner once this indicator has been reported to the security team. */}
+        {underReview && (
+          <p style={{ marginTop: 14, fontSize: "0.85em", color: "var(--review)", display: "flex", alignItems: "center", gap: 6 }}>
+            <Clock size={14} /> Reported — a security reviewer will take a closer look at this.
+          </p>
+        )}
+
+        {/* Action buttons. Report it → global security-team review. Mark safe = the
+            community "I trust this" flow, coming soon (disabled for now). */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
-          <button onClick={() => onAction?.("report")} style={btn(style.color, true)}>Report it</button>
-          <button onClick={() => onAction?.("safe")} style={btn(style.color, false)}>Mark safe</button>
+          {canReport && (
+            <button onClick={handleReport} disabled={reporting || underReview}
+              style={btn(style.color, true, reporting || underReview)}>
+              <Flag size={14} /> {underReview ? "Reported" : reporting ? "Reporting…" : "Report it"}
+            </button>
+          )}
+          <button disabled title="Community trust notes are coming soon"
+            style={btn(style.color, false, true)}>Mark safe</button>
           <button onClick={() => onAskMore?.()} style={btn("var(--primary)", false)}>Ask Orbo more</button>
         </div>
       </div>
@@ -87,12 +126,15 @@ const VerdictCard = ({ indicator, onAskMore, onAction }) => {
   );
 }
 
-const btn = (color, filled) => {
+const btn = (color, filled, disabled = false) => {
   return {
-    padding: "8px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.88em", cursor: "pointer",
+    padding: "8px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.88em",
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.5 : 1,
     border: `1.5px solid ${color}`,
     background: filled ? color : "transparent",
     color: filled ? "#fff" : color,
+    display: "inline-flex", alignItems: "center", gap: 6,
   };
 }
 

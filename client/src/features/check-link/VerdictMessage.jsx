@@ -31,7 +31,7 @@ const VerdictMessage = ({ indicatorId, onAskMore }) => {
   const pose = indicator.ai_score >= 70 ? "safe" : indicator.ai_score >= 35 ? "caution" : "danger";
   return (
     <ChatMessage role="orbo" pose={pose}>
-      <VerdictCard indicator={indicator} onAskMore={() => onAskMore?.(indicatorId)} />
+      <VerdictCard indicator={indicator} indicatorId={indicatorId} onAskMore={() => onAskMore?.(indicatorId)} />
     </ChatMessage>
   );
 }
