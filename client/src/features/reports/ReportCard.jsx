@@ -1,5 +1,15 @@
 import StatusBadge from "../../components/StatusBadge.jsx";
 
+// Safely embed a URL inside a CSS url(). The screenshot URL is our own (from urlscan), but a
+// stray ")" / quote / newline in a URL could break out of the url() and inject CSS — so we
+// only allow http(s), then encode any CSS-significant chars and wrap in quotes. Returns a full
+// `url("...")` string, or null if the URL isn't a safe http(s) URL.
+const cssUrl = (raw) => {
+  if (typeof raw !== "string" || !/^https?:\/\//i.test(raw)) return null;
+  const safe = raw.replace(/["'()\\\s]/g, encodeURIComponent);
+  return `url("${safe}")`;
+};
+
 // One report row in the "My checks" list — built to match the wireframe
 // (client/src/assets/wireframes/Personal/Orbis Reports_Page (Personal).png).
 //
@@ -35,7 +45,7 @@ const ReportCard = ({ report, showReviewStatus = false, onOpen }) => {
 
       {/* Thumbnail of the detonated page. Grey placeholder until urlscan gives us one. */}
       <div style={{ width: 96, height: 72, flexShrink: 0, borderRadius: 8,
-        background: report.screenshot_url ? `center/cover url(${report.screenshot_url})` : "var(--border)" }} />
+        background: cssUrl(report.screenshot_url) ? `center/cover ${cssUrl(report.screenshot_url)}` : "var(--border)" }} />
 
       {/* Middle: title, who/when, description, tags */}
       <div style={{ flex: 1, minWidth: 0 }}>
