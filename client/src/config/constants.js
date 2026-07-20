@@ -20,6 +20,7 @@ export const NAV_BY_ROLE = {
   ],
   analyst: [
     { label: "Dashboard", sub: "Your safety stats", to: "/dashboard", icon: "▦" },
+    { label: "Insights", sub: "Ask your data (charts)", to: "/insights", icon: "📊" },
     { label: "Ask Orbo", sub: "Chat with Orbo", to: "/ask-orbo", icon: "✦" },
     { label: "Reports", sub: "Full check history", to: "/reports", icon: "🗎" },
   ],

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import { UserButton, OrganizationSwitcher } from "@clerk/clerk-react";
-import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, PanelLeftClose, PanelLeft, Clock, MoreHorizontal, Pencil, Pin, Trash2 } from "lucide-react";
+import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, PanelLeftClose, PanelLeft, Clock, MoreHorizontal, Pencil, Pin, Trash2, BarChart3 } from "lucide-react";
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import OrbisLogo from "./OrbisLogo.jsx";
@@ -20,6 +20,7 @@ const NAV_ICON = {
   "/ask-orbo": Sparkles,
   "/dashboard": LayoutGrid,
   "/reports": FileText,
+  "/insights": BarChart3,
 };
 
 // Clerk components (OrganizationSwitcher, UserButton) render their own DOM and DON'T

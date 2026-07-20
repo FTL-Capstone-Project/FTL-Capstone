@@ -13,6 +13,7 @@ import SsoCallback from "./features/auth/SsoCallback.jsx";
 import Home from "./features/check-link/Home.jsx";
 import Reports from "./features/reports/Reports.jsx";
 import Dashboard from "./features/dashboard/Dashboard.jsx";
+import Insights from "./features/insights/Insights.jsx";
 
 // Route map:
 //  Public:  /  (marketing Landing) → /get-started (account-type chooser) → /signin,
@@ -50,6 +51,7 @@ const App = () => {
         <Route path="/check/:indicatorId" element={<Navigate to="/ask-orbo" replace />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/insights" element={<Insights />} />{/* AI Feature B: NL → chart */}
         <Route path="/settings" element={<ComingSoon title="Settings" note="Account and preferences are on the way." />} />
         {/* Catch-all: never strand the user on a blank screen. */}
         <Route path="*" element={<ComingSoon note="That page doesn't exist yet." />} />
