@@ -162,7 +162,30 @@ export const readIndicatorForClient = async (indicatorId, user) => {
     if (r) review = { human_score: r.humanScore, human_verdict: r.humanVerdict, review_status: r.reviewStatus };
   }
 
-  const base = { status: indicator.status, screenshot_url: indicator.screenshotUrl, review };
+  // IDOR guard (SEC-MED): indicators are GLOBAL threat-intel, so the verdict/score/tags are
+  // shared with everyone (that's the "seen before" value). BUT the caller-specific detail —
+  // the exact landing URL, its host, and the page screenshot — can leak a private/internal
+  // link someone else pasted (intranet hosts, reset tokens). So we only return those when the
+  // caller (or their org) actually submitted this indicator. Everyone else gets the aggregate
+  // verdict without the sensitive destination fields.
+  const submittedByCaller = await prisma.submission.findFirst({
+    where: {
+      indicatorId,
+      OR: [
+        ...(user?.id != null ? [{ userId: user.id }] : []),
+        ...(user?.orgId != null ? [{ orgId: user.orgId }] : []),
+      ],
+    },
+    select: { id: true },
+  });
+  const ownsDetail = Boolean(submittedByCaller);
+
+  const base = {
+    status: indicator.status,
+    // withhold the screenshot from non-submitters (it's a picture of someone else's link)
+    screenshot_url: ownsDetail ? indicator.screenshotUrl : null,
+    review,
+  };
   if (indicator.status === "error") {
     return { ...base, ai_verdict: indicator.aiVerdict || errorMessage() };
   }
@@ -181,9 +204,10 @@ export const readIndicatorForClient = async (indicatorId, user) => {
     tags: asArray(indicator.aiTags) ?? deriveTags(indicator, bucket),
     evidence: asArray(indicator.aiReasons) ?? [],
     domain: indicator.domain,
-    // Where the link actually goes — lets the card show a "goes to amazon.com" cue.
-    final_url: indicator.finalUrl,
-    final_host: indicator.finalHost,
+    // Landing URL + host: caller-sensitive (can be an internal hostname/token) → submitters only.
+    // The boolean "did it leave the domain" is safe to share (no hostname leak).
+    final_url: ownsDetail ? indicator.finalUrl : null,
+    final_host: ownsDetail ? indicator.finalHost : null,
     redirected_to_different_host: indicator.redirectedToDifferentHost,
     // "Report it" → global review flow: lets the card show an "under review" banner.
     global_review_status: indicator.globalReviewStatus,
