@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { Eye, ShieldCheck, Flag, Clock } from "lucide-react";
 import { api } from "../../lib/api.js";
@@ -52,6 +52,16 @@ const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
   const [shotSrc, setShotSrc] = useState(screenshot_url);
   const [shotOk, setShotOk] = useState(true);
   const [retried, setRetried] = useState(false);
+  // Belt-and-suspenders: if this component instance is ever reused for a DIFFERENT check
+  // (screenshot_url prop changes), re-sync the local image state so we never show the
+  // previous check's screenshot. (The conversation-scoped key in Home.jsx is the primary
+  // fix; this makes the card correct even if it isn't remounted.)
+  useEffect(() => {
+    setShotSrc(screenshot_url);
+    setShotOk(true);
+    setRetried(false);
+    setReviewStatus(indicator.global_review_status ?? null);
+  }, [screenshot_url, indicator.global_review_status]);
   const handleShotError = () => {
     if (!retried) { setRetried(true); setTimeout(() => setShotSrc(`${screenshot_url}?r=${Date.now()}`), 2500); }
     else setShotOk(false);

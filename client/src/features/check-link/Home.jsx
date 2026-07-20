@@ -205,7 +205,9 @@ const Home = () => {
       // Drop webmail/inbox URLs — a screenshot of an email shows the mail client's own address
       // bar (mail.google.com, outlook…), which isn't the suspicious link and can't be scanned.
       const urls = (raw.urls || []).filter((u) => !isWebmailUrl(u));
-      const emails = raw.emails || [];
+      // Validate model-extracted emails before we use any (SEC-LOW #4): emails[0] gets
+      // folded into a downstream request, so only keep well-formed addresses.
+      const emails = (raw.emails || []).filter((e) => typeof e === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()));
       const summary = raw.summary || "";
 
       // Decide what to check based on the user's instruction.
@@ -331,20 +333,26 @@ const Home = () => {
             <EmptyState firstName={firstName} onChip={handleChip} />
           ) : (
             messages.map((m) => {
-              if (m.kind === "verdict") return <VerdictMessage key={m.id} indicatorId={m.indicatorId} onAskMore={handleAskMore} />;
+              // Scope the React key to the CONVERSATION, not just the message id. Message ids
+              // reset to 1 in every chat, so a bare key={m.id} collides across conversations —
+              // React then REUSES the previous chat's component instance (keeping its stale
+              // local state, e.g. the old screenshot) instead of remounting. Composing with the
+              // conversation id makes the key unique per chat, forcing a proper remount on switch.
+              const key = `${convoId.current ?? "c"}:${m.id}`;
+              if (m.kind === "verdict") return <VerdictMessage key={key} indicatorId={m.indicatorId} onAskMore={handleAskMore} />;
               if (m.kind === "senderReport") return (
-                <ChatMessage key={m.id} role="orbo" pose={m.pose}>
+                <ChatMessage key={key} role="orbo" pose={m.pose}>
                   <VerdictCard indicator={m.indicator} onAskMore={() => handleAskMore(null)} />
                 </ChatMessage>
               );
               if (m.kind === "image") return (
-                <ChatMessage key={m.id} role="user">
+                <ChatMessage key={key} role="user">
                   <img src={m.src} alt={m.text || "uploaded image"}
                     style={{ maxWidth: 220, maxHeight: 220, borderRadius: 12, display: "block" }} />
                 </ChatMessage>
               );
               if (m.kind === "choices") return (
-                <ChatMessage key={m.id} role="orbo" pose={m.pose}>
+                <ChatMessage key={key} role="orbo" pose={m.pose}>
                   <OrboBubble>
                     {m.text}
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
@@ -359,7 +367,7 @@ const Home = () => {
                 </ChatMessage>
               );
               return (
-                <ChatMessage key={m.id} role={m.role} pose={m.pose}>
+                <ChatMessage key={key} role={m.role} pose={m.pose}>
                   {m.role === "orbo" ? (
                     <OrboBubble>
                       <Markdown text={m.text} />
