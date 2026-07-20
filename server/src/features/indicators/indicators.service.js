@@ -109,6 +109,7 @@ const runPipeline = async (indicatorId, rawUrl, contextText) => {
       domain_age_days: scan.domain_age_days,
       raw: scan._raw ?? {},
       contextText,
+      rawUrl, // lets the verdict flag raw-IP-host / unusual-port shape signals
     });
 
     await prisma.indicator.update({

@@ -15,6 +15,7 @@
 // ============================================================
 import { chatJSON } from "./llm.js";
 import { assessTyposquat } from "./typosquat.js";
+import { assessUrlShape } from "./urlShape.js";
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 
@@ -41,6 +42,8 @@ const DANGER_WEIGHTS = {
   redirectsOffDomain: 15,  // lands on a different registered domain than submitted
   brandImpersonation: 20,  // typosquat/lookalike that does NOT reach the real brand
   insecureHttp: 10,        // served over plain HTTP, no TLS
+  rawIpHost: 12,           // link points at a bare public IP, not a domain (dodges reputation scanners)
+  unusualPort: 8,          // non-80/443 port (used to slip past security filters)
 };
 
 // Compute the deterministic danger→safety score from the signals. Returns the safety
@@ -64,6 +67,9 @@ const computeSafetyScore = ({ blacklist_hit, domain_age_days, raw = {}, evidence
   add(!!raw.redirected_to_different_host, "redirectsOffDomain");
   add(typo?.impersonation, "brandImpersonation");
   add(evidence.some((e) => /insecure http|no encryption/i.test(e.text)), "insecureHttp");
+  // URL-shape red flags (raw-IP host, unusual port) — detected from the evidence we prepended.
+  add(evidence.some((e) => /raw IP address/i.test(e.text)), "rawIpHost");
+  add(evidence.some((e) => /unusual network port/i.test(e.text)), "unusualPort");
 
   const danger = hits.reduce((sum, h) => sum + h.weight, 0);
   const score = clamp(100 - danger);
@@ -76,12 +82,17 @@ const computeSafetyScore = ({ blacklist_hit, domain_age_days, raw = {}, evidence
   return { score, hits, confidence };
 };
 
-export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_source, domain_age_days, raw = {}, contextText }) => {
+export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_source, domain_age_days, raw = {}, contextText, rawUrl }) => {
   // ── Typosquat/lookalike check: is the submitted host a lookalike of a known brand, and does
   // it actually land on that brand's real domain? Prepend the finding as evidence so Claude and
   // the fallback both see it, and treat CONFIRMED impersonation as a hard danger signal. ──
   const typo = assessTyposquat({ submittedHost: raw.submitted_host, finalHost: raw.final_host });
   if (typo.evidence.length) evidence = [...typo.evidence, ...evidence];
+
+  // ── URL-shape red flags (raw-IP host / unusual port): deterministic, no network, so they fire
+  // the same behind any model. Prepend so the rubric and the LLM both see them. ──
+  const shape = assessUrlShape(rawUrl ?? raw.submitted_host);
+  if (shape.evidence.length) evidence = [...evidence, ...shape.evidence];
 
   // ── Hard-signal ceiling (computed regardless of who writes the verdict) ──
   const credFormOnNewDomain =

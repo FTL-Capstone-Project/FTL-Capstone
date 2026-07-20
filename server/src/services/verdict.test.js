@@ -64,6 +64,16 @@ describe("generateVerdict — deterministic rubric", () => {
     const v = await generateVerdict({ ...base, blacklist_hit: true, domain_age_days: 3 });
     expect(v.ai_confidence).toBe("high");
   });
+
+  it("a raw-IP host + unusual port shaves the score deterministically", async () => {
+    // Use a malicious base for both so the anchor is low enough that the model's ±15 nudge can't
+    // mask the delta (with a clean base both clamp to the model's 95 and the difference is hidden).
+    // malicious anchor = 45; shape adds rawIpHost(12)+unusualPort(8)=20 → anchor 25.
+    const clean = await generateVerdict({ ...base, raw: { malicious: true }, rawUrl: "https://example.com/x" });
+    const shaped = await generateVerdict({ ...base, raw: { malicious: true }, rawUrl: "http://45.33.32.9:8080/login" });
+    expect(shaped.ai_score).toBeLessThan(clean.ai_score);  // 20 points of shape danger
+    expect(shaped.evidence_summary.some((r) => /raw IP address|unusual network port/i.test(r.text))).toBe(true);
+  });
 });
 
 // SEC-MED: prompt-injection via contextText can't poison the global verdict. Even with the
