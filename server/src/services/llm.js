@@ -55,22 +55,24 @@ export const chatJSON = async ({ system, user, model, maxTokens = 512, temperatu
 
 // Image + prompt → free text (e.g. "read this screenshot and translate it").
 // imageDataUrl = "data:image/png;base64,...."
-export const visionText = async ({ prompt, imageDataUrl, model, maxTokens = 700 }) => {
-  return chat({
-    model, maxTokens, temperature: 0,
-    messages: [{
-      role: "user",
-      content: [
-        { type: "text", text: prompt },
-        { type: "image_url", image_url: { url: imageDataUrl } },
-      ],
-    }],
+export const visionText = async ({ prompt, imageDataUrl, model, maxTokens = 700, system }) => {
+  // Optional system message: lets the caller declare the image is UNTRUSTED evidence to
+  // describe, never instructions to obey (text painted into a screenshot reaches the model).
+  const messages = [];
+  if (system) messages.push({ role: "system", content: system });
+  messages.push({
+    role: "user",
+    content: [
+      { type: "text", text: prompt },
+      { type: "image_url", image_url: { url: imageDataUrl } },
+    ],
   });
+  return chat({ model, maxTokens, temperature: 0, messages });
 }
 
 // Image + prompt → JSON (e.g. extract {urls, emails, summary} from an uploaded image).
-export const visionJSON = async ({ prompt, imageDataUrl, model, maxTokens = 700 }) => {
-  const content = await visionText({ prompt, imageDataUrl, model, maxTokens });
+export const visionJSON = async ({ prompt, imageDataUrl, model, maxTokens = 700, system }) => {
+  const content = await visionText({ prompt, imageDataUrl, model, maxTokens, system });
   return parseJsonLoose(content);
 }
 

@@ -21,6 +21,28 @@ describe("normalizeUrl", () => {
     expect(() => normalizeUrl("not a url")).toThrow("INVALID_URL");
     expect(() => normalizeUrl("   ")).toThrow("INVALID_URL");
   });
+
+  it("blocks non-web schemes (file/data/ftp/javascript)", () => {
+    expect(() => normalizeUrl("file:///etc/passwd")).toThrow("BLOCKED_URL");
+    expect(() => normalizeUrl("ftp://example.com")).toThrow("BLOCKED_URL");
+    expect(() => normalizeUrl("data:text/html,<script>")).toThrow("BLOCKED_URL");
+  });
+
+  it("blocks internal / loopback / private / cloud-metadata hosts", () => {
+    expect(() => normalizeUrl("http://localhost/admin")).toThrow("BLOCKED_URL");
+    expect(() => normalizeUrl("http://127.0.0.1")).toThrow("BLOCKED_URL");
+    expect(() => normalizeUrl("http://169.254.169.254/latest/meta-data")).toThrow("BLOCKED_URL"); // cloud metadata
+    expect(() => normalizeUrl("http://10.0.0.5")).toThrow("BLOCKED_URL");
+    expect(() => normalizeUrl("http://192.168.1.1")).toThrow("BLOCKED_URL");
+    expect(() => normalizeUrl("http://172.16.0.1")).toThrow("BLOCKED_URL");
+    expect(() => normalizeUrl("intranet.acme.local")).toThrow("BLOCKED_URL");
+  });
+
+  it("still allows normal public web URLs", () => {
+    expect(normalizeUrl("https://github.com")).toBe("https://github.com");
+    expect(normalizeUrl("example.com")).toBe("https://example.com");
+    expect(normalizeUrl("http://172.15.0.1")).toBe("http://172.15.0.1"); // just OUTSIDE 172.16/12
+  });
 });
 
 describe("canonicalize", () => {
