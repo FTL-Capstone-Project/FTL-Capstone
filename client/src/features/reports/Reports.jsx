@@ -123,6 +123,7 @@ const Reports = () => {
         <ReportDetailModal
           report={selected}
           isMember={isMember}
+          isAnalyst={role === "analyst"}
           onClose={() => setSelected(null)}
         />
       )}

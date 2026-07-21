@@ -1,9 +1,19 @@
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import { X, ShieldCheck, Clock } from "lucide-react";
+import { X, ShieldCheck, Clock, FileCheck2 } from "lucide-react";
 import { api } from "../../lib/api.js";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import StatusChip from "./StatusChip.jsx";
+
+// The four authoritative review states an analyst can set. `value` must match the
+// backend exactly (OrgReview.reviewStatus + the PATCH /review route's whitelist) and
+// the StatusChip keys; `label` is what the analyst reads in the dropdown.
+const REVIEW_STATUS_OPTIONS = [
+  { value: "pending review",      label: "Pending review" },
+  { value: "investigating",       label: "Investigating" },
+  { value: "confirmed malicious", label: "Confirmed malicious" },
+  { value: "confirmed safe",      label: "Confirmed safe" },
+];
 
 // ── Report detail modal (wireframes: "Orbis Reports_Page - Modal_Overlay") ──
 // Opens when a report card is clicked. Shows the full verdict for one checked link.
@@ -34,7 +44,7 @@ const KIND_COLOR = { safe: "var(--safe)", review: "var(--review)", dangerous: "v
 // fabricated percentage number. Reflects the wireframe's bar look, honestly.
 const SEVERITY_FILL = { dangerous: 92, review: 58, safe: 28 };
 
-const ReportDetailModal = ({ report, isMember = false, onClose }) => {
+const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClose }) => {
   const { getToken } = useAuth();
   const [detail, setDetail] = useState(null); // richer fields from GET /api/indicators/:id
   const [loading, setLoading] = useState(true);
@@ -46,6 +56,19 @@ const ReportDetailModal = ({ report, isMember = false, onClose }) => {
   // (it must run once, not re-run every time the parent hands us a new onClose fn).
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  // Analyst review form state (only used/shown when isAnalyst). Prefilled ONCE from the
+  // list row's existing review (via the useState initializer) so re-reviewing edits the
+  // current values instead of blanking them. We intentionally do NOT re-sync from the
+  // detail fetch — that would wipe whatever the analyst is typing when it lands.
+  const [form, setForm] = useState(() => ({
+    humanScore: report.review?.human_score != null ? String(report.review.human_score) : "",
+    humanVerdict: report.review?.human_verdict ?? "",
+    reviewStatus: report.review?.review_status ?? "pending review",
+    sharedWithOrg: Boolean(report.review?.shared_with_org),
+  }));
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
 
   // Fetch the full indicator detail on open (evidence, full verdict, confidence, domain).
   useEffect(() => {
@@ -113,6 +136,48 @@ const ReportDetailModal = ({ report, isMember = false, onClose }) => {
   const analystScore = report.review?.human_score ?? detail?.review?.human_score ?? null;
   const reviewStatus = detail?.review?.review_status ?? report.review?.review_status ?? "pending review";
   const analystHasScored = analystScore != null;
+
+  // Refetch the indicator so the modal re-renders with the new human score + StatusChip.
+  const refetchDetail = async () => {
+    try {
+      const data = await api.get(`/api/indicators/${report.indicator_id}`, { getToken });
+      setDetail(data);
+    } catch {
+      // Non-fatal: the save succeeded; the view just won't auto-refresh this time.
+    }
+  }
+
+  // Submit the analyst review → PATCH /api/indicators/:id/review (card G1·01's route).
+  const handleReviewSubmit = async (event) => {
+    event.preventDefault(); // don't let the browser reload the page on form submit
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      // Score is optional, but if given it must be a whole number 0-100.
+      const trimmedScore = String(form.humanScore).trim();
+      const humanScore = trimmedScore === "" ? null : Number(trimmedScore);
+      if (humanScore != null && (!Number.isInteger(humanScore) || humanScore < 0 || humanScore > 100)) {
+        setSubmitError("Score must be a whole number between 0 and 100.");
+        setSubmitting(false);
+        return;
+      }
+      await api.patch(
+        `/api/indicators/${report.indicator_id}/review`,
+        {
+          humanScore,
+          humanVerdict: form.humanVerdict.trim() || null,
+          reviewStatus: form.reviewStatus,
+          sharedWithOrg: form.sharedWithOrg,
+        },
+        { getToken }
+      );
+      await refetchDetail(); // show the freshly-saved verdict without a page reload
+    } catch (err) {
+      setSubmitError(err.body?.error || "Couldn't save this review — please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div
@@ -240,6 +305,99 @@ const ReportDetailModal = ({ report, isMember = false, onClose }) => {
             Couldn't load the full threat details — try reopening this report.
           </p>
         ) : null}
+
+        {/* ── Analyst Review authoring form — ANALYSTS ONLY (story #10) ──
+            Frontend role gates DISPLAY only; the real security is the backend's
+            requireAnalyst guard on PATCH /api/indicators/:id/review. */}
+        {isAnalyst && (
+          <section style={{ marginTop: 28, borderTop: "1px solid var(--border)", paddingTop: 20 }}>
+            <h3 style={{ ...sectionHeadingStyle, display: "flex", alignItems: "center", gap: 8 }}>
+              <FileCheck2 size={18} /> Analyst Review
+            </h3>
+            {/* noValidate: let OUR JS validation + friendly message run on submit instead
+                of the browser's native tooltip (min/max stay for the number spinner UX). */}
+            <form onSubmit={handleReviewSubmit} noValidate>
+              {/* Analysis notes → humanVerdict */}
+              <textarea
+                aria-label="Analysis notes"
+                placeholder="Add your analysis notes…"
+                value={form.humanVerdict}
+                onChange={(e) => setForm((f) => ({ ...f, humanVerdict: e.target.value }))}
+                rows={3}
+                style={{ width: "100%", boxSizing: "border-box", resize: "vertical", padding: "10px 12px",
+                  border: "1px solid var(--border)", borderRadius: 10, fontSize: "0.9em",
+                  fontFamily: "inherit", color: "var(--text)", background: "var(--surface)" }}
+              />
+
+              {/* Score + status row */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end",
+                marginTop: 14 }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.8em",
+                  color: "var(--text-dim)" }}>
+                  Your Score
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      aria-label="Your score (0 to 100)"
+                      value={form.humanScore}
+                      onChange={(e) => setForm((f) => ({ ...f, humanScore: e.target.value }))}
+                      style={{ width: 70, padding: "8px 10px", border: "1px solid var(--border)",
+                        borderRadius: 10, fontSize: "0.95em", color: "var(--text)", background: "var(--surface)" }}
+                    />
+                    <span style={{ color: "var(--text-dim)", fontSize: "0.95em" }}>/ 100</span>
+                  </span>
+                </label>
+
+                <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.8em",
+                  color: "var(--text-dim)", flex: 1, minWidth: 160 }}>
+                  Verdict
+                  <select
+                    aria-label="Review status"
+                    value={form.reviewStatus}
+                    onChange={(e) => setForm((f) => ({ ...f, reviewStatus: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border)",
+                      borderRadius: 10, fontSize: "0.95em", color: "var(--text)", background: "var(--surface)" }}
+                  >
+                    {REVIEW_STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {/* Share-with-org toggle → sharedWithOrg (the Team History privacy gate) */}
+              <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14,
+                fontSize: "0.85em", color: "var(--text)", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={form.sharedWithOrg}
+                  onChange={(e) => setForm((f) => ({ ...f, sharedWithOrg: e.target.checked }))}
+                />
+                Share this review with my organization (shows in Team History)
+              </label>
+
+              {submitError && (
+                <p role="alert" style={{ color: "var(--danger)", fontSize: "0.85em", margin: "12px 0 0" }}>
+                  {submitError}
+                </p>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  style={{ padding: "10px 20px", border: "none", borderRadius: 10, cursor: "pointer",
+                    background: "var(--primary)", color: "#fff", fontSize: "0.9em", fontWeight: 700,
+                    opacity: submitting ? 0.6 : 1 }}
+                >
+                  {submitting ? "Saving…" : "Submit Review"}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
       </div>
     </div>
   );
