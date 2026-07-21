@@ -7,7 +7,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { rateLimit } from "../../middleware/rateLimit.js";
 import { env } from "../../config/env.js";
 import { chatText } from "../../services/llm.js";
-import { getIndicatorContext } from "../indicators/indicators.service.js";
+import { getIndicatorContext, persistSenderReport } from "../indicators/indicators.service.js";
 import { generateSenderReport } from "./senderReport.js";
 
 export const askOrboRouter = Router();
@@ -93,7 +93,14 @@ askOrboRouter.post("/sender-report", requireAuth, limit, async (req, res) => {
   if (!env.llmApiKey) return res.status(503).json({ error: "Sender report not configured" });
   try {
     const report = await generateSenderReport({ email: email.trim(), context: typeof context === "string" ? context : "" });
-    return res.json(report);
+    // Persist it so it lands in Reports/History like a link check (best-effort — a failed write
+    // must NOT break the user's verdict). Returns the indicator id, which lets the client's
+    // VerdictCard offer "Report it" for sender reports too (it had none before).
+    const indicatorId = await persistSenderReport({
+      email: email.trim(), report, user: req.user,
+      contextText: typeof context === "string" ? context : null,
+    });
+    return res.json({ ...report, indicator_id: indicatorId });
   } catch (e) {
     console.warn("⚠ sender-report failed:", e.message);
     return res.status(502).json({ error: "Orbo couldn't build a sender report just now." });

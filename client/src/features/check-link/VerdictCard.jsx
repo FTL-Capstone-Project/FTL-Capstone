@@ -28,18 +28,23 @@ const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
   const kind = bucket(ai_score);
   const style = VERDICT_STYLES[kind];
 
+  // The indicator id to report on: the explicit prop (link scans) OR indicator.indicator_id, which
+  // sender reports now carry (they persist to the same Indicator table as links). So "Report it"
+  // works for sender reports too, not just URL checks.
+  const reportId = indicatorId ?? indicator.indicator_id ?? null;
+
   // "Report it" state: an indicator can be flagged for the global security-team review.
   // Seed from the server so a URL already under review shows that on load.
   const [reviewStatus, setReviewStatus] = useState(indicator.global_review_status ?? null);
   const [reporting, setReporting] = useState(false);
-  const canReport = indicatorId != null;                 // sender reports have no id
+  const canReport = reportId != null;
   const underReview = reviewStatus === "pending review";
 
   const handleReport = async () => {
     if (!canReport || reporting || underReview) return;
     setReporting(true);
     try {
-      const res = await api.post(`/api/indicators/${indicatorId}/report`, {}, { getToken });
+      const res = await api.post(`/api/indicators/${reportId}/report`, {}, { getToken });
       setReviewStatus(res.global_review_status ?? "pending review");
     } catch {
       // Non-fatal: show a soft failure by leaving the button as-is; the user can retry.

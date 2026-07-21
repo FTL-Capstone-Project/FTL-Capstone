@@ -16,6 +16,7 @@ import { canonicalize } from "../../services/canonicalize.js";
 import { scanUrl } from "../../services/urlscan.js";
 import { checkBlacklist } from "../../services/safeBrowsing.js";
 import { generateVerdict, scoreBucket } from "../../services/verdict.js";
+import { registeredDomain } from "../../services/typosquat.js";
 import { escalateSubmission } from "../submissions/submissions.service.js";
 import { createNotification } from "../notifications/notifications.service.js";
 
@@ -95,6 +96,63 @@ export const submitUrl = async ({ rawUrl, user, contextText = null, source = "we
   if (needsScan) runPipeline(indicator.id, rawUrl, contextText);
 
   return { indicatorId: indicator.id, submissionId: submission.id, status: indicator.status, seenBefore, escalated };
+}
+
+// Persist a SENDER report so it shows up in Reports/History like a link check does. A sender
+// report is computed synchronously by generateSenderReport() (no sandbox to poll), so unlike a
+// URL we store the finished verdict directly as a "done" Indicator + a Submission — reusing the
+// SAME two tables/dedup as links, so the Reports page needs zero changes. Deduped by a
+// "sender:<email>" canonicalKey so re-checking the same sender bumps reportCount instead of
+// creating a duplicate indicator (mirrors the URL dedup win). Best-effort: if this write fails,
+// the caller still returns the report to the user — persistence is additive, not load-bearing.
+// @param {{ email, report, user, contextText? }}  report = the object from generateSenderReport()
+// @returns {Promise<number|null>} the indicator id (for the client), or null on failure
+export const persistSenderReport = async ({ email, report, user, contextText = null }) => {
+  const addr = String(email).trim().toLowerCase();
+  const canonicalKey = `sender:${addr}`;                 // distinct namespace from URL keys
+  const at = addr.lastIndexOf("@");
+  const domain = at >= 0 ? (registeredDomain(addr.slice(at + 1)) || addr.slice(at + 1)) : addr;
+
+  try {
+    // Find-or-create the GLOBAL indicator for this sender, then write the finished verdict onto
+    // it (a sender report has no async phase, so it lands "done" immediately).
+    let indicator = await prisma.indicator.findUnique({ where: { canonicalKey } });
+    const seenBefore = Boolean(indicator);
+    const verdictData = {
+      status: "done",
+      aiScore: report.ai_score,
+      aiVerdict: report.ai_verdict,
+      aiConfidence: report.ai_confidence,
+      aiTitle: report.title ?? null,
+      aiTags: report.tags ?? [],
+      // report.evidence is [{text,severity}] — same shape the Reports card reads as aiReasons.
+      aiReasons: report.evidence ?? [],
+    };
+    if (!indicator) {
+      indicator = await prisma.indicator.create({ data: { canonicalKey, domain, reportCount: 0, ...verdictData } });
+    } else {
+      // Re-check of a known sender → refresh the verdict (it's deterministic-backstopped anyway).
+      indicator = await prisma.indicator.update({ where: { id: indicator.id }, data: verdictData });
+    }
+
+    const { id: userId, orgId } = await resolveUserId(user);
+    const [submission] = await prisma.$transaction([
+      prisma.submission.create({
+        data: { userId, orgId, indicatorId: indicator.id, rawUrl: addr, contextText, source: "email" },
+      }),
+      prisma.indicator.update({ where: { id: indicator.id }, data: { reportCount: { increment: 1 } } }),
+    ]);
+
+    // Same analyst auto-escalation as links, so org-member sender reports also enter the queue.
+    if (orgId != null) {
+      try { await escalateSubmission(prisma, { submissionId: submission.id, orgId, indicatorId: indicator.id }); }
+      catch (e) { console.warn("⚠ escalateSubmission (sender) failed (non-fatal):", e.message); }
+    }
+    return indicator.id;
+  } catch (e) {
+    console.warn("⚠ persistSenderReport failed (non-fatal):", e.message);
+    return null;
+  }
 }
 
 // The real pipeline: scanning → urlscan + Safe Browsing → verdict → done. Writes each phase.
