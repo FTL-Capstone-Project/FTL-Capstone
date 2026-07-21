@@ -20,6 +20,7 @@ import { getAuth as clerkGetAuth, clerkClient as defaultClerkClient } from "@cle
 import { prisma as defaultPrisma } from "../db.js";
 import { env } from "../config/env.js";
 import { resolveUser } from "../features/users/users.service.js";
+import { findUserByApiKey, looksLikeApiKey } from "../services/apiKey.js";
 import { isAdminRole } from "./roles.js";
 
 const DEV_STUB_USER = Object.freeze({
@@ -48,6 +49,31 @@ export const makeRequireAuth = (deps = {}) => {
 
   return async (req, res, next) => {
     try {
+      // ---- Browser-extension API key (checked FIRST, works in any mode). ----
+      // The extension can't produce a Clerk session token, so it presents a long-lived
+      // "orbis_" key on Authorization. We resolve the owning user by the key's hash. This is a
+      // full, real identity (not the dev stub) — so it's honored even when Clerk is enabled.
+      // A malformed/revoked key falls through to the normal paths (→ 401), never 500s.
+      const bearer = (req.headers?.authorization || "").replace(/^Bearer\s+/i, "");
+      if (looksLikeApiKey(bearer)) {
+        const keyUser = await findUserByApiKey(db, bearer).catch(() => null);
+        if (keyUser) {
+          req.user = {
+            id: keyUser.id,
+            clerkUserId: keyUser.clerkUserId,
+            role: keyUser.role,
+            orgId: keyUser.orgId,
+            email: keyUser.email,
+            name: keyUser.name,
+            isAdmin: false, // admin is a live Clerk-session permission, never granted via API key
+          };
+          return next();
+        }
+        // A key-shaped token that resolves to nobody is an invalid credential — reject outright
+        // rather than silently trying Clerk (which would also fail, but with a confusing path).
+        return res.status(401).json({ error: "Invalid API key" });
+      }
+
       // ---- Dev stub: no Clerk configured → fake identity (LOCAL, opt-in ONLY). ----
       if (!clerkEnabled) {
         if (!devStubAllowed) {

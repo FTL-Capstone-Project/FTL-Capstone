@@ -36,6 +36,10 @@ model User {
   email       String   @unique // copied from Clerk; used to match forwarded emails
   name        String?
   role        String   @default("individual") // individual | member | analyst
+  // SHA-256 hash of the user's browser-extension API key (never the raw key). Null = no key
+  // issued yet. Unique so a presented key resolves to exactly one user; rotating overwrites it,
+  // which instantly invalidates the old key (per-user revocation). See services/apiKey.js.
+  apiKeyHash  String?  @unique
   createdAt   DateTime @default(now())
 
   organization  Organization?  @relation(fields: [orgId], references: [id])

@@ -4,12 +4,19 @@ Right-click any link (or selected text) → **"Check with Orbis"** → a popup r
 phishing check as the web app and shows the verdict card. It's a thin client over the existing
 `/api/submissions` + `/api/indicators/:id` pipeline — no new backend logic.
 
-## Auth model (dev-stub for now)
+## Auth model
 
-The extension sends `Authorization: Bearer <token>` exactly like the web app. In **dev-stub mode**
-the server fakes one logged-in user, so **no token is needed** — that's what this build targets.
-The paste-in token field (Settings) is wired for real-Clerk mode later; the token *type*
-(app-issued API key vs. long-lived Clerk JWT) is the still-open decision.
+The extension sends `Authorization: Bearer <token>` exactly like the web app.
+
+- **Dev-stub mode** (local, no Clerk keys): the server fakes one logged-in user, so **no token is
+  needed** — quickest way to build/demo.
+- **Real mode:** use an **app-issued API key**. In the Orbis web app → **Settings → Browser
+  extension → Generate key**, copy it (shown once), and paste it into the extension's Settings.
+  The key is a long-lived `orbis_…` credential; the backend accepts it as an alternative to a
+  Clerk session JWT. Rotating/regenerating in Settings **instantly revokes** the old key.
+
+> Teammates: after pulling, run `cd server && npx prisma generate --schema src/prisma/schema.prisma`
+> (a migration added `User.apiKeyHash`), and `npx prisma migrate deploy` if your DB is behind.
 
 ## Run it locally (dev-stub)
 
