@@ -1,7 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- Orbis mark: the planet-"O" + tilted orbital ring, in the LIGHT-theme brand blue (#0F62FE).
-       Shown in the tab on a light-mode machine. -->
-  <circle cx="16" cy="16" r="8.5" fill="none" stroke="#0F62FE" stroke-width="3.4"/>
-  <ellipse cx="16" cy="16" rx="14" ry="5.2" fill="none" stroke="#0F62FE" stroke-width="2.4"
-           transform="rotate(-25 16 16)"/>
+  <!-- Orbis planet-"O" mark (matches the logo): a SOLID blue planet + a navy orbital ring that
+       crosses diagonally + a small navy "moon" bead on the ring. LIGHT-theme variant: the ring/
+       moon use navy (#0A2540), which reads on a light tab bar. -->
+  <defs>
+    <!-- clip the ring to a diagonal band so it reads as passing BEHIND then IN FRONT of the planet -->
+    <clipPath id="planet"><circle cx="15" cy="16" r="9"/></clipPath>
+  </defs>
+  <!-- planet body (bright brand blue), with a darker crescent on the lower-left -->
+  <circle cx="15" cy="16" r="9" fill="#2563EB"/>
+  <path d="M15 7a9 9 0 1 0 0 18 9 9 0 0 1 0-18z" fill="#1E40AF" opacity="0.45"/>
+  <!-- orbital ring (navy), tilted; drawn as an ellipse outline across the planet -->
+  <ellipse cx="16" cy="16" rx="14.5" ry="5" fill="none" stroke="#0A2540" stroke-width="2.6"
+           transform="rotate(-22 16 16)"/>
+  <!-- the "moon" bead sitting on the ring at upper-right, with a light gap ring around it -->
+  <circle cx="26" cy="9.5" r="3.2" fill="#0A2540" stroke="#fff" stroke-width="1.2"/>
 </svg>

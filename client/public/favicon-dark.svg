@@ -1,7 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- Orbis mark: the planet-"O" + tilted orbital ring, in the DARK-theme brand blue (#3B82F6,
-       lifted so it reads against a dark tab bar). Shown on a dark-mode machine. -->
-  <circle cx="16" cy="16" r="8.5" fill="none" stroke="#3B82F6" stroke-width="3.4"/>
-  <ellipse cx="16" cy="16" rx="14" ry="5.2" fill="none" stroke="#3B82F6" stroke-width="2.4"
-           transform="rotate(-25 16 16)"/>
+  <!-- Orbis planet-"O" mark (matches the logo): a SOLID blue planet + an orbital ring + a "moon"
+       bead. DARK-theme variant: the ring/moon use a LIGHT ring color so the navy-on-navy of the
+       logo doesn't vanish against a dark tab bar; the planet stays the brand blue. -->
+  <circle cx="15" cy="16" r="9" fill="#3B82F6"/>
+  <path d="M15 7a9 9 0 1 0 0 18 9 9 0 0 1 0-18z" fill="#1D4ED8" opacity="0.5"/>
+  <ellipse cx="16" cy="16" rx="14.5" ry="5" fill="none" stroke="#E6ECF5" stroke-width="2.6"
+           transform="rotate(-22 16 16)"/>
+  <circle cx="26" cy="9.5" r="3.2" fill="#E6ECF5" stroke="#0A2540" stroke-width="1.2"/>
 </svg>
