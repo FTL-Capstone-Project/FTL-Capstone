@@ -24,6 +24,7 @@ import { dashboardRouter } from "./features/dashboard/dashboard.routes.js";
 import { notificationsRouter } from "./features/notifications/notifications.routes.js";
 import { webhooksRouter } from "./features/webhooks/webhooks.routes.js";
 import { visionRouter } from "./features/vision/vision.routes.js";
+import { prescreenRouter } from "./features/prescreen/prescreen.routes.js";
 import { askOrboRouter } from "./features/askOrbo/askOrbo.routes.js";
 import { nlpQueryRouter } from "./features/nlpQuery/nlpQuery.routes.js";
 
@@ -72,6 +73,7 @@ export function createApp() {
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/webhooks", webhooksRouter);
   app.use("/api/vision", visionRouter);        // David: screenshot read + image-upload extract
+  app.use("/api/prescreen", prescreenRouter);  // David: instant deterministic pre-check (extension inline badge)
   app.use("/api/ask-orbo", askOrboRouter);     // David: interactive follow-up Q&A
   app.use("/api/nlp-query", nlpQueryRouter);   // David: AI Feature B (NL question → chart)
 

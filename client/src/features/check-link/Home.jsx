@@ -81,6 +81,7 @@ const Home = () => {
   const nextId = useRef(1);
   const lastIndicatorId = useRef(null); // context for follow-up "ask Orbo" questions
   const convoId = useRef(null);          // active conversation id (persisted in localStorage)
+  const deepLinkDone = useRef(false);    // guard so ?check= runs once, not on every param change
   const add = (m) => setMessages((prev) => [...prev, { id: nextId.current++, ...m }]);
 
   // Resolve which conversation to show, in priority order:
@@ -116,6 +117,19 @@ const Home = () => {
     convoId.current = null;
     nextId.current = 1;
     setMessages([]);
+  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Deep-link from the browser extension's "See why": /ask-orbo?check=<url-or-email> auto-runs a
+  // full check on arrival, so the inline pre-verdict flows straight into the real report. Runs
+  // ONCE (guarded), and strips the param afterward so a refresh doesn't re-scan.
+  useEffect(() => {
+    if (deepLinkDone.current) return;
+    const target = params.get("check");
+    if (!target) return;
+    deepLinkDone.current = true;
+    const p = new URLSearchParams(params); p.delete("check"); setParams(p, { replace: true });
+    add({ role: "user", kind: "text", text: target });
+    checkTarget(target); // URL → scan verdict card, email → sender report (same routing as a paste)
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist the thread whenever it changes (creating the conversation on first message).
