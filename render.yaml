@@ -1,0 +1,63 @@
+# ── Render Blueprint for Orbis ──
+# Two services: the Express API (Web Service) + the React client (Static Site).
+# Deploy via Render → "New +" → "Blueprint" → point at this repo. Render reads this file.
+#
+# The DB is external (Neon) — NOT provisioned here; you paste its URL into DATABASE_URL.
+# Secrets (sync:false) are entered in the Render dashboard, never committed.
+#
+# IMPORTANT after first deploy — the two services reference each other's URLs, which you
+# only know once created. Fill these in the dashboard after the first deploy:
+#   • API service   → CLIENT_URL   = the static site's URL (for CORS)
+#   • Client build   → VITE_API_URL = the API service's URL
+# (Render can't auto-wire cross-service URLs for a Static Site, so these are manual.)
+
+services:
+  # ── Express API ──
+  - type: web
+    name: orbis-api
+    runtime: node
+    plan: free
+    rootDir: server
+    # Render runs install at the repo root for workspaces; build generates the Prisma
+    # client and applies migrations (migrate deploy = safe, no data reset).
+    buildCommand: npm install && npm run deploy:build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false          # paste the Neon connection string in the dashboard
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: URLSCAN_API_KEY
+        sync: false
+      - key: GOOGLE_SAFE_BROWSING_KEY
+        sync: false
+      - key: CLIENT_URL
+        sync: false          # set to the static site's URL after first deploy (CORS)
+      # NOTE: do NOT set ORBIS_DEV_STUB in production. Its absence makes auth fail closed.
+
+  # ── React client (static) ──
+  - type: web
+    name: orbis-client
+    runtime: static
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    # SPA: every route serves index.html so client-side routing (react-router) works.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false          # pk_... (safe to expose; still set per-env)
+      - key: VITE_API_URL
+        sync: false          # set to the orbis-api service URL after first deploy
