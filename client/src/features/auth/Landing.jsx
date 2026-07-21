@@ -65,8 +65,8 @@ const Nav = () => {
           ))}
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          {/* Placeholder until the browser extension ships; wire to the store URL later. */}
-          <a href="#" style={outlineBtnStyle}><Download size={16} /> Download Extension</a>
+          {/* → /extension how-to-install page; swaps to the Chrome Web Store link once listed. */}
+          <Link to="/extension" style={outlineBtnStyle}><Download size={16} /> Download Extension</Link>
           <Link to="/signin?type=personal" style={ghostBtnStyle}>Login</Link>
           <Link to="/get-started" style={primaryBtnStyle}>Get Started</Link>
         </div>
@@ -143,7 +143,7 @@ const Hero = () => (
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
           <Link to="/get-started" style={{ ...primaryBtnStyle, padding: "14px 30px", fontSize: 16 }}>Get Started</Link>
           <Link to="/signin?type=personal" style={{ ...ghostBtnStyle, padding: "14px 30px", fontSize: 16 }}>Login</Link>
-          <a href="#" style={{ ...outlineBtnStyle, padding: "14px 24px", fontSize: 16 }}><Download size={18} /> Download Extension</a>
+          <Link to="/extension" style={{ ...outlineBtnStyle, padding: "14px 24px", fontSize: 16 }}><Download size={18} /> Download Extension</Link>
         </div>
       </div>
 
@@ -279,11 +279,11 @@ const FinalCta = () => (
           background: "#fff", color: "var(--primary)", fontWeight: 700, padding: "14px 30px",
           borderRadius: 10, fontSize: 16,
         }}>Get Started</Link>
-        <a href="#" style={{
+        <Link to="/extension" style={{
           background: "transparent", color: "#fff", fontWeight: 700, padding: "14px 30px",
           borderRadius: 10, fontSize: 16, border: "1px solid rgba(255,255,255,0.6)",
-          display: "inline-flex", alignItems: "center", gap: 8,
-        }}><Download size={18} /> Download Extension</a>
+          display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none",
+        }}><Download size={18} /> Download Extension</Link>
       </div>
     </div>
   </section>
