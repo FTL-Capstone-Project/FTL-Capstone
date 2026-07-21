@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Orbis — Settings</title>
+  <link rel="stylesheet" href="popup.css" />
+  <style>
+    body { width: 460px; padding: 20px; }
+    label { display: block; font-weight: 700; font-size: 0.85em; margin: 14px 0 5px; }
+    input { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px; font-size: 0.9em; }
+    .hint { font-size: 0.78em; color: var(--text-dim); margin-top: 5px; line-height: 1.5; }
+    #saved { color: var(--safe); font-size: 0.85em; margin-left: 10px; opacity: 0; transition: opacity 0.2s; }
+    #saved.show { opacity: 1; }
+    h1 { color: var(--navy); font-size: 1.2em; }
+  </style>
+</head>
+<body>
+  <h1>Orbis extension settings</h1>
+
+  <label for="apiUrl">API URL</label>
+  <input id="apiUrl" type="text" placeholder="http://localhost:3001" />
+  <p class="hint">Where your Orbis backend runs. Leave as the default for local dev.</p>
+
+  <label for="token">Auth token <span style="font-weight:400;color:var(--text-dim)">(optional in dev-stub mode)</span></label>
+  <input id="token" type="password" placeholder="Paste your Orbis token" />
+  <p class="hint">
+    In dev-stub mode you can leave this blank — the server signs you in as the dev user.
+    In real mode, paste the token from the Orbis web app (Settings → copy token). Stored only in
+    your browser, sent as a Bearer token exactly like the web app.
+  </p>
+
+  <div style="margin-top:16px">
+    <button class="btn" id="save">Save</button>
+    <span id="saved">Saved ✓</span>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

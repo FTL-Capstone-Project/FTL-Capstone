@@ -8,6 +8,11 @@ import "dotenv/config";
 export const env = {
   port: Number(process.env.PORT) || 3001,
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
+  // The browser extension calls the API from a "chrome-extension://<id>" origin, which is NOT
+  // the Vite client origin — so CORS must allow it explicitly. Comma-separated list (the id
+  // changes between "load unpacked" and a published build). Empty by default = extension off.
+  extensionOrigins: (process.env.EXTENSION_ORIGINS || "")
+    .split(",").map((s) => s.trim()).filter(Boolean),
   databaseUrl: process.env.DATABASE_URL,
   clerk: {
     secretKey: process.env.CLERK_SECRET_KEY,

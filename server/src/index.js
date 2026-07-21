@@ -42,10 +42,13 @@ export function createApp() {
   app.use("/api/vision", express.json({ limit: "12mb" }));
   app.use(express.json({ limit: "256kb" }));
 
-  // 3) CORS for the Vite client.
+  // 3) CORS for the Vite client + the browser extension (if configured). An allowlist rather
+  // than a single string so the extension's "chrome-extension://<id>" origin is accepted too.
+  // Requests with no Origin header (curl, same-origin, server-to-server) are allowed through.
+  const allowedOrigins = [env.clientUrl, ...env.extensionOrigins];
   app.use(
     cors({
-      origin: env.clientUrl,
+      origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin)),
       methods: ["GET", "POST", "PATCH", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
     })
