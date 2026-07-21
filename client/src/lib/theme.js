@@ -31,7 +31,7 @@ export const getResolvedTheme = () => {
 // live (Settings toggle, or the OS flipping while "system" is selected).
 const applyFavicon = (resolved) => {
   const fav = typeof document !== "undefined" && document.getElementById("favicon");
-  if (fav) fav.href = resolved === "dark" ? "/favicon-dark.svg" : "/favicon-light.svg";
+  if (fav) fav.href = resolved === "dark" ? "/favicon-dark.png" : "/favicon-light.png";
 };
 
 // Apply the resolved theme to <html data-theme> (and sync the favicon).
