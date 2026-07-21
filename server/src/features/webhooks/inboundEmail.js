@@ -1,0 +1,37 @@
+// ── feature: webhooks (inbound-email) · owner: Ozias ──
+// Pure text extractors for the inbound-email handler. No Express, no DB — just
+// string → string, so they're trivial to unit-test. The handler in
+// webhooks.routes.js composes these to turn a forwarded email into submitUrl() args.
+
+// Pull the bare address out of a From/To header value and lowercase it.
+//   "David M. <david@acme.com>" → "david@acme.com"
+//   "sofia@example.com"          → "sofia@example.com"
+// Returns null if there's no email-looking token at all.
+export const extractEmailAddress = (headerValue) => {
+  if (typeof headerValue !== "string") return null;
+  // Prefer the address inside angle brackets ("Name <addr>"), else the whole string.
+  const angled = headerValue.match(/<([^>]+)>/);
+  const candidate = (angled ? angled[1] : headerValue).trim().toLowerCase();
+  // Basic shape check: something@something.tld — good enough to reject non-emails.
+  const match = candidate.match(/[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+/);
+  return match ? match[0] : null;
+}
+
+// Pull the plus-addressing token out of a recipient address.
+//   "orbischecks+david@gmail.com" → "david"
+// Returns null when there's no "+token" segment. Lowercased to match the env map.
+export const extractPlusToken = (toValue) => {
+  const email = extractEmailAddress(toValue);
+  if (!email) return null;
+  const plus = email.match(/\+([^@]+)@/);
+  return plus ? plus[1] : null;
+}
+
+// Find the first http(s) URL in a blob of text (subject + body). Returns null if none.
+// Trailing sentence punctuation is trimmed so "visit https://x.com." doesn't keep the dot.
+export const extractFirstUrl = (text) => {
+  if (typeof text !== "string") return null;
+  const match = text.match(/https?:\/\/[^\s<>"')]+/i);
+  if (!match) return null;
+  return match[0].replace(/[.,;:!?]+$/, "");
+}

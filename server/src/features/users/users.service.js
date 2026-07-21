@@ -10,6 +10,7 @@
 // with a mock. No Express, no Clerk SDK here.
 // ============================================================
 import { deriveRole } from "../../middleware/roles.js";
+import { env } from "../../config/env.js";
 
 /**
  * Ensure a mirror Organization row exists for a Clerk org. Returns the row (or null).
@@ -84,6 +85,28 @@ export const upsertUserFromWebhook = async (prisma, { clerkUserId, email, name }
       role: "individual",
     },
   });
+}
+
+/**
+ * Find a mirror User by email address (used by the inbound-email webhook to match a
+ * forwarded email back to its sender). Email is @unique + @@index, so this is a fast
+ * point lookup. We lowercase the input because seed + Clerk-synced emails are stored
+ * lowercase, and findUnique is exact-match. Returns the FULL row (incl. orgId) or null.
+ */
+export const findUserByEmail = async (prisma, email) => {
+  if (!email) return null;
+  return prisma.user.findUnique({ where: { email: String(email).trim().toLowerCase() } });
+}
+
+/**
+ * Find a mirror User by an inbound-email plus-token (orbischecks+<token>@gmail.com).
+ * The token→email mapping lives in env (INBOUND_EMAIL_TOKENS) — no DB migration — and
+ * a matched token beats a spoofable From header. Returns the full row or null.
+ */
+export const findUserByToken = async (prisma, token) => {
+  if (!token) return null;
+  const email = env.inboundEmail.tokens[String(token).trim().toLowerCase()];
+  return email ? findUserByEmail(prisma, email) : null;
 }
 
 /**

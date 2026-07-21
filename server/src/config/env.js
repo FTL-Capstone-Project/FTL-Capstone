@@ -5,6 +5,16 @@
 // ============================================================
 import "dotenv/config";
 
+// Parse the token→email map for inbound email plus-addressing.
+// Format: "david:david@acme.com,sofia:sofia@example.com" → { david: "david@acme.com", ... }.
+// A plus-token in the recipient (orbischecks+david@gmail.com) beats a spoofable From header.
+const parseTokenMap = (raw) =>
+  (raw || "")
+    .split(",")
+    .map((pair) => pair.split(":").map((s) => s.trim()))
+    .filter(([token, email]) => token && email)
+    .reduce((map, [token, email]) => ({ ...map, [token.toLowerCase()]: email.toLowerCase() }), {});
+
 export const env = {
   port: Number(process.env.PORT) || 3001,
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
@@ -21,6 +31,16 @@ export const env = {
   },
   urlscanApiKey: process.env.URLSCAN_API_KEY,
   safeBrowsingKey: process.env.GOOGLE_SAFE_BROWSING_KEY,
+
+  // Inbound email forwarding — a Gmail inbox + Apps Script relay POST forwarded emails here.
+  //   token   — shared secret sent as the x-orbis-token header (endpoint 503s until set).
+  //   address — the Orbis inbox users forward to (informational; shown in the UI/docs).
+  //   tokens  — optional plus-addressing map so orbischecks+<token>@gmail.com beats a spoofed From.
+  inboundEmail: {
+    token: process.env.INBOUND_EMAIL_TOKEN,
+    address: process.env.INBOUND_EMAIL_ADDRESS || "orbischecks@gmail.com",
+    tokens: parseTokenMap(process.env.INBOUND_EMAIL_TOKENS),
+  },
 
   // LLM access — OpenAI (Chat Completions API). The client (services/llm.js) speaks the
   // OpenAI wire format: Bearer auth, POST {base}/chat/completions, `messages`. Base URL and
@@ -57,5 +77,8 @@ export const warnMissingEnv = () => {
   }
   if (!env.clerk.webhookSecret) {
     console.warn("⚠ env: CLERK_WEBHOOK_SECRET missing — /api/webhooks/clerk will reject events until set.");
+  }
+  if (!env.inboundEmail.token) {
+    console.warn("⚠ env: INBOUND_EMAIL_TOKEN missing — /api/webhooks/inbound-email will 503 until set.");
   }
 }
