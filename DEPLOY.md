@@ -38,7 +38,7 @@ In the Render dashboard, on each service → **Environment**:
 ### `orbis-api` (Web Service)
 | Var | Value |
 |---|---|
-| `DATABASE_URL` | your Neon connection string |
+| `DATABASE_URL` | your Neon **pooled** connection string (see note ⬇) |
 | `CLERK_SECRET_KEY` | `sk_...` |
 | `CLERK_PUBLISHABLE_KEY` | `pk_...` |
 | `CLERK_WEBHOOK_SECRET` | `whsec_...` (from the Clerk webhook endpoint) |
@@ -88,6 +88,13 @@ sync relied on the lazy backstop; in prod the webhook does the real-time sync.)
 ---
 
 ## Notes & gotchas
+
+- **Use Neon's POOLED connection string** for `DATABASE_URL`. In the Neon dashboard the
+  pooled host contains `-pooler` (e.g. `ep-xxx-pooler.<region>.aws.neon.tech`). A Render
+  web service opens many connections; the *direct* (non-pooler) endpoint hits Neon's
+  connection cap → intermittent "too many connections" errors. The pooled string avoids it.
+- **Node is pinned to 22.x** (`engines` in each package.json) so Render builds with a
+  known version. Don't remove that unless you also test on the new version.
 
 - **Free tier sleeps.** Render free web services spin down when idle; the first request
   after a nap takes a few seconds. Fine for a demo.

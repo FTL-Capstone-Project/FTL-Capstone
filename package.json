@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "description": "Orbis — AI-assisted phishing-triage web app (monorepo: client + server)",
+  "engines": {
+    "node": "22.x"
+  },
   "workspaces": [
     "client",
     "server"
