@@ -26,9 +26,19 @@ export const getResolvedTheme = () => {
   return pref;
 };
 
-// Apply the resolved theme to <html data-theme>.
+// Point the tab favicon at the planet-"O" variant matching the resolved theme (blue tuned per
+// theme). index.html sets it once before paint; this keeps it in sync when the theme changes
+// live (Settings toggle, or the OS flipping while "system" is selected).
+const applyFavicon = (resolved) => {
+  const fav = typeof document !== "undefined" && document.getElementById("favicon");
+  if (fav) fav.href = resolved === "dark" ? "/favicon-dark.svg" : "/favicon-light.svg";
+};
+
+// Apply the resolved theme to <html data-theme> (and sync the favicon).
 const applyResolved = () => {
-  document.documentElement.setAttribute("data-theme", getResolvedTheme());
+  const resolved = getResolvedTheme();
+  document.documentElement.setAttribute("data-theme", resolved);
+  applyFavicon(resolved);
 };
 
 // Set the preference (persist it) and repaint. Pass "light" | "dark" | "system".

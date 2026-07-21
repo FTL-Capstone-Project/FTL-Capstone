@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Orbis</title>
+    <!-- Favicon: the Orbis planet-"O" mark. The href is set by the script below to the
+         light/dark variant so the tab icon matches the machine's theme. -->
+    <link id="favicon" rel="icon" type="image/svg+xml" href="/favicon-light.svg" />
     <!-- Set the theme BEFORE React/CSS paint so there's no flash on reload. The saved
          PREFERENCE is "light" | "dark" | "system" (default system = follow the OS). An
          explicit light/dark wins; system resolves against prefers-color-scheme. -->
@@ -15,6 +18,9 @@
             ? pref
             : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
           document.documentElement.setAttribute("data-theme", theme);
+          // Point the tab icon at the matching planet-"O" (blue tuned per theme).
+          var fav = document.getElementById("favicon");
+          if (fav) fav.href = theme === "dark" ? "/favicon-dark.svg" : "/favicon-light.svg";
         } catch (e) {}
       })();
     </script>
