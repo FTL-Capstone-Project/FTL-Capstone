@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "prisma": {
     "schema": "src/prisma/schema.prisma"
   },
@@ -10,10 +13,13 @@
     "dev": "node --env-file-if-exists=.env --watch src/index.js",
     "start": "node --env-file-if-exists=.env src/index.js",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:generate": "prisma generate",
     "prisma:seed": "node src/prisma/seed.js",
     "prisma:studio": "prisma studio",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deploy:build": "prisma generate && prisma migrate deploy"
   },
   "dependencies": {
     "@clerk/express": "^2.1.36",

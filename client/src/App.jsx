@@ -10,6 +10,7 @@ import SignIn from "./features/auth/SignIn.jsx";
 import CreateAccount from "./features/auth/CreateAccount.jsx";
 import CreateTeam from "./features/auth/CreateTeam.jsx";
 import SsoCallback from "./features/auth/SsoCallback.jsx";
+import ExtensionInstall from "./features/auth/ExtensionInstall.jsx";
 import Home from "./features/check-link/Home.jsx";
 import Reports from "./features/reports/Reports.jsx";
 import Dashboard from "./features/dashboard/Dashboard.jsx";
@@ -34,6 +35,7 @@ const App = () => {
       <Route path="/create-account" element={<PublicOnly><CreateAccount /></PublicOnly>} />
       <Route path="/create-team" element={<PublicOnly><CreateTeam /></PublicOnly>} />
       <Route path="/sso-callback" element={<SsoCallback />} />
+      <Route path="/extension" element={<ExtensionInstall />} />{/* how-to-install (landing "Download Extension") */}
 
       {/* Legacy auth paths → new flow. */}
       <Route path="/login" element={<Navigate to="/signin?type=personal" replace />} />

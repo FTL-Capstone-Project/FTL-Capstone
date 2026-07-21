@@ -26,7 +26,7 @@ askOrboRouter.post("/", requireAuth, limit, async (req, res) => {
   if (question.length > MAX_QUESTION) {
     return res.status(400).json({ error: "That question is too long — please shorten it." });
   }
-  if (!env.anthropicApiKey) return res.status(503).json({ error: "Orbo chat not configured" });
+  if (!env.llmApiKey) return res.status(503).json({ error: "Orbo chat not configured" });
 
   // Pull the verdict context for this check (if any) so answers are grounded.
   // Validate the id is a real integer before hitting the DB (matches the indicators route
@@ -90,7 +90,7 @@ askOrboRouter.post("/sender-report", requireAuth, limit, async (req, res) => {
   if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
     return res.status(400).json({ error: "A valid sender email is required" });
   }
-  if (!env.anthropicApiKey) return res.status(503).json({ error: "Sender report not configured" });
+  if (!env.llmApiKey) return res.status(503).json({ error: "Sender report not configured" });
   try {
     const report = await generateSenderReport({ email: email.trim(), context: typeof context === "string" ? context : "" });
     return res.json(report);

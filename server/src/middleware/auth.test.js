@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { makeRequireAuth } from "./auth.js";
 import { requireAnalyst } from "./requireAnalyst.js";
+import { generateApiKey, hashApiKey } from "../services/apiKey.js";
 
 const mockRes = () => {
   return {
@@ -74,6 +75,53 @@ describe("requireAuth (real mode, mocked Clerk)", () => {
     await mw(req, res, next);
     expect(req.user.role).toBe("member");
     expect(req.user.isAdmin).toBe(false);
+  });
+});
+
+describe("requireAuth (browser-extension API key)", () => {
+  // A prisma mock whose user.findUnique matches ONLY the given key's hash.
+  const prismaFor = (rawKey, row) => ({
+    user: { findUnique: vi.fn(async ({ where }) => (where.apiKeyHash === hashApiKey(rawKey) ? row : null)) },
+  });
+  const reqWith = (key) => ({ headers: { authorization: `Bearer ${key}` } });
+
+  it("resolves a valid key to its owning user (works even with Clerk enabled)", async () => {
+    const key = generateApiKey();
+    const row = { id: 9, clerkUserId: "user_x", role: "member", orgId: 3, email: "x@acme.com", name: "X" };
+    const mw = makeRequireAuth({ clerkEnabled: true, prisma: prismaFor(key, row), getAuth: () => { throw new Error("Clerk path must NOT run for a key"); } });
+    const req = reqWith(key);
+    const res = mockRes();
+    const next = vi.fn();
+    await mw(req, res, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(req.user).toMatchObject({ id: 9, role: "member", orgId: 3, isAdmin: false });
+  });
+
+  it("never grants isAdmin via an API key, even for an org-admin user", async () => {
+    const key = generateApiKey();
+    const mw = makeRequireAuth({ clerkEnabled: true, prisma: prismaFor(key, { id: 1, role: "analyst", orgId: 2, clerkUserId: "u", email: "a@b.com", name: "A" }) });
+    const req = reqWith(key);
+    await mw(req, mockRes(), vi.fn());
+    expect(req.user.isAdmin).toBe(false);
+  });
+
+  it("401 for a key-shaped token that resolves to no user (revoked/unknown)", async () => {
+    const key = generateApiKey();
+    const mw = makeRequireAuth({ clerkEnabled: true, prisma: { user: { findUnique: vi.fn(async () => null) } } });
+    const res = mockRes();
+    const next = vi.fn();
+    await mw(reqWith(key), res, next);
+    expect(res.statusCode).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("a non-key bearer token falls through to the Clerk path (not treated as a key)", async () => {
+    const getAuth = vi.fn(() => ({ userId: null })); // Clerk path runs → 401 for no userId
+    const mw = makeRequireAuth({ clerkEnabled: true, getAuth, prisma: { user: { findUnique: vi.fn() } } });
+    const res = mockRes();
+    await mw({ headers: { authorization: "Bearer eyJ.jwt.sig" } }, res, vi.fn());
+    expect(getAuth).toHaveBeenCalledOnce(); // proves it took the Clerk branch
+    expect(res.statusCode).toBe(401);
   });
 });
 
