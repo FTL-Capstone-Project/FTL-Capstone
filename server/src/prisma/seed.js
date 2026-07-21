@@ -61,8 +61,11 @@ const main = async () => {
   });
 
   // ── Campaign (analyst clustering, org-scoped) ──
+  // Clusters the PayPal + Microsoft phishing indicators (both brand-impersonation
+  // lookalike-domain attacks) so the analyst triage queue can collapse them into one
+  // campaign row (G1·06). Two indicators = a visible cluster in the demo.
   const campaign = await prisma.campaign.create({
-    data: { orgId: acme.id, name: "Bank impersonation", sharedSignal: "paypal-lookalike domains" },
+    data: { orgId: acme.id, name: "Brand impersonation", sharedSignal: "brand-lookalike login domains" },
   });
 
   // ── Global indicators (shared threat intel; 100 = safe) ──
@@ -75,7 +78,7 @@ const main = async () => {
       aiVerdict: "This link doesn't go where it says. The real site is paypal.com, but this points to paypa1-secure.com. Do not enter your details.",
       aiTitle: "Fake PayPal 'account locked' email",
       aiDescription: "Credential phishing page impersonating PayPal on a newly registered lookalike domain.",
-      aiTags: ["Credential phishing", "Campaign: Bank impersonation"],
+      aiTags: ["Credential phishing", "Campaign: Brand impersonation"],
       // Threat vectors shown in the report detail modal (the "why" rows).
       aiReasons: [
         { text: "Credential harvesting — fake login form captures your password", severity: "dangerous" },
@@ -192,12 +195,15 @@ const main = async () => {
     data: { orgId: acme.id, indicatorId: fedexMaybe.id, reviewStatus: "pending review" },
   });
   // Microsoft phishing — Priya is actively looking into it (the 4th status word).
+  // Part of the same "Brand impersonation" campaign as the PayPal scam → the triage
+  // queue clusters both under one campaign row (G1·06).
   await prisma.orgReview.create({
     data: {
       orgId: acme.id,
       indicatorId: microsoftScam.id,
       reviewStatus: "investigating",
       reviewedBy: priya.id,
+      campaignId: campaign.id,
     },
   });
   await prisma.orgReview.create({

@@ -4,7 +4,8 @@ import { ListChecks } from "lucide-react";
 import { api } from "../../lib/api.js";
 import ReportCard from "./ReportCard.jsx";
 import ReportDetailModal from "./ReportDetailModal.jsx";
-import { sortByPriority, isPending } from "./triagePriority.js";
+import CampaignGroupRow from "./CampaignGroupRow.jsx";
+import { sortByPriority, isPending, groupByCampaign } from "./triagePriority.js";
 
 // ── feature: reports · analyst triage queue · owner: Ozias ──
 // The ANALYST variant of the Reports page (card G1·05): an org-wide triage queue.
@@ -22,6 +23,7 @@ const Filters = {
 const TriageQueue = () => {
   const { getToken } = useAuth();
   const [reports, setReports] = useState([]);
+  const [campaigns, setCampaigns] = useState([]); // for grouping rows by campaign (G1·06)
   const [filter, setFilter] = useState(Filters.ALL); // "all" | "pending"
   const [selected, setSelected] = useState(null);     // open report (null = closed)
 
@@ -33,12 +35,21 @@ const TriageQueue = () => {
       .catch(() => setReports([]));
   }, [getToken]);
 
+  // Load this org's campaigns so related reports can cluster under a campaign header.
+  // Graceful fallback: if the endpoint is unavailable, we just render rows ungrouped.
+  useEffect(() => {
+    api.get("/api/campaigns", { getToken })
+      .then((data) => setCampaigns(data.campaigns ?? []))
+      .catch(() => setCampaigns([]));
+  }, [getToken]);
+
   // How many still need a verdict — shown on the "Pending review" pill.
   const pendingCount = reports.filter(isPending).length;
 
-  // Apply the pending filter first, THEN priority-sort what's left.
+  // Apply the pending filter first, THEN priority-sort, THEN cluster by campaign.
   const filtered = filter === Filters.PENDING ? reports.filter(isPending) : reports;
   const visible = sortByPriority(filtered);
+  const items = groupByCampaign(visible, campaigns); // report + campaign items, in priority order
 
   const PILLS = [
     { value: Filters.ALL, label: `All reports (${reports.length})` },
@@ -83,14 +94,23 @@ const TriageQueue = () => {
         <p style={{ color: "var(--text-dim)" }}>Nothing pending review — the queue is clear.</p>
       ) : (
         <div style={{ display: "grid", gap: 8 }}>
-          {visible.map((r) => (
-            <ReportCard
-              key={r.indicator_id}
-              report={r}
-              showReviewStatus={true}
-              onOpen={() => setSelected(r)}
-            />
-          ))}
+          {items.map((item) =>
+            item.type === "campaign" ? (
+              <CampaignGroupRow
+                key={`campaign-${item.campaignId}`}
+                name={item.name}
+                reports={item.reports}
+                onOpen={(r) => setSelected(r)}
+              />
+            ) : (
+              <ReportCard
+                key={item.report.indicator_id}
+                report={item.report}
+                showReviewStatus={true}
+                onOpen={() => setSelected(item.report)}
+              />
+            )
+          )}
         </div>
       )}
 

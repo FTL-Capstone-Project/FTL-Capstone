@@ -1,13 +1,15 @@
 // ── analyst triage priority · tests · owner: Ozias ── (card G1·05)
 import { describe, it, expect } from "vitest";
-import { sortByPriority, isPending } from "./triagePriority.js";
+import { sortByPriority, isPending, groupByCampaign } from "./triagePriority.js";
 
 // Helper to build a report row in the GET /api/history shape.
-const row = (indicator_id, { status = null, ai_score = null, created_at = null } = {}) => ({
+const row = (indicator_id, { status = null, ai_score = null, created_at = null, campaign_id = null } = {}) => ({
   indicator_id,
   ai_score,
   created_at,
-  review: status ? { review_status: status } : null,
+  review: (status || campaign_id != null)
+    ? { review_status: status, campaign_id }
+    : null,
 });
 
 describe("isPending", () => {
@@ -54,5 +56,43 @@ describe("sortByPriority", () => {
     const copy = [...input];
     sortByPriority(input);
     expect(input).toEqual(copy);
+  });
+});
+
+describe("groupByCampaign", () => {
+  const campaigns = [{ id: 1, name: "Bank impersonation" }];
+
+  it("collapses same-campaign reports into one item, keeps others standalone", () => {
+    const items = groupByCampaign(
+      [row(1, { campaign_id: 1 }), row(2), row(3, { campaign_id: 1 })],
+      campaigns
+    );
+    // One campaign item (with 2 reports) + one standalone report.
+    expect(items).toHaveLength(2);
+    const campaignItem = items.find((i) => i.type === "campaign");
+    expect(campaignItem.name).toBe("Bank impersonation");
+    expect(campaignItem.reports.map((r) => r.indicator_id)).toEqual([1, 3]);
+    expect(items.filter((i) => i.type === "report")).toHaveLength(1);
+  });
+
+  it("places the campaign group at its highest-priority member's position", () => {
+    // Input order = priority order. A standalone item sits between two campaign rows;
+    // the group should appear where its FIRST (top-priority) member was → index 0.
+    const items = groupByCampaign(
+      [row(1, { campaign_id: 1 }), row(2), row(3, { campaign_id: 1 })],
+      campaigns
+    );
+    expect(items[0].type).toBe("campaign");
+    expect(items[1].type).toBe("report");
+  });
+
+  it("falls back to a placeholder name when the campaign isn't in the list", () => {
+    const items = groupByCampaign([row(1, { campaign_id: 9 })], []);
+    expect(items[0]).toMatchObject({ type: "campaign", name: "Campaign #9" });
+  });
+
+  it("returns all standalone items when no campaigns are present", () => {
+    const items = groupByCampaign([row(1), row(2)], []);
+    expect(items.every((i) => i.type === "report")).toBe(true);
   });
 });

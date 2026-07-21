@@ -47,6 +47,9 @@ export const toReportJson = (submission, orgReview, reporterName) => {
           // Has an analyst shared this with the whole team? Team History only ever
           // returns shared items, but ?mine=1 can use this to hint "shared with your team".
           shared_with_org: orgReview.sharedWithOrg ?? false,
+          // Which campaign this indicator is clustered into (or null). The analyst
+          // triage queue groups rows by this to collapse duplicate/related reports (G1·06).
+          campaign_id: orgReview.campaignId ?? null,
         }
       : null,
   };

@@ -27,6 +27,7 @@ import { visionRouter } from "./features/vision/vision.routes.js";
 import { prescreenRouter } from "./features/prescreen/prescreen.routes.js";
 import { askOrboRouter } from "./features/askOrbo/askOrbo.routes.js";
 import { nlpQueryRouter } from "./features/nlpQuery/nlpQuery.routes.js";
+import { campaignsRouter } from "./features/campaigns/campaigns.routes.js";
 
 warnMissingEnv();
 
@@ -76,6 +77,7 @@ export function createApp() {
   app.use("/api/prescreen", prescreenRouter);  // David: instant deterministic pre-check (extension inline badge)
   app.use("/api/ask-orbo", askOrboRouter);     // David: interactive follow-up Q&A
   app.use("/api/nlp-query", nlpQueryRouter);   // David: AI Feature B (NL question → chart)
+  app.use("/api/campaigns", campaignsRouter);  // David's slice; built by Ozias for G1·06 triage grouping
 
   // 6) Central error handler.
   // Only surface a message for deliberate CLIENT errors (a 4xx status our own code

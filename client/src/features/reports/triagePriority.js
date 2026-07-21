@@ -12,6 +12,43 @@ export const isPending = (report) => {
   return status === "pending review" || status === "investigating";
 };
 
+// Group priority-sorted reports by campaign (card G1·06). Reports sharing a
+// campaign_id collapse into ONE campaign item; reports with no campaign stay as
+// standalone items. Preserves the incoming priority order: each item appears at the
+// position of its highest-priority member, so the most urgent thing (grouped or not)
+// stays on top. `campaigns` is the GET /api/campaigns list (for names/metadata).
+//
+// Returns a flat, ordered array of items:
+//   { type: "report",   report }
+//   { type: "campaign", campaignId, name, reports: [...] }
+export const groupByCampaign = (sortedReports, campaigns = []) => {
+  const nameById = new Map(campaigns.map((c) => [c.id, c.name]));
+  const items = [];
+  const groupIndexByCampaign = new Map(); // campaignId → index in `items`
+
+  for (const report of sortedReports) {
+    const campaignId = report.review?.campaign_id ?? null;
+    if (campaignId == null) {
+      items.push({ type: "report", report });
+      continue;
+    }
+    // First time we see this campaign → create the group where it first appears
+    // (which is its highest-priority row, since input is already sorted).
+    if (!groupIndexByCampaign.has(campaignId)) {
+      groupIndexByCampaign.set(campaignId, items.length);
+      items.push({
+        type: "campaign",
+        campaignId,
+        name: nameById.get(campaignId) ?? `Campaign #${campaignId}`,
+        reports: [],
+      });
+    }
+    items[groupIndexByCampaign.get(campaignId)].reports.push(report);
+  }
+
+  return items;
+}
+
 // Rank order for the triage queue:
 //   1) OPEN items (pending / investigating / never-reviewed) before CONFIRMED ones,
 //      so an analyst always sees outstanding work first.

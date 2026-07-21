@@ -54,12 +54,13 @@ describe("toReportJson (DB row → Reports-card shape)", () => {
     expect(r.review).toBe(null);
   });
 
-  it("org member (has review) → nests review_status/human_score/reviewed_by/shared_with_org", () => {
+  it("org member (has review) → nests review_status/human_score/reviewed_by/shared_with_org/campaign_id", () => {
     const orgReview = {
       reviewStatus: "confirmed malicious",
       humanScore: 18,
       sharedWithOrg: true,
       reviewedByUser: { name: "Priya S." },
+      campaignId: 7,
     };
     const r = toReportJson(submission, orgReview, "David M.");
     expect(r.review).toEqual({
@@ -67,7 +68,14 @@ describe("toReportJson (DB row → Reports-card shape)", () => {
       human_score: 18,
       reviewed_by: "Priya S.",
       shared_with_org: true,
+      campaign_id: 7,
     });
+  });
+
+  it("review with no campaign → campaign_id is null", () => {
+    const orgReview = { reviewStatus: "pending review", humanScore: null, sharedWithOrg: false, reviewedByUser: null };
+    const r = toReportJson(submission, orgReview, "David M.");
+    expect(r.review.campaign_id).toBe(null);
   });
 
   it("falls back to 'you' when no reporter name is given", () => {
