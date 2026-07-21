@@ -9,6 +9,7 @@
 // isolation): ?mine=1 = their own rows; ?org=1 = rows scoped to THEIR org only.
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
+import { isAnalyst } from "../../middleware/roles.js";
 import { prisma } from "../../db.js";
 import { toReportJson } from "./history.service.js";
 
@@ -62,6 +63,13 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
         return res.json({ reports: [] });
       }
 
+      // ANALYST TRIAGE MODE (?org=1&all=1): an analyst needs the FULL org queue —
+      // including items still pending/investigating (not yet shared). We drop the
+      // shared-only gate and show every org report so they have something to triage.
+      // Guarded by role: only an analyst may see unshared reviews (story #12). A
+      // member passing all=1 is ignored → they still get the shared-only Team History.
+      const triageMode = req.query.all === "1" && isAnalyst(req.user.role);
+
       // 1) Every submission in MY org, newest first, with the joined global
       //    indicator AND the teammate who reported it (for "Reported by <name>").
       const submissions = await prisma.submission.findMany({
@@ -70,27 +78,34 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
         include: { indicator: true, user: true },
       });
 
-      // 2) My org's reviews for those indicators that an analyst has explicitly
-      //    SHARED with the team (sharedWithOrg = true). This is the privacy gate:
-      //    only vetted-and-shared items appear in Team History, so nothing with
-      //    personal info leaks org-wide without an analyst's deliberate decision.
+      // 2) My org's reviews for those indicators. In normal Team History we fetch
+      //    ONLY analyst-SHARED reviews (sharedWithOrg = true) — the privacy gate, so
+      //    nothing with personal info leaks org-wide without a deliberate decision.
+      //    In analyst triage mode we fetch ALL of the org's reviews (any status),
+      //    so pending/investigating items are visible for triage.
       //    One query, same N+1-avoiding pattern as the ?mine=1 branch above.
       const indicatorIds = submissions.map((s) => s.indicatorId);
       const reviews = await prisma.orgReview.findMany({
-        where: { orgId: req.user.orgId, indicatorId: { in: indicatorIds }, sharedWithOrg: true },
-        include: { reviewedByUser: true }, // to show which analyst shared it
+        where: {
+          orgId: req.user.orgId,
+          indicatorId: { in: indicatorIds },
+          ...(triageMode ? {} : { sharedWithOrg: true }),
+        },
+        include: { reviewedByUser: true }, // to show which analyst reviewed it
       });
       const reviewsByIndicator = new Map(reviews.map((r) => [r.indicatorId, r]));
 
       // 3) One card per unique indicator (dedup: if two teammates checked the
       //    same link, show it once — keep the newest, which is first after sort).
-      //    SKIP any indicator with no shared review — it isn't part of Team History.
       const seen = new Set();
       const reports = [];
       for (const submission of submissions) {
         if (seen.has(submission.indicatorId)) continue;
         const review = reviewsByIndicator.get(submission.indicatorId) ?? null;
-        if (!review) continue; // not analyst-reviewed + shared → hidden from the team
+        // Normal Team History hides anything without a shared review. Triage mode
+        // shows every org report (even those with NO review yet → review stays null,
+        // which the queue treats as top-priority "needs review").
+        if (!triageMode && !review) continue;
         seen.add(submission.indicatorId);
         // Reporter name comes from THIS submission's user (a teammate), not me.
         reports.push(toReportJson(submission, review, submission.user?.name));

@@ -17,6 +17,7 @@ import { scanUrl } from "../../services/urlscan.js";
 import { checkBlacklist } from "../../services/safeBrowsing.js";
 import { generateVerdict, scoreBucket } from "../../services/verdict.js";
 import { escalateSubmission } from "../submissions/submissions.service.js";
+import { createNotification } from "../notifications/notifications.service.js";
 
 // In dev-stub auth mode, req.user is a fake { id: 1, ... } that may not exist in the DB,
 // so a submission FK would fail. Resolve a REAL mirror row for it (upsert by a stable
@@ -234,6 +235,73 @@ export const reportIndicator = async (indicatorId) => {
     },
   });
   return { global_review_status: updated.globalReviewStatus, reported_count: updated.reportedCount };
+};
+
+// ── closure loop (analyst review) · owner: Ozias ──
+// The four review states an analyst may set (must match the OrgReview.reviewStatus
+// values in schema.prisma AND the StatusChip keys the client renders). Anything else
+// is rejected so we never write a status the UI can't display.
+export const REVIEW_STATUSES = Object.freeze([
+  "pending review",
+  "investigating",
+  "confirmed malicious",
+  "confirmed safe",
+]);
+
+// A "confirmed" verdict is a FINAL authoritative call (safe OR malicious). Reaching one
+// is what fires the closure notification to the members who reported the link.
+const isConfirmedStatus = (status) =>
+  status === "confirmed malicious" || status === "confirmed safe";
+
+// reviewIndicator: an analyst records their org's AUTHORITATIVE verdict on a global
+// indicator, overriding the AI. This is the heart of the "closure loop" (story #7/#10):
+//   1. Upsert the org's single OrgReview row (@@unique([orgId, indicatorId])) with the
+//      analyst's score/verdict/status + who reviewed it + whether it's shared with the org.
+//   2. On a CONFIRMED status, notify every member of this org who submitted this indicator
+//      (createNotification → their NotificationBell badge lights up). The analyst is never
+//      notified about their own review.
+// Takes the prisma client as its first arg (same pattern as the other services here) so
+// it's unit-testable with a mock. Returns { orgReview, notified } for the route to send back.
+export const reviewIndicator = async (
+  prisma,
+  { indicatorId, orgId, reviewedBy, humanScore = null, humanVerdict = null, reviewStatus, sharedWithOrg = false }
+) => {
+  if (!indicatorId) throw new Error("reviewIndicator: indicatorId is required");
+  if (!orgId) throw new Error("reviewIndicator: orgId is required (only analysts in an org can review)");
+  if (!reviewedBy) throw new Error("reviewIndicator: reviewedBy (analyst user id) is required");
+  if (!REVIEW_STATUSES.includes(reviewStatus)) {
+    throw new Error(`reviewIndicator: invalid reviewStatus "${reviewStatus}"`);
+  }
+
+  // The fields the analyst is setting. Reused for BOTH sides of the upsert so a first
+  // review (create) and a re-review (update) write exactly the same authoritative values.
+  const reviewData = { humanScore, humanVerdict, reviewStatus, sharedWithOrg, reviewedBy };
+
+  const orgReview = await prisma.orgReview.upsert({
+    where: { orgId_indicatorId: { orgId, indicatorId } },
+    update: reviewData,
+    create: { orgId, indicatorId, ...reviewData },
+  });
+
+  // Fire the closure notification only once the verdict is confirmed (final).
+  let notified = 0;
+  if (isConfirmedStatus(reviewStatus)) {
+    // Who in THIS org reported this link? They're the people awaiting closure. One member
+    // may have submitted it more than once, so dedup to distinct user ids.
+    const submissions = await prisma.submission.findMany({
+      where: { indicatorId, orgId },
+      select: { userId: true },
+    });
+    const reporterIds = [...new Set(submissions.map((s) => s.userId))];
+
+    const message = `An analyst confirmed a verdict on a link you reported: ${reviewStatus}.`;
+    for (const userId of reporterIds) {
+      await createNotification(prisma, { userId, message, type: "verdict_confirmed", indicatorId });
+      notified += 1;
+    }
+  }
+
+  return { orgReview, notified };
 };
 
 // Lightweight read for context (askOrbo): just the verdict facts, no org_review.

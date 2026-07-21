@@ -43,10 +43,22 @@ export const NotificationsProvider = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mark every notification read (called when the dropdown opens). TODO(Ozias):
-  // also PATCH /api/notifications/:id/read on the backend (O8) so it persists.
+  // Mark every notification read (called when the dropdown opens). We update local
+  // state immediately (optimistic → snappy UI) AND persist each unread one to the
+  // backend (O8) so the change survives a page reload. Persisting is best-effort:
+  // if a PATCH fails, the next poll simply brings that notification back as unread.
   const markAllRead = () => {
+    // Capture the ids that are currently unread BEFORE the optimistic flip, so we
+    // only PATCH the ones that actually changed (not every row every time).
+    const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id);
+
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+
+    unreadIds.forEach((id) => {
+      api.patch(`/api/notifications/${id}/read`, undefined, { getToken }).catch(() => {
+        // Non-fatal: leave the optimistic state; the poll re-syncs from the server.
+      });
+    });
   }
 
   const value = { notifications, unreadCount, markAllRead, refresh };

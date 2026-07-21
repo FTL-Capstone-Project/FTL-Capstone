@@ -1,4 +1,7 @@
-// Escalation/closure status for org-member reports. TODO(Ozias): wire real review_status values.
+// ── feature: reports · owner: Ozias ──
+// Escalation/closure status chip for org-member reports. The four keys match the real
+// review_status values written by PATCH /api/indicators/:id/review (OrgReview.reviewStatus).
+// Unknown/missing status → renders nothing (null), so a report with no review shows no chip.
 const CHIPS = {
   "pending review":       { label: "Pending review", color: "var(--review)", bg: "var(--review-bg)" },
   "investigating":        { label: "Investigating", color: "var(--review)", bg: "var(--review-bg)" },
