@@ -13,11 +13,11 @@ import { env } from "../config/env.js";
 // Low-level call. `messages` is the OpenAI messages array (content may be a string
 // or an array of {type:text|image_url} parts). Returns the raw assistant string.
 const chat = async ({ messages, model = env.llmModel, maxTokens = 512, temperature = 0 }) => {
-  if (!env.anthropicApiKey) throw new Error("LLM key not set");
+  if (!env.llmApiKey) throw new Error("LLM key not set");
 
   const res = await fetch(`${env.llmBaseUrl}/chat/completions`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${env.anthropicApiKey}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${env.llmApiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model, max_tokens: maxTokens, temperature, messages }),
   });
   if (!res.ok) {

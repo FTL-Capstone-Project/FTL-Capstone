@@ -38,7 +38,7 @@ visionRouter.post("/read-screenshot", requireAuth, limit, async (req, res) => {
   try { host = new URL(screenshotUrl).hostname; } catch { return res.status(400).json({ error: "bad url" }); }
   if (!ALLOWED_IMAGE_HOSTS.has(host)) return res.status(400).json({ error: "url not allowed" });
 
-  if (!env.anthropicApiKey) return res.status(503).json({ error: "Vision not configured" });
+  if (!env.llmApiKey) return res.status(503).json({ error: "Vision not configured" });
 
   try {
     // Server fetches the screenshot (urlscan wants the API-Key) → base64 → Claude.
@@ -87,7 +87,7 @@ visionRouter.post("/extract", requireAuth, limit, async (req, res) => {
   if (!imageDataUrl || !/^data:image\//.test(imageDataUrl)) {
     return res.status(400).json({ error: "imageDataUrl (data:image/...) is required" });
   }
-  if (!env.anthropicApiKey) return res.status(503).json({ error: "Vision not configured" });
+  if (!env.llmApiKey) return res.status(503).json({ error: "Vision not configured" });
 
   try {
     const prompt =

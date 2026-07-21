@@ -24,7 +24,7 @@ nlpQueryRouter.post("/", requireAuth, requireAnalyst, limit, async (req, res) =>
   if (question.length > MAX_QUESTION) {
     return res.status(400).json({ error: "That question is too long — please shorten it." });
   }
-  if (!env.anthropicApiKey) return res.status(503).json({ error: "Insights are not configured" });
+  if (!env.llmApiKey) return res.status(503).json({ error: "Insights are not configured" });
   try {
     const result = await answerNlpQuery(prisma, question.trim());
     return res.json(result); // { data, chartSpec } | { fallback }

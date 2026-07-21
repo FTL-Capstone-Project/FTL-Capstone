@@ -4,7 +4,7 @@ import request from "supertest";
 
 // Mock the vision LLM + env so no network/key is needed. visionJSON returns whatever the model
 // "saw"; the deterministic scorer must own the resulting number regardless.
-const env = { anthropicApiKey: "test-key", llmModel: "claude", urlscanApiKey: "", clerkEnabled: false, devStubAllowed: true };
+const env = { llmApiKey: "test-key", llmModel: "claude", urlscanApiKey: "", clerkEnabled: false, devStubAllowed: true };
 const visionJSON = vi.fn();
 const visionText = vi.fn();
 
@@ -29,7 +29,7 @@ const IMG = "data:image/png;base64,AAAA";
 describe("POST /api/vision/extract — signal extraction + deterministic report", () => {
   beforeEach(() => {
     visionJSON.mockReset();
-    env.anthropicApiKey = "test-key";
+    env.llmApiKey = "test-key";
   });
 
   it("400 without a data:image URL", async () => {
@@ -39,7 +39,7 @@ describe("POST /api/vision/extract — signal extraction + deterministic report"
   });
 
   it("503 when vision isn't configured (never fabricates a verdict)", async () => {
-    env.anthropicApiKey = "";
+    env.llmApiKey = "";
     const res = await request(app()).post("/api/vision/extract").send({ imageDataUrl: IMG });
     expect(res.status).toBe(503);
     expect(visionJSON).not.toHaveBeenCalled();

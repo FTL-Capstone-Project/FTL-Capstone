@@ -7,7 +7,7 @@ import request from "supertest";
 //   chatText — the Claude call; return canned text or throw.
 //   getIndicatorContext — the grounding lookup for a specific check.
 //   generateSenderReport — used by the sibling /sender-report route (stub so import works).
-const env = { anthropicApiKey: "test-key", llmModel: "claude", clerkEnabled: false, devStubAllowed: true };
+const env = { llmApiKey: "test-key", llmModel: "claude", clerkEnabled: false, devStubAllowed: true };
 const chatText = vi.fn();
 const getIndicatorContext = vi.fn();
 
@@ -31,7 +31,7 @@ describe("POST /api/ask-orbo (chat)", () => {
   beforeEach(() => {
     chatText.mockReset();
     getIndicatorContext.mockReset();
-    env.anthropicApiKey = "test-key";
+    env.llmApiKey = "test-key";
   });
 
   it("400 when the question is missing/blank", async () => {
@@ -41,7 +41,7 @@ describe("POST /api/ask-orbo (chat)", () => {
   });
 
   it("503 when the LLM key isn't configured (never fakes an answer)", async () => {
-    env.anthropicApiKey = "";
+    env.llmApiKey = "";
     const res = await request(app()).post("/api/ask-orbo").send({ question: "is this a scam?" });
     expect(res.status).toBe(503);
     expect(chatText).not.toHaveBeenCalled();

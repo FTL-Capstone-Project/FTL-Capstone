@@ -22,17 +22,14 @@ export const env = {
   urlscanApiKey: process.env.URLSCAN_API_KEY,
   safeBrowsingKey: process.env.GOOGLE_SAFE_BROWSING_KEY,
 
-  // Claude access. David's key is a Salesforce "LLM Gateway Express" key — an
-  // OpenAI-compatible proxy in front of Claude, NOT a direct Anthropic key.
-  // So we call the OpenAI /chat/completions format at a configurable base URL.
-  // (Key var kept as ANTHROPIC_API_KEY so existing .env files don't break.)
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-  // Claude via the Salesforce "LLM Gateway Express" — an OpenAI-compatible proxy (NOT direct
-  // Anthropic). Configurable base URL + model; the key lives in ANTHROPIC_API_KEY above.
-  llmBaseUrl:
-    process.env.LLM_BASE_URL ||
-    "https://eng-ai-model-gateway.sfproxy.devx-preprod.aws-esvc1-useast2.aws.sfdc.cl",
-  llmModel: process.env.LLM_MODEL || "claude-sonnet-4-6",
+  // LLM access — OpenAI (Chat Completions API). The client (services/llm.js) speaks the
+  // OpenAI wire format: Bearer auth, POST {base}/chat/completions, `messages`. Base URL and
+  // model are env-overridable so we can point at OpenAI-compatible proxies without code changes.
+  // Key precedence: OPENAI_API_KEY, falling back to the legacy ANTHROPIC_API_KEY var so older
+  // .env files / Render configs keep working during the switch.
+  llmApiKey: process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY,
+  llmBaseUrl: process.env.LLM_BASE_URL || "https://api.openai.com/v1",
+  llmModel: process.env.LLM_MODEL || "gpt-4o-mini",
   // True when Clerk backend creds are present; lets middleware fall back to a
   // dev stub locally (so David/Ozias can build without live Clerk) while using
   // real verification as soon as keys exist.
