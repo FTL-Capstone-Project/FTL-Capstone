@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import { UserButton, OrganizationSwitcher } from "@clerk/clerk-react";
-import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, PanelLeftClose, PanelLeft, Clock, MoreHorizontal, Pencil, Pin, Trash2, BarChart3 } from "lucide-react";
+import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, PanelLeftClose, PanelLeft, Clock, MoreHorizontal, Pencil, Pin, Trash2, BarChart3, Menu } from "lucide-react";
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import OrbisLogo from "./OrbisLogo.jsx";
 import { NAV_BY_ROLE } from "../config/constants.js";
 import { useOrbisRole } from "../lib/useOrbisRole.js";
+import { useMediaQuery, MOBILE_QUERY } from "../lib/useMediaQuery.js";
 import { listConversations, searchConversations, subscribe, deleteConversation, renameConversation, togglePin, groupConversations } from "../lib/conversations.js";
 
 // NOTE: SHARED COMPONENT (app frame). Merged: David's wireframe styling + real Orbis logo +
@@ -58,6 +59,21 @@ const AppShell = () => {
   const nav = NAV_BY_ROLE[role] ?? NAV_BY_ROLE.individual;
   const inOrg = role === "member" || role === "analyst";
 
+  // ── Responsive frame ──
+  // Desktop: the sidebar is docked (a flex column that can collapse to a rail).
+  // Mobile (Gemini-style): the sidebar is hidden off-screen and slides in as an OVERLAY over a
+  // dim backdrop when the header hamburger is tapped; the chat is full-width underneath. We track
+  // the breakpoint in JS because inline styles can't hold @media rules.
+  const isMobile = useMediaQuery(MOBILE_QUERY);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // On mobile, tapping a nav link / chat / New-check should navigate AND close the drawer, so the
+  // user lands straight on the full-width content (exactly how Gemini's mobile menu behaves).
+  const go = (to) => { navigate(to); if (isMobile) setDrawerOpen(false); };
+
+  // Never leave the drawer "stuck open" when rotating to desktop width.
+  useEffect(() => { if (!isMobile) setDrawerOpen(false); }, [isMobile]);
+
   // Keep Recents live: re-read when the conversation store changes (chat saved/deleted).
   useEffect(() => subscribe(() => setRecents(listConversations())), []);
   // While searching: a flat list of matches (no date headers). Otherwise: date-grouped.
@@ -65,47 +81,71 @@ const AppShell = () => {
   const searchResults = searching ? searchConversations(search) : [];
   const groups = searching ? [] : groupConversations(recents);
 
+  // On mobile the sidebar is always shown "expanded" (never the icon-rail), since it's an overlay
+  // drawer with room. The collapse rail is a desktop-only affordance.
+  const railCollapsed = collapsed && !isMobile;
+
+  // Sidebar box: docked flex column on desktop; fixed slide-in overlay on mobile.
+  const asideStyle = isMobile
+    ? {
+        position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 50, width: 280,
+        transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
+        transition: "transform .22s ease", boxShadow: drawerOpen ? "var(--shadow)" : "none",
+        background: "var(--surface)", borderRight: "1px solid var(--border)", padding: 18,
+        display: "flex", flexDirection: "column", gap: 14,
+      }
+    : {
+        width: railCollapsed ? 68 : 250, background: "var(--surface)",
+        borderRight: "1px solid var(--border)", padding: railCollapsed ? "18px 12px" : 18,
+        display: "flex", flexDirection: "column", gap: 14, flexShrink: 0, transition: "width .15s ease",
+      };
+
   return (
     <NotificationsProvider>
       <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+        {/* Mobile backdrop — tap outside the drawer to close it. */}
+        {isMobile && drawerOpen && (
+          <div onClick={() => setDrawerOpen(false)} aria-hidden="true"
+            style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(10,37,64,0.45)" }} />
+        )}
         {/* ── Sidebar ── */}
-        <aside style={{ width: collapsed ? 68 : 250, background: "var(--surface)",
-          borderRight: "1px solid var(--border)", padding: collapsed ? "18px 12px" : 18,
-          display: "flex", flexDirection: "column", gap: 14, flexShrink: 0, transition: "width .15s ease" }}>
+        <aside style={asideStyle}>
 
-          {/* Logo → Home (the Ask-Orbo chat). A separate chevron collapses the sidebar. */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", padding: "2px 0 6px" }}>
-            <button onClick={() => navigate("/ask-orbo")} aria-label="Go to Orbo home" title="Home"
+          {/* Logo → Home (the Ask-Orbo chat). The chevron collapses the sidebar (desktop only;
+              on mobile the drawer just closes via the backdrop / a nav tap). */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: railCollapsed ? "center" : "space-between", padding: "2px 0 6px" }}>
+            <button onClick={() => go("/ask-orbo")} aria-label="Go to Orbo home" title="Home"
               style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
-              {collapsed ? <Orbit size={26} color="var(--navy)" /> : <OrbisLogo height={32} />}
+              {railCollapsed ? <Orbit size={26} color="var(--navy)" /> : <OrbisLogo height={32} />}
             </button>
-            {!collapsed && (
-              <button onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" title="Collapse"
+            {!railCollapsed && (
+              <button onClick={() => isMobile ? setDrawerOpen(false) : setCollapsed(true)}
+                aria-label={isMobile ? "Close menu" : "Collapse sidebar"} title={isMobile ? "Close" : "Collapse"}
                 style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
                 <PanelLeftClose size={18} />
               </button>
             )}
           </div>
-          {collapsed && (
+          {railCollapsed && (
             <button onClick={() => setCollapsed(false)} aria-label="Expand sidebar" title="Expand"
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
               <PanelLeft size={18} />
             </button>
           )}
 
-          {inOrg && !collapsed && (
+          {inOrg && !railCollapsed && (
             <div style={{ margin: "2px 0" }}>
               <OrganizationSwitcher hidePersonal={false} appearance={clerkAppearance} />
             </div>
           )}
 
-          <button onClick={() => navigate("/ask-orbo?new=1")} style={{ display: "flex", alignItems: "center",
+          <button onClick={() => go("/ask-orbo?new=1")} style={{ display: "flex", alignItems: "center",
             justifyContent: "center", gap: 8, background: "var(--primary)", color: "#fff", border: "none",
-            borderRadius: 12, padding: collapsed ? "11px 0" : "11px 14px", fontWeight: 700, cursor: "pointer", fontSize: "0.95em" }}>
-            <Plus size={18} /> {!collapsed && "New check"}
+            borderRadius: 12, padding: railCollapsed ? "11px 0" : "11px 14px", fontWeight: 700, cursor: "pointer", fontSize: "0.95em" }}>
+            <Plus size={18} /> {!railCollapsed && "New check"}
           </button>
 
-          {!collapsed && (
+          {!railCollapsed && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--border)",
               borderRadius: 10, padding: "8px 12px", color: "var(--text-dim)" }}>
               <Search size={16} />
@@ -120,14 +160,14 @@ const AppShell = () => {
           {/* Role-aware nav */}
           <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {nav.map((item) => (
-              <NavItem key={item.to} item={item} collapsed={collapsed} />
+              <NavItem key={item.to} item={item} collapsed={railCollapsed} onNavigate={() => isMobile && setDrawerOpen(false)} />
             ))}
           </nav>
 
           {/* Recents — real past chat threads (localStorage). Click to reopen; ⋯ menu to
               rename / pin / delete. Grouped by date (Today/Yesterday/…), or a flat list of
               matches while searching. The open chat is highlighted. */}
-          {!collapsed && (
+          {!railCollapsed && (
             <div style={{ marginTop: 4, overflowY: "auto", flex: 1, minHeight: 0 }}>
               {searching ? (
                 // Search mode: one flat list under a "Recents" header.
@@ -138,7 +178,7 @@ const AppShell = () => {
                   ) : (
                     searchResults.map((c) => (
                       <RecentItem key={c.id} convo={c} active={c.id === activeId}
-                        onOpen={() => navigate(`/ask-orbo?c=${c.id}`)}
+                        onOpen={() => go(`/ask-orbo?c=${c.id}`)}
                         onDelete={() => deleteConversation(c.id)} />
                     ))
                   )}
@@ -152,7 +192,7 @@ const AppShell = () => {
                     <div style={groupHeaderStyle}>{group.label}</div>
                     {group.items.map((c) => (
                       <RecentItem key={c.id} convo={c} active={c.id === activeId}
-                        onOpen={() => navigate(`/ask-orbo?c=${c.id}`)}
+                        onOpen={() => go(`/ask-orbo?c=${c.id}`)}
                         onDelete={() => deleteConversation(c.id)} />
                     ))}
                   </div>
@@ -161,8 +201,8 @@ const AppShell = () => {
             </div>
           )}
 
-          <NavLink to="/settings" style={navLinkStyle(collapsed)}>
-            <Settings size={16} /> {!collapsed && "Settings"}
+          <NavLink to="/settings" onClick={() => isMobile && setDrawerOpen(false)} style={navLinkStyle(railCollapsed)}>
+            <Settings size={16} /> {!railCollapsed && "Settings"}
           </NavLink>
         </aside>
 
@@ -170,7 +210,14 @@ const AppShell = () => {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
           <header style={{ height: 56, borderBottom: "1px solid var(--border)", background: "var(--surface)",
             display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, padding: "0 22px", flexShrink: 0 }}>
-            {orgName && <span style={{ marginRight: "auto", color: "var(--text-dim)", fontSize: "0.9em" }}>{orgName}</span>}
+            {/* Mobile hamburger → opens the slide-in sidebar drawer. Hidden on desktop (docked sidebar). */}
+            {isMobile && (
+              <button onClick={() => setDrawerOpen(true)} aria-label="Open menu" title="Menu"
+                style={{ marginRight: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--text)", display: "grid", placeItems: "center" }}>
+                <Menu size={22} />
+              </button>
+            )}
+            {orgName && <span style={{ marginRight: isMobile ? 0 : "auto", color: "var(--text-dim)", fontSize: "0.9em" }}>{orgName}</span>}
             <button title="Inbox" aria-label="Inbox"
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
               <Inbox size={20} />
@@ -278,10 +325,10 @@ const menuItemStyle = {
   cursor: "pointer", fontSize: "0.9em", color: "inherit",
 };
 
-const NavItem = ({ item, collapsed }) => {
+const NavItem = ({ item, collapsed, onNavigate }) => {
   const Icon = NAV_ICON[item.to] ?? Sparkles;
   return (
-    <NavLink to={item.to} title={item.label} style={({ isActive }) => ({
+    <NavLink to={item.to} title={item.label} onClick={onNavigate} style={({ isActive }) => ({
       display: "flex", alignItems: "center", gap: 10, padding: collapsed ? "8px 0" : "8px 12px",
       justifyContent: collapsed ? "center" : "flex-start", borderRadius: 10, textDecoration: "none",
       background: isActive ? "var(--canvas)" : "transparent",
