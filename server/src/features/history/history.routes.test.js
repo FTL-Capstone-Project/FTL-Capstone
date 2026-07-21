@@ -93,6 +93,49 @@ describe("GET /api/history?org=1 (Team History)", () => {
     expect(res.body.reports).toHaveLength(0); // reviewed-and-shared only → empty
   });
 
+  it("analyst triage (?org=1&all=1) includes pending + unreviewed items", async () => {
+    // Two org indicators: one pending review, one with NO review row at all.
+    submissionFindMany.mockResolvedValue([
+      sub({ id: 1, indicatorId: 10, aiScore: 54, name: "Marcus T.", createdAt: new Date("2026-07-06") }),
+      sub({ id: 2, indicatorId: 11, aiScore: 31, name: "Anya K.",  createdAt: new Date("2026-07-07") }),
+    ]);
+    // Only indicator 10 has a review, and it's pending (NOT shared).
+    orgReviewFindMany.mockResolvedValue([
+      { indicatorId: 10, reviewStatus: "pending review", humanScore: null, sharedWithOrg: false, reviewedByUser: null },
+    ]);
+
+    const res = await request(appAs({ id: 7, orgId: 99, role: "analyst", name: "Priya S." }))
+      .get("/api/history?org=1&all=1");
+
+    expect(res.status).toBe(200);
+    // Triage mode drops the sharedWithOrg gate → the review query is NOT filtered by it.
+    expect(orgReviewFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.not.objectContaining({ sharedWithOrg: true }) })
+    );
+    // BOTH indicators appear: the pending one AND the never-reviewed one (review: null).
+    expect(res.body.reports).toHaveLength(2);
+    const byId = Object.fromEntries(res.body.reports.map((r) => [r.indicator_id, r]));
+    expect(byId[10].review.review_status).toBe("pending review");
+    expect(byId[11].review).toBeNull();
+  });
+
+  it("a non-analyst passing all=1 is ignored (still shared-only)", async () => {
+    submissionFindMany.mockResolvedValue([
+      sub({ id: 1, indicatorId: 10, aiScore: 54, name: "Marcus T.", createdAt: new Date("2026-07-06") }),
+    ]);
+    orgReviewFindMany.mockResolvedValue([]); // nothing shared
+
+    const res = await request(appAs({ id: 2, orgId: 99, role: "member", name: "David M." }))
+      .get("/api/history?org=1&all=1");
+
+    expect(res.status).toBe(200);
+    // Member: the gate still applies, so the query DOES filter by sharedWithOrg.
+    expect(orgReviewFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ sharedWithOrg: true }) })
+    );
+    expect(res.body.reports).toHaveLength(0);
+  });
+
   it("dedups to one card per indicator (keeps the newest submission)", async () => {
     // Two submissions of the SAME shared indicator by different teammates; newest first.
     submissionFindMany.mockResolvedValue([
