@@ -45,6 +45,8 @@ In the Render dashboard, on each service → **Environment**:
 | `ANTHROPIC_API_KEY` | LLM gateway key |
 | `URLSCAN_API_KEY` | urlscan.io key (optional; stubs without it) |
 | `GOOGLE_SAFE_BROWSING_KEY` | Safe Browsing key (optional) |
+| `INBOUND_EMAIL_TOKEN` | shared secret for the email-forwarding relay (see Step 7); `/inbound-email` 503s until set |
+| `INBOUND_EMAIL_TOKENS` | optional plus-token map `david:david@acme.com,...` |
 | `CLIENT_URL` | **fill in Step 4** (the client's URL) |
 | `NODE_ENV` | `production` (already set in render.yaml) |
 
@@ -85,6 +87,27 @@ sync relied on the lazy backstop; in prod the webhook does the real-time sync.)
 - `https://orbis-api.onrender.com/api/health` → `{"ok":true,"clerk":"live"}`
 - Open the client URL, sign up / sign in, run a check.
 
+## Step 7 — (Optional) Enable email forwarding
+
+Lets users forward a suspicious email to Orbis; it's analyzed (sender + message + any link) and
+shows up as a report an analyst can review — even a text-only scam with no link. Orbis runs **no
+mail infrastructure**; a free Gmail account relays forwards to the API.
+
+1. Set **`INBOUND_EMAIL_TOKEN`** on `orbis-api` to any long random string (the shared secret).
+2. Create/pick a Gmail inbox (e.g. `orbischecks@gmail.com`) and install the Orbis Apps Script relay
+   (separate setup guide) with the **same** token + a 1-minute time trigger. The relay POSTs
+   `{from,to,subject,body}` to `/api/webhooks/inbound-email` with the `x-orbis-token` header.
+3. (Optional) Set **`INBOUND_EMAIL_TOKENS`** to map plus-tokens to registered emails so
+   `orbischecks+<token>@gmail.com` beats a spoofable From header.
+
+Test without Gmail (simulate a forward) — expect `201 …escalated:true` for a seed org member:
+```bash
+curl -i -X POST https://orbis-api.onrender.com/api/webhooks/inbound-email \
+  -H "content-type: application/json" -H "x-orbis-token: YOUR_TOKEN" \
+  -d '{"from":"David M. <david@acme.com>","to":"orbischecks@gmail.com",
+       "subject":"Fwd: account locked","body":"verify https://paypa1-secure.com/verify"}'
+```
+
 ---
 
 ## Notes & gotchas
@@ -98,6 +121,11 @@ sync relied on the lazy backstop; in prod the webhook does the real-time sync.)
 
 - **Free tier sleeps.** Render free web services spin down when idle; the first request
   after a nap takes a few seconds. Fine for a demo.
+- **Creating a migration locally against Neon may hang on an advisory lock** (`P1002`). Neon doesn't
+  reliably support Prisma's session advisory lock. Workaround: prefix with
+  `PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=1` (e.g.
+  `PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=1 npx prisma migrate dev --name <name>`, from `server/`).
+  Affects only local migration creation; prod `migrate deploy` is unaffected.
 - **Migrations are additive-safe** via `migrate deploy`. If you add a new migration
   later, the next deploy applies it automatically.
 - **Seed data:** `deploy:build` does NOT seed. To load demo data once, run

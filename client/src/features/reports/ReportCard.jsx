@@ -1,3 +1,4 @@
+import { Mail } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge.jsx";
 
 // Safely embed a URL inside a CSS url(). The screenshot URL is our own (from urlscan), but a
@@ -66,8 +67,17 @@ const ReportCard = ({ report, showReviewStatus = false, onOpen }) => {
           <div style={{ flexShrink: 0 }}><StatusBadge kind={report.kind} /></div>
         </div>
 
-        <p style={{ margin: "0 0 6px", fontSize: "0.8em", color: "var(--text-dim)" }}>
-          Reported by {report.reported_by ?? "you"}{when ? ` · ${when}` : ""}
+        <p style={{ margin: "0 0 6px", fontSize: "0.8em", color: "var(--text-dim)",
+          display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span>Reported by {report.reported_by ?? "you"}{when ? ` · ${when}` : ""}</span>
+          {/* Show HOW it was reported when it came in by forwarded email (vs the web form). */}
+          {report.source === "email" && (
+            <span title="Forwarded by email" style={{ display: "inline-flex", alignItems: "center", gap: 4,
+              fontSize: "0.92em", color: "var(--primary)", background: "var(--canvas)",
+              border: "1px solid var(--border)", borderRadius: 999, padding: "1px 8px" }}>
+              <Mail size={12} /> Email
+            </span>
+          )}
         </p>
 
         {report.description && (

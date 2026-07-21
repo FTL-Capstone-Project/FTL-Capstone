@@ -38,6 +38,9 @@ export const toReportJson = (submission, orgReview, reporterName) => {
     kind: scoreToKind(ind.aiScore),
     ai_score: ind.aiScore,
     screenshot_url: ind.screenshotUrl ?? null,
+    // How it was reported — "web" (the check form) or "email" (a forwarded email). Lets the card
+    // show an "Email" badge and the modal label a forwarded-email report.
+    source: submission.source ?? "web",
     // Org members see the analyst's closure status; individuals get null.
     review: orgReview
       ? {
