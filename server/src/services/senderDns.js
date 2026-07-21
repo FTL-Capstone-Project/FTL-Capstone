@@ -85,12 +85,19 @@ export const checkSenderDns = async (domain, { timeoutMs = 3000 } = {}) => {
     add("no_resolve", `The domain "${host}" doesn't resolve on the internet — it may not exist or is misconfigured, which is very unusual for a genuine sender`);
   } else {
     if (!hasMx) add("no_mx", `"${host}" has no mail (MX) records — it isn't set up to receive email, unusual for a real organization`);
-    if (!hasSpf) add("no_spf", `"${host}" publishes no SPF record — legitimate senders almost always do, and its absence makes spoofing easier`);
+    // Missing SPF is only a red flag when DMARC is ALSO missing. Big senders (uber.com,
+    // google.com) legitimately publish SPF on their sending SUBDOMAINS, not the apex, and rely on
+    // DMARC for apex protection — so "no apex SPF but yes DMARC" is a normal, well-configured
+    // pattern, not a warning. Penalizing it dinged legit brands (the uber.com false-alarm). We
+    // only flag missing SPF when there's no DMARC either, i.e. genuinely no domain auth at all.
+    if (!hasSpf && !hasDmarc) add("no_spf", `"${host}" publishes no SPF record — combined with no DMARC, this domain has no email authentication at all, which is unusual for a legitimate sender`);
     if (!hasDmarc) add("no_dmarc", `"${host}" publishes no DMARC policy — most established organizations do`);
-    // Fully authenticated: informational only. Presence is NOT proof of trust (scammers can set
-    // these up on their own domain), so weight 0 and say so — never a false reassurance.
-    if (hasMx && hasSpf && hasDmarc) {
-      evidence.push({ text: `"${host}" has email authentication configured (MX, SPF, and DMARC) — a small positive, though scammers can set these up too`, severity: "safe" });
+    // Any email authentication present is informational only. Presence is NOT proof of trust
+    // (scammers can set these up on their own domain), so weight 0 and say so — never a false
+    // reassurance. Cover the big-sender case (MX + DMARC, apex SPF on subdomains) too.
+    if (hasMx && (hasSpf || hasDmarc)) {
+      const which = [hasMx && "MX", hasSpf && "SPF", hasDmarc && "DMARC"].filter(Boolean).join(", ");
+      evidence.push({ text: `"${host}" has email authentication configured (${which}) — a small positive, though scammers can set these up too`, severity: "safe" });
     }
   }
 

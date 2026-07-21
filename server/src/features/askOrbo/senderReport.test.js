@@ -57,6 +57,16 @@ describe("generateSenderReport — deterministic domain backstop", () => {
     expect(r.evidence[0].severity).toBe("safe");
   });
 
+  it("a newly-recognized brand (uber.com) is floored to the safe band, not left as UNKNOWN", async () => {
+    // The exact case a user hit: uber.com wasn't in the list → fell to UNKNOWN → got dinged to
+    // 64/review. Now recognized as a brand → floored >=55 with the "genuine domain" reason.
+    const r = await generateSenderReport({ email: "noreply@uber.com" });
+    expect(r.ai_score).toBeGreaterThanOrEqual(55);
+    expect(r.ai_confidence).toBe("high");
+    expect(r.evidence[0].severity).toBe("safe");
+    expect(checkSenderDns).not.toHaveBeenCalled(); // brand path skips DNS entirely
+  });
+
   it("free webmail is NOT floored to trusted — capped below 'safe' with a caveat (bug fix)", async () => {
     // Regression: gmail.com used to classify as brand:google and floor to >=55 + "genuine Google
     // domain". A "legal dept" on Gmail is a red flag, not a trust signal.

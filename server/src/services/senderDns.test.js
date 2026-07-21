@@ -70,6 +70,29 @@ describe("checkSenderDns — free native MX/SPF/DMARC signals", () => {
     expect(r.penalty).toBeGreaterThan(0);
   });
 
+  it("big-sender pattern: MX + DMARC but no APEX SPF → no penalty (the uber.com false-alarm fix)", async () => {
+    // Large senders publish SPF on sending subdomains and rely on DMARC at the apex. Missing apex
+    // SPF is only a red flag when DMARC is ALSO missing — so this well-configured domain is clean.
+    resolveMx.mockResolvedValue([{ exchange: "mx.uber.com", priority: 10 }]);
+    resolveTxt.mockImplementation(async (name) =>
+      name.startsWith("_dmarc.") ? [["v=DMARC1; p=reject"]] : [["some-verification-token=abc"]]); // no v=spf1 at apex
+    resolve.mockResolvedValue(["1.2.3.4"]);
+    const r = await checkSenderDns("uber.com");
+    expect(r.hasSpf).toBe(false);
+    expect(r.hasDmarc).toBe(true);
+    expect(r.penalty).toBe(0);                          // no SPF penalty when DMARC is present
+    expect(r.evidence.every((e) => e.severity === "safe")).toBe(true); // no "review" warnings
+  });
+
+  it("genuinely no auth (no SPF AND no DMARC) still flags", async () => {
+    resolveMx.mockResolvedValue([{ exchange: "mx.sketchy.com", priority: 10 }]);
+    resolveTxt.mockResolvedValue([]); // no SPF, no DMARC
+    resolve.mockResolvedValue(["1.2.3.4"]);
+    const r = await checkSenderDns("sketchy.com");
+    expect(r.penalty).toBeGreaterThan(0);
+    expect(r.evidence.some((e) => /no email authentication at all/i.test(e.text))).toBe(true);
+  });
+
   it("a slow lookup times out into a soft failure, never a hang or a thrown error", async () => {
     // resolveMx never settles; the guard's timeout must win.
     resolveMx.mockImplementation(() => new Promise(() => {}));

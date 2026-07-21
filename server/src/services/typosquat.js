@@ -14,20 +14,50 @@
 // ============================================================
 import { domainToUnicode } from "node:url";
 
-// Most-impersonated brands → their LEGITIMATE registered domains. A lookalike is judged "safe"
-// only if it lands on one of these exact domains for the matched brand (not just "some redirect").
-// This is our curated "who gets impersonated" list. It is deliberately a few DOZEN dominant
-// phishing targets, NOT a top-million dump: fuzzy edit-distance matching against a huge list
-// produces a false-positive explosion (in a million domains, tons of legit sites are 1 edit
-// apart). The list-free signals below (punycode + mixed-script) catch look-alikes of ANY domain
-// with no list at all, so the list only needs to cover plausible NO-trick typosquats.
+// Recognized brands → their LEGITIMATE registered domains. This list serves TWO jobs, and the
+// distinction is the whole design:
+//   1. EXACT recognition (knownBrandDomain / LEGIT_DOMAINS) — "is this the REAL domain?" This is
+//      pure set membership, so it scales to hundreds of brands with ZERO false-positive risk.
+//      Growing this list is what lets the sender report correctly TRUST uber.com, spotify.com, etc.
+//   2. FUZZY lookalike hunting (detectLookalike) — "does this RESEMBLE a brand?" This uses
+//      edit-distance + token matching, so a big list here causes false positives on brands that
+//      are also common English words ("target", "delta", "discover"). Those are marked
+//      `noFuzzy: true`: still recognized exactly (job 1), but skipped by the fuzzy hunt (job 2),
+//      so "delta-dental-plans.net" isn't flagged as impersonating Delta. The list-free signals
+//      (punycode + mixed-script) still catch look-alikes of ANY domain regardless.
 const BRANDS = [
-  // Retail / marketplaces
+  // ── Retail / marketplaces ──
   { brand: "amazon", domains: ["amazon.com", "amazon.co.uk", "amazon.de", "amazon.co.jp", "amzn.to", "amazonaws.com", "a.co"] },
   { brand: "ebay", domains: ["ebay.com"] },
   { brand: "walmart", domains: ["walmart.com"] },
-  // Payments / finance
+  { brand: "target", domains: ["target.com"], noFuzzy: true },
+  { brand: "bestbuy", domains: ["bestbuy.com"] },
+  { brand: "costco", domains: ["costco.com"] },
+  { brand: "homedepot", domains: ["homedepot.com"] },
+  { brand: "lowes", domains: ["lowes.com"] },
+  { brand: "etsy", domains: ["etsy.com"] },
+  { brand: "alibaba", domains: ["alibaba.com"] },
+  { brand: "aliexpress", domains: ["aliexpress.com"] },
+  { brand: "wayfair", domains: ["wayfair.com"] },
+  { brand: "shopify", domains: ["shopify.com"] },
+  { brand: "ikea", domains: ["ikea.com"] },
+  { brand: "macys", domains: ["macys.com"] },
+  // ── Payments / fintech ──
   { brand: "paypal", domains: ["paypal.com", "paypal.me"] },
+  { brand: "venmo", domains: ["venmo.com"] },
+  { brand: "zelle", domains: ["zellepay.com"] },
+  { brand: "cashapp", domains: ["cash.app"] },
+  { brand: "stripe", domains: ["stripe.com"] },
+  { brand: "square", domains: ["squareup.com"], noFuzzy: true },
+  { brand: "wise", domains: ["wise.com"], noFuzzy: true },
+  { brand: "revolut", domains: ["revolut.com"] },
+  { brand: "klarna", domains: ["klarna.com"] },
+  { brand: "affirm", domains: ["affirm.com"], noFuzzy: true },
+  { brand: "robinhood", domains: ["robinhood.com"] },
+  { brand: "sofi", domains: ["sofi.com"] },
+  { brand: "intuit", domains: ["intuit.com", "turbotax.com", "quickbooks.com", "mint.com"] },
+  { brand: "creditkarma", domains: ["creditkarma.com"] },
+  // ── Banks ──
   { brand: "chase", domains: ["chase.com"] },
   { brand: "wellsfargo", domains: ["wellsfargo.com"] },
   { brand: "bankofamerica", domains: ["bankofamerica.com", "bofa.com"] },
@@ -35,37 +65,135 @@ const BRANDS = [
   { brand: "capitalone", domains: ["capitalone.com"] },
   { brand: "usbank", domains: ["usbank.com"] },
   { brand: "americanexpress", domains: ["americanexpress.com", "aexp.com"] },
+  { brand: "discover", domains: ["discover.com"], noFuzzy: true },
+  { brand: "ally", domains: ["ally.com"], noFuzzy: true },
+  { brand: "pnc", domains: ["pnc.com"] },
+  { brand: "truist", domains: ["truist.com"] },
+  { brand: "schwab", domains: ["schwab.com"] },
+  { brand: "fidelity", domains: ["fidelity.com"] },
+  { brand: "vanguard", domains: ["vanguard.com"] },
   { brand: "hsbc", domains: ["hsbc.com", "hsbc.co.uk"] },
   { brand: "barclays", domains: ["barclays.co.uk", "barclays.com"] },
   { brand: "santander", domains: ["santander.com", "santander.co.uk"] },
   { brand: "mastercard", domains: ["mastercard.com"] },
   { brand: "visa", domains: ["visa.com"] },
-  // Crypto
+  // ── Crypto ──
   { brand: "coinbase", domains: ["coinbase.com"] },
   { brand: "binance", domains: ["binance.com"] },
-  // Big tech / platforms
+  { brand: "kraken", domains: ["kraken.com"] },
+  { brand: "cryptocom", domains: ["crypto.com"] },
+  { brand: "blockchain", domains: ["blockchain.com"], noFuzzy: true },
+  { brand: "metamask", domains: ["metamask.io"] },
+  { brand: "ledger", domains: ["ledger.com"], noFuzzy: true },
+  { brand: "opensea", domains: ["opensea.io"] },
+  // ── Big tech / social ──
   { brand: "google", domains: ["google.com", "google.co.uk", "goo.gl", "youtube.com", "youtu.be", "gmail.com"] },
   { brand: "microsoft", domains: ["microsoft.com", "live.com", "office.com", "outlook.com", "microsoftonline.com"] },
   { brand: "apple", domains: ["apple.com", "icloud.com", "me.com"] },
-  { brand: "netflix", domains: ["netflix.com"] },
+  { brand: "meta", domains: ["meta.com"], noFuzzy: true },
   { brand: "facebook", domains: ["facebook.com", "fb.com", "fb.me"] },
   { brand: "instagram", domains: ["instagram.com"] },
   { brand: "whatsapp", domains: ["whatsapp.com"] },
   { brand: "linkedin", domains: ["linkedin.com", "lnkd.in"] },
+  { brand: "twitter", domains: ["twitter.com", "x.com", "t.co"] },
+  { brand: "tiktok", domains: ["tiktok.com"] },
+  { brand: "snapchat", domains: ["snapchat.com"] },
+  { brand: "pinterest", domains: ["pinterest.com"] },
+  { brand: "reddit", domains: ["reddit.com"] },
+  { brand: "discord", domains: ["discord.com", "discord.gg"] },
+  { brand: "telegram", domains: ["telegram.org"] },
+  { brand: "signal", domains: ["signal.org"], noFuzzy: true },
+  { brand: "netflix", domains: ["netflix.com"] },
+  // ── Productivity / SaaS ──
   { brand: "adobe", domains: ["adobe.com"] },
   { brand: "dropbox", domains: ["dropbox.com"] },
   { brand: "docusign", domains: ["docusign.com", "docusign.net"] },
-  { brand: "steam", domains: ["steampowered.com", "steamcommunity.com"] },
-  // Telco
+  { brand: "slack", domains: ["slack.com"] },
+  { brand: "zoom", domains: ["zoom.us"] },
+  { brand: "notion", domains: ["notion.so"], noFuzzy: true },
+  { brand: "figma", domains: ["figma.com"] },
+  { brand: "canva", domains: ["canva.com"], noFuzzy: true },
+  { brand: "airtable", domains: ["airtable.com"] },
+  { brand: "asana", domains: ["asana.com"] },
+  { brand: "atlassian", domains: ["atlassian.com", "atlassian.net"] },
+  { brand: "salesforce", domains: ["salesforce.com", "force.com"] },
+  { brand: "hubspot", domains: ["hubspot.com"] },
+  { brand: "mailchimp", domains: ["mailchimp.com"] },
+  { brand: "zendesk", domains: ["zendesk.com"] },
+  { brand: "servicenow", domains: ["servicenow.com"] },
+  { brand: "workday", domains: ["workday.com"] },
+  { brand: "okta", domains: ["okta.com"] },
+  { brand: "twilio", domains: ["twilio.com"] },
+  { brand: "oracle", domains: ["oracle.com"], noFuzzy: true },
+  { brand: "sap", domains: ["sap.com"] },
+  { brand: "ibm", domains: ["ibm.com"] },
+  { brand: "wetransfer", domains: ["wetransfer.com"] },
+  { brand: "calendly", domains: ["calendly.com"] },
+  // ── Cloud / dev ──
+  { brand: "github", domains: ["github.com"] },
+  { brand: "gitlab", domains: ["gitlab.com"] },
+  { brand: "cloudflare", domains: ["cloudflare.com"] },
+  { brand: "digitalocean", domains: ["digitalocean.com"] },
+  { brand: "heroku", domains: ["heroku.com"] },
+  { brand: "vercel", domains: ["vercel.com"] },
+  { brand: "netlify", domains: ["netlify.com"] },
+  // ── Telco / ISP ──
   { brand: "verizon", domains: ["verizon.com"] },
   { brand: "tmobile", domains: ["t-mobile.com"] },
-  // Shipping / logistics
+  { brand: "att", domains: ["att.com"] },
+  { brand: "comcast", domains: ["comcast.com", "xfinity.com"] },
+  { brand: "spectrum", domains: ["spectrum.com"], noFuzzy: true },
+  { brand: "vodafone", domains: ["vodafone.com"] },
+  // ── Shipping / logistics ──
   { brand: "dhl", domains: ["dhl.com"] },
   { brand: "fedex", domains: ["fedex.com"] },
   { brand: "usps", domains: ["usps.com"] },
   { brand: "ups", domains: ["ups.com"] },
-  // Government (tax-refund scams)
+  { brand: "royalmail", domains: ["royalmail.com"] },
+  { brand: "canadapost", domains: ["canadapost.ca"] },
+  // ── Travel / rideshare / delivery ──
+  { brand: "uber", domains: ["uber.com", "ubereats.com"] },
+  { brand: "lyft", domains: ["lyft.com"] },
+  { brand: "airbnb", domains: ["airbnb.com"] },
+  { brand: "booking", domains: ["booking.com"], noFuzzy: true },
+  { brand: "expedia", domains: ["expedia.com"] },
+  { brand: "marriott", domains: ["marriott.com"] },
+  { brand: "hilton", domains: ["hilton.com"] },
+  { brand: "delta", domains: ["delta.com"], noFuzzy: true },
+  { brand: "united", domains: ["united.com"], noFuzzy: true },
+  { brand: "southwest", domains: ["southwest.com"], noFuzzy: true },
+  { brand: "tripadvisor", domains: ["tripadvisor.com"] },
+  { brand: "doordash", domains: ["doordash.com"] },
+  { brand: "grubhub", domains: ["grubhub.com"] },
+  { brand: "instacart", domains: ["instacart.com"] },
+  { brand: "deliveroo", domains: ["deliveroo.com"] },
+  // ── Streaming / gaming ──
+  { brand: "disney", domains: ["disney.com", "disneyplus.com"] },
+  { brand: "hulu", domains: ["hulu.com"] },
+  { brand: "spotify", domains: ["spotify.com"] },
+  { brand: "twitch", domains: ["twitch.tv"] },
+  { brand: "steam", domains: ["steampowered.com", "steamcommunity.com"] },
+  { brand: "epicgames", domains: ["epicgames.com"] },
+  { brand: "playstation", domains: ["playstation.com"] },
+  { brand: "xbox", domains: ["xbox.com"] },
+  { brand: "nintendo", domains: ["nintendo.com"] },
+  { brand: "roblox", domains: ["roblox.com"] },
+  { brand: "riotgames", domains: ["riotgames.com"] },
+  // ── Hardware / AI ──
+  { brand: "nvidia", domains: ["nvidia.com"] },
+  { brand: "intel", domains: ["intel.com"], noFuzzy: true },
+  { brand: "dell", domains: ["dell.com"], noFuzzy: true },
+  { brand: "lenovo", domains: ["lenovo.com"] },
+  { brand: "samsung", domains: ["samsung.com"] },
+  { brand: "sony", domains: ["sony.com"] },
+  { brand: "openai", domains: ["openai.com"] },
+  { brand: "anthropic", domains: ["anthropic.com"] },
+  // ── Security (impersonation targets) ──
+  { brand: "norton", domains: ["norton.com"] },
+  { brand: "mcafee", domains: ["mcafee.com"] },
+  // ── Government (tax / benefits scams) ──
   { brand: "irs", domains: ["irs.gov"] },
+  { brand: "ssa", domains: ["ssa.gov"] },
 ];
 
 // Every legit domain across all brands — a host that IS one of these is the real thing, never a lookalike.
@@ -280,6 +408,9 @@ export const detectLookalike = (submittedHost) => {
   const subLabels = host.endsWith(unicodeReg) ? host.slice(0, -unicodeReg.length).replace(/\.$/, "").split(".").filter(Boolean) : [];
 
   for (const b of BRANDS) {
+    // Skip common-word brands ("target", "delta", "discover") in the FUZZY hunt — they're still
+    // recognized exactly by knownBrandDomain, but resemble too many innocent domains to fuzzy-match.
+    if (b.noFuzzy) continue;
     if (labelLooksLikeBrand(regLabel, b.brand)) return { brand: b.brand, domains: b.domains };
     if (subLabels.some((l) => labelLooksLikeBrand(l, b.brand))) return { brand: b.brand, domains: b.domains };
   }

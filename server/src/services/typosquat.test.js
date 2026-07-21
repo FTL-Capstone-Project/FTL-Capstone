@@ -106,6 +106,31 @@ describe("detectLookalike", () => {
     expect(detectLookalike("dropbex.com")?.brand).toBe("dropbox");
   });
 
+  it("recognizes the expanded brand set as exact domains (the uber.com fix)", () => {
+    expect(knownBrandDomain("uber.com")).toBe("uber");
+    expect(knownBrandDomain("ubereats.com")).toBe("uber");
+    expect(knownBrandDomain("spotify.com")).toBe("spotify");
+    expect(knownBrandDomain("venmo.com")).toBe("venmo");
+    expect(knownBrandDomain("airbnb.com")).toBe("airbnb");
+  });
+
+  it("noFuzzy brands are recognized EXACTLY but never fuzzy-matched (common-word FP guard)", () => {
+    // Exact recognition still works...
+    expect(knownBrandDomain("target.com")).toBe("target");
+    expect(knownBrandDomain("delta.com")).toBe("delta");
+    expect(knownBrandDomain("discover.com")).toBe("discover");
+    // ...but the fuzzy hunt does NOT fire on innocent domains that merely contain the word.
+    expect(detectLookalike("some-target-page.com")).toBeNull();
+    expect(detectLookalike("delta-dental-plans.net")).toBeNull();
+    expect(detectLookalike("discover-nature.org")).toBeNull();
+    expect(detectLookalike("united-way.org")).toBeNull();
+  });
+
+  it("still fuzzy-catches lookalikes of the newly-added (non-noFuzzy) brands", () => {
+    expect(detectLookalike("spotify-premium.com")?.brand).toBe("spotify");
+    expect(detectLookalike("disney-plus-login.net")?.brand).toBe("disney");
+  });
+
   it("catches combosquats: misspelled brand token and glued brand words", () => {
     // misspelled brand token inside a delimited combosquat (amazoon ≈ amazon)
     expect(detectLookalike("amazoon-rewards.com")?.brand).toBe("amazon");
