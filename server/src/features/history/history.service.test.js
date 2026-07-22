@@ -47,6 +47,12 @@ describe("toReportJson (DB row → Reports-card shape)", () => {
     expect(r.description).toBe("Credential phishing on a lookalike domain.");
     expect(r.tags).toEqual(["Credential phishing"]);
     expect(r.reported_by).toBe("David M.");
+    expect(r.source).toBe("web"); // defaults to web when the row has no explicit source
+  });
+
+  it("surfaces source 'email' for a forwarded-email report (drives the card's Email badge)", () => {
+    const r = toReportJson({ ...submission, source: "email" }, null, "David M.");
+    expect(r.source).toBe("email");
   });
 
   it("individual (no org review) → review is null", () => {

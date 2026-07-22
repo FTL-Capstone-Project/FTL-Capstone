@@ -11,6 +11,7 @@
 // Once those land, store + read them directly (see TODO markers).
 // Owner: David.
 // ============================================================
+import { createHash } from "node:crypto";
 import { prisma } from "../../db.js";
 import { canonicalize } from "../../services/canonicalize.js";
 import { scanUrl } from "../../services/urlscan.js";
@@ -19,6 +20,9 @@ import { generateVerdict, scoreBucket } from "../../services/verdict.js";
 import { registeredDomain } from "../../services/typosquat.js";
 import { escalateSubmission } from "../submissions/submissions.service.js";
 import { createNotification } from "../notifications/notifications.service.js";
+import { generateSenderReport } from "../askOrbo/senderReport.js";
+import { analyzeEmailBody, combineEmailReports } from "../webhooks/emailAnalysis.js";
+import { extractEmailAddress } from "../webhooks/inboundEmail.js";
 
 // In dev-stub auth mode, req.user is a fake { id: 1, ... } that may not exist in the DB,
 // so a submission FK would fail. Resolve a REAL mirror row for it (upsert by a stable
@@ -153,6 +157,135 @@ export const persistSenderReport = async ({ email, report, user, contextText = n
     console.warn("⚠ persistSenderReport failed (non-fatal):", e.message);
     return null;
   }
+}
+
+// Stable dedup key for a forwarded email. Re-forwarding the same email bumps reportCount instead
+// of creating a duplicate. Distinct `email:` namespace from `sender:` / URL keys.
+const emailCanonicalKey = ({ from, subject = "", body = "" }) => {
+  const fingerprint = `${String(from || "").trim().toLowerCase()}|${String(subject).slice(0, 200)}|${String(body).slice(0, 500)}`;
+  return `email:${createHash("sha256").update(fingerprint).digest("hex").slice(0, 40)}`;
+}
+
+// Submit a FORWARDED EMAIL: create ONE reviewable Indicator for it (the same pattern as submitUrl
+// for links / persistSenderReport for senders), record the Submission, auto-escalate org members,
+// and kick the SENDER + BODY + (optional) LINK analysis in the BACKGROUND. Because it's a normal
+// "done"-eventually Indicator, the email flows through the EXACT SAME Reports page + analyst triage
+// queue + closure-notification loop as a link check — including LINK-LESS emails, which is the
+// whole point (an analyst can now review a text-only scam).
+//
+// Returns immediately with { indicatorId, submissionId, escalated } (verdict fills in a few
+// seconds later, like a link scan). Two forwards of the same email dedup to one Indicator.
+// @param {{ from, subject, body, hasLink, rawUrl?, user, contextText? }}
+export const submitEmail = async ({ from, subject = "", body = "", hasLink = false, rawUrl = null, user, contextText = null }) => {
+  const canonicalKey = emailCanonicalKey({ from, subject, body });
+  // Pull the bare address out of a "Display Name <addr>" header before deriving the domain / rawUrl,
+  // else a trailing ">" leaks into the domain (e.g. "acme.com>"). Fall back to the raw string.
+  const fromAddr = extractEmailAddress(from) || String(from || "").trim().toLowerCase();
+  const at = fromAddr.lastIndexOf("@");
+  const domain = at >= 0 ? (registeredDomain(fromAddr.slice(at + 1)) || fromAddr.slice(at + 1)) : (fromAddr || "email");
+
+  // Find-or-create the email's Indicator. New → "pending" (verdict fills in background).
+  let indicator = await prisma.indicator.findUnique({ where: { canonicalKey } });
+  const seenBefore = Boolean(indicator);
+  if (!indicator) {
+    indicator = await prisma.indicator.create({ data: { canonicalKey, domain, status: "pending", reportCount: 0 } });
+  }
+
+  const { id: userId, orgId } = await resolveUserId(user);
+  const [submission] = await prisma.$transaction([
+    prisma.submission.create({
+      // rawUrl carries the sender address for the "email" source (mirrors persistSenderReport).
+      data: { userId, orgId, indicatorId: indicator.id, rawUrl: fromAddr, contextText, source: "email" },
+    }),
+    prisma.indicator.update({ where: { id: indicator.id }, data: { reportCount: { increment: 1 } } }),
+  ]);
+
+  // Same analyst auto-escalation as links, so org-member forwarded emails (link OR link-less)
+  // enter the triage queue and are reviewable.
+  let escalated = false;
+  if (orgId != null) {
+    try {
+      await escalateSubmission(prisma, { submissionId: submission.id, orgId, indicatorId: indicator.id });
+      escalated = true;
+    } catch (e) {
+      console.warn("⚠ escalateSubmission (email) failed (non-fatal):", e.message);
+    }
+  }
+
+  // Analyze in the background for a NEW email, OR re-run a stale one (stuck pending/error).
+  const needsAnalysis = !seenBefore || indicator.status === "pending" || indicator.status === "error";
+  if (needsAnalysis) runEmailPipeline(indicator.id, { from, subject, body, hasLink, rawUrl, contextText });
+
+  return { indicatorId: indicator.id, submissionId: submission.id, status: indicator.status, seenBefore, escalated };
+}
+
+// Background finalize for a forwarded email: run sender + body + (optional) link analysis, combine
+// worst-of, and write the verdict onto the email Indicator (→ "done"). Mirrors runPipeline's shape.
+// Imported analysis helpers live in webhooks/emailAnalysis.js; sender in askOrbo/senderReport.js.
+const runEmailPipeline = async (indicatorId, { from, subject, body, hasLink, rawUrl, contextText }) => {
+  try {
+    await prisma.indicator.update({ where: { id: indicatorId }, data: { status: "scanning" } });
+
+    // Three legs, each best-effort (a failed leg is simply absent from the combine).
+    const [sender, bodyReport, link] = await Promise.all([
+      generateSenderReport({ email: extractEmailAddress(from) || String(from || ""), context: subject || "" })
+        .catch((e) => { console.warn("⚠ email sender leg failed:", e.message); return null; }),
+      analyzeEmailBody({ from, subject, body }),
+      hasLink && rawUrl
+        ? scanLinkForReport(rawUrl, contextText).catch((e) => { console.warn("⚠ email link leg failed:", e.message); return null; })
+        : Promise.resolve(null),
+    ]);
+
+    const report = combineEmailReports({ sender, body: bodyReport, link });
+    await prisma.indicator.update({
+      where: { id: indicatorId },
+      data: {
+        status: "done",
+        aiScore: report.ai_score,
+        aiVerdict: report.ai_verdict,
+        aiConfidence: report.ai_confidence,
+        aiTitle: report.title ?? null,
+        aiTags: report.tags ?? [],
+        aiReasons: report.evidence ?? [],
+        // Fold in the link's sandbox screenshot when the email had a scanned link.
+        screenshotUrl: link?.screenshot_url ?? null,
+      },
+    });
+  } catch (e) {
+    console.warn(`⚠ email pipeline failed for indicator ${indicatorId}:`, e.message);
+    await prisma.indicator.update({
+      where: { id: indicatorId },
+      data: { status: "error", aiVerdict: "We couldn't finish analyzing this forwarded email — please review it manually." },
+    }).catch(() => {});
+  }
+}
+
+// Scan a URL and return a VerdictCard-shaped report (+ screenshot), WITHOUT creating or updating
+// any Indicator. Used by the forwarded-email pipeline to fold a link's verdict into the combined
+// email report — the forwarded email is its own single reviewable Indicator, so its link does NOT
+// get a separate global url: indicator (a minor loss of cross-user URL dedup, in exchange for one
+// clean reviewable unit per email). Throws on scan failure so the caller can treat the link leg as
+// unavailable (best-effort), exactly like the other legs.
+export const scanLinkForReport = async (rawUrl, contextText = null) => {
+  const [scan, bl] = await Promise.all([scanUrl(rawUrl), checkBlacklist(rawUrl)]);
+  const verdict = await generateVerdict({
+    evidence: scan.evidence,
+    blacklist_hit: bl.blacklist_hit,
+    blacklist_source: bl.blacklist_source,
+    domain_age_days: scan.domain_age_days,
+    raw: scan._raw ?? {},
+    contextText,
+    rawUrl,
+  });
+  return {
+    ai_score: verdict.ai_score,
+    ai_verdict: verdict.ai_verdict,
+    ai_confidence: verdict.ai_confidence,
+    title: verdict.title ?? null,
+    tags: verdict.tags ?? [],
+    evidence: verdict.evidence_summary ?? [],
+    screenshot_url: scan.screenshot_url ?? null,
+  };
 }
 
 // The real pipeline: scanning → urlscan + Safe Browsing → verdict → done. Writes each phase.
