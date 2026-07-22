@@ -142,7 +142,10 @@ export const persistSenderReport = async ({ email, report, user, contextText = n
     const { id: userId, orgId } = await resolveUserId(user);
     const [submission] = await prisma.$transaction([
       prisma.submission.create({
-        data: { userId, orgId, indicatorId: indicator.id, rawUrl: addr, contextText, source: "email" },
+        // source "web": this sender report was created IN the Ask Orbo chat, not forwarded by email.
+        // Only truly forwarded emails (submitEmail) get source "email", so the Reports "Forwarded"
+        // pill + the card's "Email" badge stay limited to real forwards.
+        data: { userId, orgId, indicatorId: indicator.id, rawUrl: addr, contextText, source: "web" },
       }),
       prisma.indicator.update({ where: { id: indicator.id }, data: { reportCount: { increment: 1 } } }),
     ]);

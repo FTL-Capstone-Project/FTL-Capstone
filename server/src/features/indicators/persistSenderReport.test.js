@@ -54,7 +54,7 @@ describe("persistSenderReport — sender reports land in Reports/History", () =>
     expect(created.aiReasons).toEqual(report.evidence);
   });
 
-  it("writes a Submission with the email as rawUrl and source 'email'", async () => {
+  it("writes a Submission with the email as rawUrl and source 'web' (chat, not a forward)", async () => {
     indicatorFindUnique.mockResolvedValue(null);
     indicatorCreate.mockResolvedValue({ id: 87 });
 
@@ -62,7 +62,9 @@ describe("persistSenderReport — sender reports land in Reports/History", () =>
 
     const sub = submissionCreate.mock.calls[0][0].data;
     expect(sub.rawUrl).toBe("foo@bar.com");
-    expect(sub.source).toBe("email");
+    // A sender report made in the Ask Orbo chat is a WEB action — it must NOT be tagged "email",
+    // or it would wrongly appear under the Reports "Forwarded" pill (which is real forwards only).
+    expect(sub.source).toBe("web");
     expect(sub.userId).toBe(3);
   });
 
