@@ -17,6 +17,22 @@ export const extractEmailAddress = (headerValue) => {
   return match ? match[0] : null;
 }
 
+// Pull the ORIGINAL sender out of a forwarded email body. When someone forwards a scam, the
+// envelope `from` is the FORWARDER (e.g. the user's own Gmail) — the real suspect sits inside the
+// quoted forward header. We parse that so the sender-trust analysis judges the scammer, not the
+// forwarder. Handles the common client formats (Gmail / Apple Mail / Outlook), takes the FIRST
+// (topmost = original) "From:" line, and returns a lowercased address or null.
+//   "---------- Forwarded message ----------\nFrom: Scam <no-reply@evil.com>\n..." → "no-reply@evil.com"
+export const extractOriginalSender = (body) => {
+  if (typeof body !== "string" || !body.trim()) return null;
+  // Match the FIRST "From:" line (case-insensitive, at a line start after optional quote markers
+  // like "> " that some clients add). Capture the rest of that line and pull the address out of it
+  // with the same extractor the envelope uses — so "Name <addr>", bare addr, and lists all work.
+  const m = body.match(/^[>\s]*from:\s*(.+)$/im);
+  if (!m) return null;
+  return extractEmailAddress(m[1]);
+}
+
 // Pull the plus-addressing token out of a recipient address.
 //   "orbischecks+david@gmail.com" → "david"
 // Returns null when there's no "+token" segment. Lowercased to match the env map.

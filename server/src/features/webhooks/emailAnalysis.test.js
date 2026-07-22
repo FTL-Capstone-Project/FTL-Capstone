@@ -82,4 +82,23 @@ describe("analyzeEmailBody", () => {
     expect(prompt).toContain("credentials");
     expect(prompt).toContain("urgency");
   });
+
+  it("does NOT offer the text-unverifiable flags (link_mismatch / sender_mismatch) in the prompt", async () => {
+    chatJSON.mockResolvedValue({ signals: [], verdict: "Clean.", title: "Clean" });
+    await analyzeEmailBody({ body: "hi" });
+    const prompt = chatJSON.mock.calls[0][0].user;
+    expect(prompt).not.toContain("link_mismatch");
+    expect(prompt).not.toContain("sender_mismatch");
+  });
+
+  it("drops link_mismatch / sender_mismatch even if the model returns them anyway (no phantom danger)", async () => {
+    // A SAFE marketing email — the model hallucinates the two unverifiable flags + a real one.
+    chatJSON.mockResolvedValue({ signals: ["link_mismatch", "sender_mismatch", "urgency"], verdict: "Marketing reminder.", title: "Reminder" });
+    const report = await analyzeEmailBody({ from: "x@y.com", subject: "reminder", body: "don't forget your appointment" });
+    // Only 'urgency' (weight 18) should score → 100 - 18 = 82, NOT tanked to ~20 by the phantom flags.
+    expect(report.ai_score).toBe(82);
+    // The dropped flags must not appear in the evidence rows either.
+    const texts = report.evidence.map((e) => e.text).join(" | ");
+    expect(texts).not.toMatch(/hides its real destination|display name/i);
+  });
 });

@@ -1,6 +1,6 @@
 // ── analyst triage priority · tests · owner: Ozias ── (card G1·05)
 import { describe, it, expect } from "vitest";
-import { sortByPriority, isPending, groupByCampaign } from "./triagePriority.js";
+import { sortByPriority, isPending, groupByCampaign, isForwardedEmail } from "./triagePriority.js";
 
 // Helper to build a report row in the GET /api/history shape.
 const row = (indicator_id, { status = null, ai_score = null, created_at = null, campaign_id = null } = {}) => ({
@@ -22,6 +22,14 @@ describe("isPending", () => {
   it("treats confirmed verdicts as closed", () => {
     expect(isPending(row(4, { status: "confirmed malicious" }))).toBe(false);
     expect(isPending(row(5, { status: "confirmed safe" }))).toBe(false);
+  });
+});
+
+describe("isForwardedEmail", () => {
+  it("is true only when the report's source is 'email'", () => {
+    expect(isForwardedEmail({ source: "email" })).toBe(true);
+    expect(isForwardedEmail({ source: "web" })).toBe(false);
+    expect(isForwardedEmail({})).toBe(false); // missing source → not forwarded
   });
 });
 

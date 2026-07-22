@@ -22,7 +22,7 @@ import { escalateSubmission } from "../submissions/submissions.service.js";
 import { createNotification } from "../notifications/notifications.service.js";
 import { generateSenderReport } from "../askOrbo/senderReport.js";
 import { analyzeEmailBody, combineEmailReports } from "../webhooks/emailAnalysis.js";
-import { extractEmailAddress } from "../webhooks/inboundEmail.js";
+import { extractEmailAddress, extractOriginalSender } from "../webhooks/inboundEmail.js";
 
 // In dev-stub auth mode, req.user is a fake { id: 1, ... } that may not exist in the DB,
 // so a submission FK would fail. Resolve a REAL mirror row for it (upsert by a stable
@@ -226,9 +226,16 @@ const runEmailPipeline = async (indicatorId, { from, subject, body, hasLink, raw
   try {
     await prisma.indicator.update({ where: { id: indicatorId }, data: { status: "scanning" } });
 
+    // The sender to JUDGE is the ORIGINAL sender inside the forwarded body (the real suspect),
+    // NOT the envelope `from` (which is the forwarder — usually the user's own Gmail, which would
+    // wrongly get penalized as "free webmail"). Fall back to the envelope from only if the body
+    // has no parseable forward header. (User-matching + notification still key off the envelope
+    // `from` upstream — this only changes who the sender-trust leg analyzes.)
+    const senderToJudge = extractOriginalSender(body) || extractEmailAddress(from) || String(from || "");
+
     // Three legs, each best-effort (a failed leg is simply absent from the combine).
     const [sender, bodyReport, link] = await Promise.all([
-      generateSenderReport({ email: extractEmailAddress(from) || String(from || ""), context: subject || "" })
+      generateSenderReport({ email: senderToJudge, context: subject || "" })
         .catch((e) => { console.warn("⚠ email sender leg failed:", e.message); return null; }),
       analyzeEmailBody({ from, subject, body }),
       hasLink && rawUrl

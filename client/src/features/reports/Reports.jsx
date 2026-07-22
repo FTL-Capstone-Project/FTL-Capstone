@@ -6,15 +6,17 @@ import ReportCard from "./ReportCard.jsx";
 import ReportDetailModal from "./ReportDetailModal.jsx";
 import HistoryScopeToggle from "./HistoryScopeToggle.jsx";
 import TriageQueue from "./TriageQueue.jsx";
+import { isForwardedEmail } from "./triagePriority.js";
 
-// The verdict filter options (O2). `value` is what we compare against each
-// report's `kind`; `label` is what the user sees. Note: our verdict kind for
+// The filter options (O2). Most compare against each report's verdict `kind`; "Forwarded" is a
+// different dimension (report `source`), handled specially below. Note: our verdict kind for
 // "Suspicious" is stored as "review" (see config/constants.js VERDICT_STYLES).
 const FILTERS = [
   { value: "all",       label: "All" },
   { value: "safe",      label: "Safe" },
   { value: "review",    label: "Suspicious" },
   { value: "dangerous", label: "Dangerous" },
+  { value: "email",     label: "Forwarded" }, // source === "email" (grouped forwarded emails)
 ];
 
 // My checks — adapts to the signed-in user's role (O2 + O3).
@@ -63,10 +65,13 @@ const MyChecks = ({ role }) => {
       .catch(() => setTeamReports([]));
   }, [isMember, scope, getToken]);
 
-  // Which dataset is active, then apply the verdict filter on top of it.
+  // Which dataset is active, then apply the selected filter on top of it. "Forwarded" filters by
+  // report SOURCE (how it arrived); the rest filter by verdict KIND.
   const activeReports = scope === "team" ? teamReports : reports;
   const visibleReports =
-    filter === "all" ? activeReports : activeReports.filter((r) => r.kind === filter);
+    filter === "all" ? activeReports
+      : filter === "email" ? activeReports.filter(isForwardedEmail)
+      : activeReports.filter((r) => r.kind === filter);
 
   return (
     <div style={{ maxWidth: 720, margin: "40px auto", padding: "0 20px" }}>
@@ -114,7 +119,9 @@ const MyChecks = ({ role }) => {
             : "No checks yet — paste a link on the Home page to get started."}
         </p>
       ) : visibleReports.length === 0 ? (
-        <p style={{ color: "var(--text-dim)" }}>No {filter} reports.</p>
+        <p style={{ color: "var(--text-dim)" }}>
+          {filter === "email" ? "No forwarded emails yet." : `No ${filter} reports.`}
+        </p>
       ) : (
         <div style={{ display: "grid", gap: 8 }}>
           {visibleReports.map((r) => (

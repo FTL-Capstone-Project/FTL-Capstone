@@ -14,10 +14,22 @@ import { chatJSON } from "../../services/llm.js";
 import { env } from "../../config/env.js";
 import { SIGNAL_CATALOG, buildImageReport } from "../vision/phishingSignals.js";
 
+// Signals that CANNOT be honestly verified from forwarded PLAIN TEXT (they need a rendered email
+// or real headers, which the screenshot/vision path has but a forwarded text body does not):
+//   - link_mismatch  → "visible link text hides a different destination": needs the rendered
+//                       anchor; forwarded text has no reliable href-vs-text to compare.
+//   - sender_mismatch → "display name doesn't match the address": we judge the real sender
+//                       deterministically via the sender leg (extractOriginalSender + domain check),
+//                       so letting the LLM also guess it here just double-penalizes + hallucinates.
+// The LLM was firing these on SAFE forwarded emails (marketing reminders), tanking every score to
+// ~10. We exclude them from the EMAIL (text) path only — the vision path keeps the full catalog.
+const TEXT_UNVERIFIABLE_SIGNALS = new Set(["link_mismatch", "sender_mismatch"]);
+
 // Build the closed red-flag guide from the shared catalog so it can never drift from the scorer.
-// (The vision route hand-writes an equivalent string; we derive ours from SIGNAL_CATALOG instead
-// of importing its private constant, so we don't have to touch David's file.)
+// We only offer the model the signals that are genuinely observable in forwarded plain text (i.e.
+// the catalog MINUS the unverifiable ones above), so it can't reach for a flag it can't support.
 const SIGNAL_GUIDE = Object.entries(SIGNAL_CATALOG)
+  .filter(([key]) => !TEXT_UNVERIFIABLE_SIGNALS.has(key))
   .map(([key, { text }]) => `${key} (${text.toLowerCase()})`)
   .join(", ");
 
@@ -60,7 +72,10 @@ export const analyzeEmailBody = async ({ from = "", subject = "", body = "" }) =
 
   try {
     const out = await chatJSON({ system, user: prompt, maxTokens: 500, temperature: 0 });
-    const signals = Array.isArray(out?.signals) ? out.signals : [];
+    // Drop any unverifiable-from-text flags even if the model returned them anyway (it was told
+    // not to, but belt-and-suspenders — a hallucinated link_mismatch must not move the score).
+    const signals = (Array.isArray(out?.signals) ? out.signals : [])
+      .filter((s) => !TEXT_UNVERIFIABLE_SIGNALS.has(String(s || "").trim().toLowerCase()));
     // Deterministic scorer owns the number; the model only contributed which flags it saw + words.
     return buildImageReport({
       signals,
