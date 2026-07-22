@@ -105,9 +105,25 @@ model Indicator {
   submissions   Submission[]
   orgReviews    OrgReview[]
   notifications Notification[]
+  reportReasons ReportReason[]
 
   @@index([domain])
   @@index([status])
+}
+
+// One user's "Report it" on an indicator, with their free-text WHY (≤200 words, capped server-side).
+// Feeds the (portrayed) global security team's triage: many reasons across many users on the same
+// indicator = a signal to look. reportedCount on Indicator is the fast counter; this holds the text.
+model ReportReason {
+  id          Int      @id @default(autoincrement())
+  indicatorId Int
+  userId      Int?     // who reported (null-safe for dev-stub / anonymous)
+  reason      String   // the user's explanation of why they're reporting
+  createdAt   DateTime @default(now())
+
+  indicator Indicator @relation(fields: [indicatorId], references: [id])
+
+  @@index([indicatorId])
 }
 
 // PER-ORG overlay — each org's private authoritative verdict on a global indicator.

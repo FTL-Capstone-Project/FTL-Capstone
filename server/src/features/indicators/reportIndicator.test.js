@@ -3,7 +3,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock the shared Prisma client so reportIndicator is tested without a live DB.
 const findUnique = vi.fn();
 const update = vi.fn();
-vi.mock("../../db.js", () => ({ prisma: { indicator: { findUnique: (...a) => findUnique(...a), update: (...a) => update(...a) } } }));
+const reasonCreate = vi.fn();
+// $transaction receives an array of already-invoked prisma promises; just await them all (so the
+// indicator.update mock still records its call, which the assertions below inspect).
+const transaction = vi.fn((ops) => Promise.all(ops));
+vi.mock("../../db.js", () => ({ prisma: {
+  indicator: { findUnique: (...a) => findUnique(...a), update: (...a) => update(...a) },
+  reportReason: { create: (...a) => reasonCreate(...a) },
+  $transaction: (...a) => transaction(...a),
+} }));
 // The service module also imports these; stub so importing it doesn't touch the network.
 vi.mock("../../services/urlscan.js", () => ({ scanUrl: vi.fn() }));
 vi.mock("../../services/safeBrowsing.js", () => ({ checkBlacklist: vi.fn() }));
@@ -12,7 +20,7 @@ vi.mock("../../services/verdict.js", () => ({ generateVerdict: vi.fn(), scoreBuc
 const { reportIndicator } = await import("./indicators.service.js");
 
 describe("reportIndicator (Report it → global review)", () => {
-  beforeEach(() => { findUnique.mockReset(); update.mockReset(); });
+  beforeEach(() => { findUnique.mockReset(); update.mockReset(); reasonCreate.mockReset(); transaction.mockClear(); });
 
   it("returns null when the indicator doesn't exist", async () => {
     findUnique.mockResolvedValue(null);
@@ -47,5 +55,21 @@ describe("reportIndicator (Report it → global review)", () => {
     const dataArg = update.mock.calls[0][0].data;
     expect(dataArg).not.toHaveProperty("aiScore");
     expect(dataArg).not.toHaveProperty("aiVerdict");
+  });
+
+  it("stores the user's reason when one is given", async () => {
+    findUnique.mockResolvedValue({ id: 4, globalReviewStatus: null, reportedCount: 0 });
+    update.mockResolvedValue({ globalReviewStatus: "pending review", reportedCount: 1 });
+    reasonCreate.mockResolvedValue({ id: 10 });
+    await reportIndicator(4, { reason: "  asked for my bank password  ", userId: 7 });
+    expect(reasonCreate).toHaveBeenCalledWith({ data: { indicatorId: 4, userId: 7, reason: "asked for my bank password" } });
+  });
+
+  it("does NOT write a reason row when none is given (count still bumps)", async () => {
+    findUnique.mockResolvedValue({ id: 5, globalReviewStatus: null, reportedCount: 0 });
+    update.mockResolvedValue({ globalReviewStatus: "pending review", reportedCount: 1 });
+    await reportIndicator(5);
+    expect(reasonCreate).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalled();
   });
 });

@@ -30,8 +30,19 @@ export const getResolvedTheme = () => {
 // theme). index.html sets it once before paint; this keeps it in sync when the theme changes
 // live (Settings toggle, or the OS flipping while "system" is selected).
 const applyFavicon = (resolved) => {
-  const fav = typeof document !== "undefined" && document.getElementById("favicon");
-  if (fav) fav.href = resolved === "dark" ? "/favicon-dark.png" : "/favicon-light.png";
+  if (typeof document === "undefined") return;
+  const href = (resolved === "dark" ? "/favicon-dark.svg" : "/favicon-light.svg") + "?v=" + resolved;
+  // Browsers cache the favicon and often IGNORE an href change on the existing <link>. To force a
+  // re-fetch we REPLACE the node (and add a ?v= query so the URL actually differs). This is why the
+  // live light/dark swap wasn't switching before.
+  const old = document.getElementById("favicon");
+  const link = document.createElement("link");
+  link.id = "favicon";
+  link.rel = "icon";
+  link.type = "image/svg+xml";
+  link.href = href;
+  if (old) old.remove();
+  document.head.appendChild(link);
 };
 
 // Apply the resolved theme to <html data-theme> (and sync the favicon).

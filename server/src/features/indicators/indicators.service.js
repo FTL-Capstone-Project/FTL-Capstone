@@ -413,18 +413,27 @@ export const readIndicatorForClient = async (indicatorId, user) => {
 // the reported counter. Because the indicator is GLOBAL, one user's report is visible to all
 // as "under review" — but it NEVER changes aiScore/the verdict (a report is a request for a
 // human look, not a re-scoring). Returns the updated review status + count.
-export const reportIndicator = async (indicatorId) => {
+export const reportIndicator = async (indicatorId, { reason = null, userId = null } = {}) => {
   const i = await prisma.indicator.findUnique({ where: { id: indicatorId } });
   if (!i) return null;
   // Don't reopen something a reviewer already confirmed; just count the extra report.
   const alreadyResolved = i.globalReviewStatus === "confirmed safe" || i.globalReviewStatus === "confirmed dangerous";
-  const updated = await prisma.indicator.update({
-    where: { id: indicatorId },
-    data: {
-      reportedCount: { increment: 1 },
-      ...(alreadyResolved ? {} : { globalReviewStatus: "pending review" }),
-    },
-  });
+
+  // Store the user's free-text WHY alongside the count bump (best-effort — a failed reason write
+  // must not lose the report itself). The route already caps length; trim defensively here too.
+  const cleanReason = typeof reason === "string" && reason.trim() ? reason.trim().slice(0, 1400) : null;
+
+  const [updated] = await prisma.$transaction([
+    prisma.indicator.update({
+      where: { id: indicatorId },
+      data: {
+        reportedCount: { increment: 1 },
+        ...(alreadyResolved ? {} : { globalReviewStatus: "pending review" }),
+      },
+    }),
+    ...(cleanReason ? [prisma.reportReason.create({ data: { indicatorId, userId, reason: cleanReason } })] : []),
+  ]);
+
   return { global_review_status: updated.globalReviewStatus, reported_count: updated.reportedCount };
 };
 
