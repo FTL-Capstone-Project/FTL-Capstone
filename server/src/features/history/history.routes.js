@@ -9,9 +9,11 @@
 // isolation): ?mine=1 = their own rows; ?org=1 = rows scoped to THEIR org only.
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { isAnalyst } from "../../middleware/roles.js";
+import { requireAnalyst } from "../../middleware/requireAnalyst.js";
+import { isAnalyst, ROLES } from "../../middleware/roles.js";
 import { prisma } from "../../db.js";
 import { toReportJson } from "./history.service.js";
+import { scoreBucket } from "../../services/verdict.js";
 
 export const historyRouter = Router();
 
@@ -114,9 +116,106 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
       return res.json({ reports });
     }
 
-    // Org-wide STATS (analyst dashboard) branch → analyst track; guard with
-    // requireAnalyst. TODO(analyst): stats + recent for req.user.orgId.
-    return res.json({ recent: [], stats: {} });
+    // ── Analyst dashboard stats branch ────────────────────────────────────────
+    // GET /api/history (no ?mine/?org) → org-scoped stats for the analyst dashboard.
+    // Guarded by requireAnalyst: non-analysts get 403, no data leaks.
+    // All queries are parameterized and scoped to req.user.orgId (story #12).
+
+    // requireAnalyst runs as an inline guard (not a global route middleware) so
+    // the ?mine and ?org branches above stay accessible to all roles.
+    if (!req.user || !isAnalyst(req.user.role)) {
+      return res.status(403).json({ error: "Analyst role required" });
+    }
+    if (!req.user.orgId) {
+      // An analyst with no org shouldn't happen in prod; return gracefully rather
+      // than crash with a Prisma error on orgId=null.
+      return res.json({ stats: {}, recent: [] });
+    }
+
+    const orgId = req.user.orgId;
+
+    // ── 1. Verdict breakdown ─────────────────────────────────────────────────
+    // Count org submissions grouped by the aiScore verdict band (safe/review/dangerous).
+    // We fetch in one query and bucket in JS (avoids a raw GROUP BY that Prisma can't
+    // express without $queryRaw, keeping parameterization safe).
+    const allOrgSubmissions = await prisma.submission.findMany({
+      where: { orgId },
+      select: { indicatorId: true, indicator: { select: { aiScore: true } } },
+    });
+
+    // Dedup to unique indicators (same URL reported multiple times = one verdict).
+    const seenForStats = new Set();
+    const uniqueIndicators = [];
+    for (const s of allOrgSubmissions) {
+      if (seenForStats.has(s.indicatorId)) continue;
+      seenForStats.add(s.indicatorId);
+      uniqueIndicators.push(s.indicator);
+    }
+    const verdictBreakdown = { safe: 0, review: 0, dangerous: 0, total: uniqueIndicators.length };
+    for (const ind of uniqueIndicators) {
+      const band = scoreBucket(ind.aiScore); // safe | review | dangerous
+      verdictBreakdown[band] = (verdictBreakdown[band] ?? 0) + 1;
+    }
+
+    // ── 2. 7-day submission trend ─────────────────────────────────────────────
+    // Count all org submissions per day for the past 7 days (incl. today).
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setUTCDate(sevenDaysAgo.getUTCDate() - 6);
+    sevenDaysAgo.setUTCHours(0, 0, 0, 0);
+
+    const recentSubs = await prisma.submission.findMany({
+      where: { orgId, createdAt: { gte: sevenDaysAgo } },
+      select: { createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // Build a bucket per day (ISO date string) so zero-count days appear.
+    const trendMap = new Map();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(sevenDaysAgo);
+      d.setUTCDate(d.getUTCDate() + i);
+      trendMap.set(d.toISOString().slice(0, 10), 0);
+    }
+    for (const { createdAt } of recentSubs) {
+      const key = new Date(createdAt).toISOString().slice(0, 10);
+      if (trendMap.has(key)) trendMap.set(key, trendMap.get(key) + 1);
+    }
+    const trend = [...trendMap.entries()].map(([date, count]) => ({ date, count }));
+
+    // ── 3. Pending-review count ───────────────────────────────────────────────
+    // How many of this org's indicators are still waiting on an analyst verdict?
+    const pendingCount = await prisma.orgReview.count({
+      where: { orgId, reviewStatus: "pending review" },
+    });
+
+    // ── 4. Recent activity feed (last 10 org submissions, newest first) ───────
+    const recentActivity = await prisma.submission.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      include: {
+        indicator: { select: { aiTitle: true, domain: true, aiScore: true } },
+        user: { select: { name: true } },
+      },
+    });
+    const recent = recentActivity.map((s) => ({
+      indicatorId: s.indicatorId,
+      title: s.indicator.aiTitle ?? s.rawUrl,
+      domain: s.indicator.domain,
+      score: s.indicator.aiScore,
+      kind: scoreBucket(s.indicator.aiScore),
+      reporter: s.user?.name ?? null,
+      createdAt: s.createdAt,
+    }));
+
+    return res.json({
+      stats: {
+        verdictBreakdown,  // { safe, review, dangerous, total }
+        trend,             // [{ date: "YYYY-MM-DD", count: N }, ×7]
+        pendingCount,      // number — indicators awaiting analyst review
+      },
+      recent,              // last 10 org submissions with title/score/reporter
+    });
   } catch (err) {
     return next(err);
   }

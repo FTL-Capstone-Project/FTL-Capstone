@@ -9,5 +9,6 @@ Each file wraps ONE concern. Swap the internals freely without touching the rout
 | `safeBrowsing.js` | Google Safe Browsing known-bad lookup | `GOOGLE_SAFE_BROWSING_KEY` | David |
 | `verdict.js` | OpenAI plain-English verdict (AI Feature A) + score floor | `OPENAI_API_KEY` | David |
 
-**All external services are STUBBED** (return canned data) until keys are set, so the whole flow
-runs and demos with zero credentials. Replace the stub body with the real call when a key arrives.
+All four external services are **LIVE** — they call real APIs when keys are set.
+`urlscan.js` falls back to a stub result when `URLSCAN_API_KEY` is absent (safe for local dev without a key),
+but `verdict.js` / `safeBrowsing.js` return errors rather than fake data if their keys are missing.

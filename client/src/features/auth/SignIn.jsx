@@ -10,8 +10,8 @@
 // link + tagline — the sign-in itself is identical for everyone (Clerk decides the
 // real org/role once they're in).
 import { useState } from "react";
-import { useSignIn } from "@clerk/clerk-react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useSignIn, useAuth } from "@clerk/clerk-react";
+import { Navigate, useSearchParams, Link } from "react-router-dom";
 import {
   AuthCard, SocialButton, SsoButton, Field, PrimaryButton, Divider, PrivacyNote, GoogleMark, AppleMark,
 } from "./AuthKit.jsx";
@@ -34,7 +34,7 @@ const ErrorText = ({ children }) => (
 
 const SignIn = () => {
   const { signIn, isLoaded, setActive } = useSignIn();
-  const navigate = useNavigate();
+  const { isSignedIn } = useAuth();
   const [params] = useSearchParams();
   const type = params.get("type") || "personal";
   const footer = FOOTER[type] ?? FOOTER.personal;
@@ -45,6 +45,11 @@ const SignIn = () => {
   const [step, setStep] = useState("credentials"); // "credentials" | "verify"
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Once Clerk confirms the session (after setActive propagates), redirect off REAL state
+  // — not an imperative navigate() that races Clerk's context update. This is what fixes
+  // "login sends me back to the landing page". (After all hooks, per rules of hooks.)
+  if (isSignedIn) return <Navigate to={AFTER_AUTH} replace />;
 
   // OAuth (Google/Apple) → Clerk hosts the redirect; we come back at /sso-callback.
   const oauth = async (strategy) => {
@@ -69,8 +74,7 @@ const SignIn = () => {
     try {
       const res = await signIn.create({ identifier: email, password });
       if (res.status === "complete") {
-        await setActive({ session: res.createdSessionId });
-        navigate(AFTER_AUTH);
+        await setActive({ session: res.createdSessionId }); // isSignedIn flips → top <Navigate> takes over
         return;
       }
       // Not complete → Clerk wants an email code. Prepare it with the REQUIRED
@@ -99,8 +103,7 @@ const SignIn = () => {
     try {
       const res = await signIn.attemptFirstFactor({ strategy: "email_code", code });
       if (res.status === "complete") {
-        await setActive({ session: res.createdSessionId });
-        navigate(AFTER_AUTH);
+        await setActive({ session: res.createdSessionId }); // top <Navigate> takes over
       } else {
         setError("That code didn't work. Try again.");
       }
