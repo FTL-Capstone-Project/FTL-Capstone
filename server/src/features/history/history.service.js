@@ -7,6 +7,39 @@
 // The DB stores camelCase columns and a NUMERIC aiScore only — so this file
 // does the translation + derives the "kind" verdict word from the score.
 
+// ── archive / delete a user's OWN reports (per-user, indicator-safe) · owner: David ──
+// The Reports page shows one card per indicator, so both helpers act on ALL of the caller's
+// submissions for that indicator at once. That keeps a card ATOMIC: because we flip every one
+// of a user's rows for an indicator together, an indicator is never half-archived for them, so
+// it shows in exactly one of the "active" / "archived" lists (the dedup can't split it).
+//
+// SCOPE (deliberate): the WHERE always pins `userId`, so we can only ever touch the caller's own
+// Submission rows — never the GLOBAL Indicator (its shared score / verdict / reportCount) or
+// another user's data. A caller passing an indicator they never submitted matches 0 rows, which
+// the routes turn into a 404 — that doubles as the IDOR guard (no "does this exist?" leak).
+
+// Soft-archive (archived=true) or restore (archived=false) the caller's submissions for one
+// indicator. `now` is passed in (not read here) so the timestamp is the route's call, keeping
+// this easy to unit-test. Returns the row count changed (0 = nothing of the caller's here).
+export const setArchivedForUser = async (prisma, { userId, indicatorId, archived, now }) => {
+  const { count } = await prisma.submission.updateMany({
+    where: { userId, indicatorId },
+    data: { archivedAt: archived ? now : null },
+  });
+  return count;
+}
+
+// Permanently delete the caller's submissions for one indicator. Same per-user guard. It does
+// NOT touch the global Indicator (reportCount stays put) or ReportReason rows — removing my
+// personal history is not the same as retracting a report I sent to the security team, so the
+// shared threat-intel signal is left intact on purpose. Returns the row count deleted.
+export const deleteForUser = async (prisma, { userId, indicatorId }) => {
+  const { count } = await prisma.submission.deleteMany({
+    where: { userId, indicatorId },
+  });
+  return count;
+}
+
 // Map a 0-100 SAFETY score → the verdict word the card colors itself by.
 // Thresholds match David's exported scoreBucket() in server/src/services/verdict.js
 // exactly — he owns these numbers, we just mirror them here.

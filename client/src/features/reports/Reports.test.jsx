@@ -99,4 +99,38 @@ describe("Reports role-router", () => {
     expect(screen.getByText("Safe link")).toBeInTheDocument();
     expect(screen.queryByText("Dangerous link")).not.toBeInTheDocument();
   });
+
+  it("empty-filter message uses the friendly label, not the raw kind", async () => {
+    mockRole.mockReturnValue({ role: "individual" });
+    const user = userEvent.setup();
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText("Dangerous link")).toBeInTheDocument());
+
+    // The seed data has no "review"-kind rows, so selecting "Suspicious" empties the list.
+    // The message must read "No suspicious reports." — the pill label — not "No review reports."
+    await user.click(screen.getByRole("button", { name: "Suspicious" }));
+    expect(screen.getByText(/no suspicious reports/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no review reports/i)).not.toBeInTheDocument();
+  });
+
+  it("individual → shows a Delete option on a card; member → does NOT (archive-only)", async () => {
+    const user = userEvent.setup();
+
+    // Individual: Delete is offered.
+    mockRole.mockReturnValue({ role: "individual" });
+    const { unmount } = render(<Reports />);
+    await waitFor(() => expect(screen.getByText("Dangerous link")).toBeInTheDocument());
+    await user.click(screen.getAllByRole("button", { name: /report options/i })[0]);
+    expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /archive/i })).toBeInTheDocument();
+    unmount();
+
+    // Member: same menu, but NO Delete (their report feeds the analyst queue → archive only).
+    mockRole.mockReturnValue({ role: "member" });
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText("Dangerous link")).toBeInTheDocument());
+    await user.click(screen.getAllByRole("button", { name: /report options/i })[0]);
+    expect(screen.getByRole("menuitem", { name: /archive/i })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /delete/i })).not.toBeInTheDocument();
+  });
 });

@@ -12,7 +12,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireAnalyst } from "../../middleware/requireAnalyst.js";
 import { isAnalyst, ROLES } from "../../middleware/roles.js";
 import { prisma } from "../../db.js";
-import { toReportJson } from "./history.service.js";
+import { toReportJson, setArchivedForUser, deleteForUser } from "./history.service.js";
 import { scoreBucket } from "../../services/verdict.js";
 
 export const historyRouter = Router();
@@ -20,16 +20,38 @@ export const historyRouter = Router();
 historyRouter.get("/", requireAuth, async (req, res, next) => {
   const mine = req.query.mine === "1";
   const orgWide = req.query.org === "1";
+  // My History has two lists: active (default) and archived (?archived=1). Archived items are
+  // hidden from the default view but not deleted — flipping this filter reveals them so the user
+  // can restore or permanently remove them. Only affects THIS caller's own view.
+  const showArchived = req.query.archived === "1";
 
   try {
     if (mine) {
-      // 1) All of my submissions, newest first, with the joined GLOBAL indicator
-      //    (score / verdict / status / screenshot live on the indicator).
+      // 1) My submissions, newest first, with the joined GLOBAL indicator (score / verdict /
+      //    status / screenshot live on the indicator). Default hides archived rows; ?archived=1
+      //    flips to show ONLY archived ones. archivedAt is my own soft-archive flag (per-user).
       const submissions = await prisma.submission.findMany({
-        where: { userId: req.user.id },
+        where: {
+          userId: req.user.id,
+          archivedAt: showArchived ? { not: null } : null,
+        },
         orderBy: { createdAt: "desc" },
         include: { indicator: true },
       });
+
+      // A card is per-indicator but archivedAt is per-submission, so a user who archived a link
+      // and later RE-CHECKED it has two rows for one indicator: an archived one + a fresh active
+      // one. Without this, that indicator would show in BOTH the Active and Archived tabs. Rule:
+      // an indicator with ANY active submission belongs to Active only — so when building the
+      // Archived list, skip indicators that also have a live (unarchived) submission.
+      let activeIndicatorIds = new Set();
+      if (showArchived) {
+        const active = await prisma.submission.findMany({
+          where: { userId: req.user.id, archivedAt: null },
+          select: { indicatorId: true },
+        });
+        activeIndicatorIds = new Set(active.map((s) => s.indicatorId));
+      }
 
       // 2) If I'm in an org, fetch my org's private reviews for those indicators
       //    in ONE query, then look them up by indicatorId (avoids N+1 queries).
@@ -49,6 +71,8 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
       const reports = [];
       for (const submission of submissions) {
         if (seen.has(submission.indicatorId)) continue;
+        // Archived view: an indicator that also has a live submission belongs to Active, not here.
+        if (showArchived && activeIndicatorIds.has(submission.indicatorId)) continue;
         seen.add(submission.indicatorId);
         const review = reviewsByIndicator.get(submission.indicatorId) ?? null;
         reports.push(toReportJson(submission, review, req.user.name));
@@ -216,6 +240,73 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
       },
       recent,              // last 10 org submissions with title/score/reporter
     });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// ── archive / delete a user's OWN report from My History · owner: David ──
+// These act on the caller's Submission rows only (WHERE pins req.user.id), never the global
+// Indicator or anyone else's data — so removing my history can't hurt shared threat-intel.
+// :indicatorId is the Reports card's identity (one card = one indicator), so both routes take it.
+
+// Parse + validate the :indicatorId path param. Returns the integer, or null if it's not a
+// positive whole number (→ the route answers 400 rather than running a bogus query).
+const parseIndicatorId = (raw) => {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+// PATCH /api/history/:indicatorId/archive — soft-archive (hide) or restore the caller's own
+// report. Body: { archived: true } to archive, { archived: false } to restore. Reversible.
+historyRouter.patch("/:indicatorId/archive", requireAuth, async (req, res, next) => {
+  const indicatorId = parseIndicatorId(req.params.indicatorId);
+  if (indicatorId == null) return res.status(400).json({ error: "Bad indicator id" });
+
+  // Default to archiving; only an explicit `false` restores. Reject anything non-boolean so a
+  // typo like archived:"false" (a truthy string) can't silently archive what the user meant to restore.
+  const archived = req.body?.archived ?? true;
+  if (typeof archived !== "boolean") {
+    return res.status(400).json({ error: "archived must be true or false" });
+  }
+
+  try {
+    const count = await setArchivedForUser(prisma, {
+      userId: req.user.id,
+      indicatorId,
+      archived,
+      now: new Date(),
+    });
+    // 0 rows = the caller has no submission for this indicator → nothing of theirs to touch.
+    // 404 (not 403) so we don't reveal whether the indicator exists for someone else.
+    if (count === 0) return res.status(404).json({ error: "Not found" });
+    return res.json({ archived, count });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// DELETE /api/history/:indicatorId — permanently remove the caller's own report(s) for this
+// indicator. Does NOT touch the global Indicator (its shared score/reportCount) or the
+// ReportReason the user may have filed — this only clears MY personal history row.
+//
+// INDIVIDUALS ONLY. An org member's submission is auto-escalated into an OrgReview (the analyst
+// queue), and Team History / triage derive their cards FROM submissions — so if a member were the
+// sole reporter, a hard delete would yank the indicator out of the whole org's views and strand
+// the analyst's in-progress review. Members archive instead (archiving keeps the org view intact);
+// only solo individuals (no org, no analyst layer) may permanently delete.
+historyRouter.delete("/:indicatorId", requireAuth, async (req, res, next) => {
+  const indicatorId = parseIndicatorId(req.params.indicatorId);
+  if (indicatorId == null) return res.status(400).json({ error: "Bad indicator id" });
+
+  if (req.user.orgId != null) {
+    return res.status(403).json({ error: "Org members can archive but not permanently delete reports." });
+  }
+
+  try {
+    const count = await deleteForUser(prisma, { userId: req.user.id, indicatorId });
+    if (count === 0) return res.status(404).json({ error: "Not found" });
+    return res.json({ deleted: count });
   } catch (err) {
     return next(err);
   }

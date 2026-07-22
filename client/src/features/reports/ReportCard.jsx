@@ -1,4 +1,5 @@
-import { Mail } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Mail, MoreHorizontal, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge.jsx";
 
 // Safely embed a URL inside a CSS url(). The screenshot URL is our own (from urlscan), but a
@@ -28,7 +29,14 @@ const cssUrl = (raw) => {
 //
 // `onOpen` — click/Enter/Space opens the detail modal. The card acts as a button
 // (role + tabIndex + key handler) so it's reachable by keyboard, not just mouse.
-const ReportCard = ({ report, showReviewStatus = false, onOpen }) => {
+//
+// ROW ACTIONS (My History only): pass any of `onArchive` / `onRestore` / `onDelete` to reveal
+// the "⋯" menu (top-right). They're opt-in — the analyst TriageQueue renders ReportCard WITHOUT
+// them, so it never shows the menu. `isArchived` picks Archive vs. Restore wording.
+const ReportCard = ({ report, showReviewStatus = false, onOpen,
+  onArchive, onRestore, onDelete, isArchived = false }) => {
+  // Show the menu button only if the parent gave us at least one action to run.
+  const hasActions = Boolean(onArchive || onRestore || onDelete);
   // Format the DB timestamp ("2026-07-14T23:03:28.535Z") into a readable date
   // like "Jul 14, 2026". Guarded so a null/invalid value shows nothing (not 1970).
   const when = report.created_at
@@ -43,6 +51,17 @@ const ReportCard = ({ report, showReviewStatus = false, onOpen }) => {
       className="report-card"
       style={{ position: "relative", display: "flex", gap: 14, background: "var(--surface)",
         border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 16 }}>
+
+      {/* Row-actions "⋯" menu (My History only). Sits ABOVE the card's click overlay so its
+          clicks open the menu instead of the detail modal. */}
+      {hasActions && (
+        <RowActionsMenu
+          isArchived={isArchived}
+          onArchive={onArchive}
+          onRestore={onRestore}
+          onDelete={onDelete}
+        />
+      )}
 
       {/* Thumbnail of the detonated page. Grey placeholder until urlscan gives us one. */}
       <div style={{ width: 96, height: 72, flexShrink: 0, borderRadius: 8,
@@ -139,6 +158,94 @@ const ReportCard = ({ report, showReviewStatus = false, onOpen }) => {
     </article>
   );
 }
+
+// The "⋯" row-actions menu for a My History card: Archive/Restore + Delete. Kept in this file
+// (not shared) because it only makes sense on a personal report row. Every button calls
+// stopPropagation so a click acts on the menu, never the card's open-modal overlay underneath.
+const RowActionsMenu = ({ isArchived, onArchive, onRestore, onDelete }) => {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef(null);
+
+  // Close the menu and return focus to the trigger, so keyboard users aren't stranded when the
+  // focused menu item unmounts (Escape / outside-click / after running an action).
+  const close = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  // Escape closes. (Outside-click is handled by the transparent backdrop below, NOT a document
+  // listener — that way the dismiss click is swallowed and can't also fall through to the card's
+  // open-modal overlay underneath.)
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  // Run one action then close. stopPropagation keeps the click off the card overlay.
+  const run = (fn) => (e) => {
+    e.stopPropagation();
+    close();
+    fn?.();
+  }
+
+  return (
+    <div style={{ position: "absolute", top: 10, right: 10, zIndex: 2 }}>
+      <button
+        ref={triggerRef}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        aria-label="Report options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        style={{ border: "none", background: "var(--surface)", cursor: "pointer",
+          color: "var(--text-dim)", display: "grid", placeItems: "center", padding: 4,
+          borderRadius: 8 }}
+      >
+        <MoreHorizontal size={18} />
+      </button>
+
+      {open && (
+        <>
+          {/* Invisible full-screen backdrop: an outside click lands HERE (dismiss + stopPropagation)
+              instead of bubbling to the card overlay, so dismissing the menu never also opens the
+              detail modal. */}
+          <div
+            onClick={(e) => { e.stopPropagation(); close(); }}
+            style={{ position: "fixed", inset: 0, zIndex: 2 }}
+          />
+          <div role="menu" style={{ position: "absolute", top: "100%", right: 0, zIndex: 3, minWidth: 160,
+            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+            boxShadow: "var(--shadow)", padding: 4 }}>
+            {/* Archived rows offer "Restore"; active rows offer "Archive". */}
+            {isArchived ? (
+              <button role="menuitem" onClick={run(onRestore)} style={menuItemStyle}>
+                <ArchiveRestore size={14} /> Restore
+              </button>
+            ) : (
+              <button role="menuitem" onClick={run(onArchive)} style={menuItemStyle}>
+                <Archive size={14} /> Archive
+              </button>
+            )}
+            {/* Delete is only rendered when the parent passes onDelete (individuals only). */}
+            {onDelete && (
+              <button role="menuitem" onClick={run(onDelete)} style={{ ...menuItemStyle, color: "var(--danger)" }}>
+                <Trash2 size={14} /> Delete
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// One row inside the ⋯ menu (mirrors the sidebar's menuItemStyle so both menus match).
+const menuItemStyle = {
+  display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
+  padding: "7px 10px", borderRadius: 8, border: "none", background: "none",
+  cursor: "pointer", fontSize: "0.9em", color: "inherit",
+};
 
 // Map the verdict "kind" to a theme color token for the score number.
 const scoreColor = (kind) => {

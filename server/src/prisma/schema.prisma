@@ -60,6 +60,10 @@ model Submission {
   contextText String?
   source      String   @default("web") // web | email
   escalated   Boolean  @default(false)
+  // Soft-archive: when set, this submission is hidden from the user's default Reports view but
+  // NOT deleted (reversible). Only affects THIS user's own view — the global Indicator and other
+  // users' submissions are untouched. null = active. See history route ?archived= filter.
+  archivedAt  DateTime?
   createdAt   DateTime @default(now())
 
   user      User      @relation(fields: [userId], references: [id])

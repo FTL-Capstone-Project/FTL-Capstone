@@ -38,10 +38,12 @@ const Reports = () => {
 // The individual / org-member Reports view: "My checks" + optional Team History toggle.
 const MyChecks = ({ role }) => {
   const { getToken } = useAuth();
-  const [reports, setReports] = useState([]);       // my own reports (?mine=1)
+  const [reports, setReports] = useState([]);       // my ACTIVE reports (?mine=1)
+  const [archivedReports, setArchivedReports] = useState([]); // my archived reports (?mine=1&archived=1)
   const [teamReports, setTeamReports] = useState([]); // my whole org's reports (?org=1)
   const [scope, setScope] = useState("mine");       // which list is showing: "mine" | "team"
   const [filter, setFilter] = useState("all"); // which verdict is selected; "all" = show everything
+  const [showArchived, setShowArchived] = useState(false); // My History sub-view: active vs archived
   const [selected, setSelected] = useState(null); // the report whose detail modal is open (null = closed)
 
   // Members see the closure chip + Team History toggle; solo individuals don't.
@@ -49,12 +51,20 @@ const MyChecks = ({ role }) => {
   // to SHOW only; real security is the backend filtering by the verified session.
   const isMember = role === "member";
 
-  // Always load my own reports (the default "My History" view).
+  // Always load my own ACTIVE reports (the default "My History" view).
   useEffect(() => {
     api.get("/api/history?mine=1", { getToken })
       .then((data) => setReports(data.reports ?? []))
       .catch(() => setReports([]));
   }, [getToken]);
+
+  // Load my ARCHIVED reports only when I actually open the archived sub-view (lazy, like Team History).
+  useEffect(() => {
+    if (scope !== "mine" || !showArchived) return;
+    api.get("/api/history?mine=1&archived=1", { getToken })
+      .then((data) => setArchivedReports(data.reports ?? []))
+      .catch(() => setArchivedReports([]));
+  }, [scope, showArchived, getToken]);
 
   // Load the org-wide reports only for org members, and only when they actually
   // open the Team History tab (don't fetch data the user may never look at).
@@ -65,13 +75,69 @@ const MyChecks = ({ role }) => {
       .catch(() => setTeamReports([]));
   }, [isMember, scope, getToken]);
 
-  // Which dataset is active, then apply the selected filter on top of it. "Forwarded" filters by
-  // report SOURCE (how it arrived); the rest filter by verdict KIND.
-  const activeReports = scope === "team" ? teamReports : reports;
+  // Archive one of MY reports: hide it locally right away (optimistic), then persist. On failure,
+  // reload from the server so the UI can't drift from the DB. Only ever hits my own rows (backend guard).
+  const handleArchive = async (report) => {
+    const id = report.indicator_id;
+    setReports((rows) => rows.filter((r) => r.indicator_id !== id));
+    setArchivedReports((rows) => (rows.some((r) => r.indicator_id === id) ? rows : [report, ...rows]));
+    try {
+      await api.patch(`/api/history/${id}/archive`, { archived: true }, { getToken });
+    } catch {
+      reloadMine();
+      reloadArchived();
+    }
+  }
+
+  // Restore an archived report back to the active list (reverse of archive).
+  const handleRestore = async (report) => {
+    const id = report.indicator_id;
+    setArchivedReports((rows) => rows.filter((r) => r.indicator_id !== id));
+    setReports((rows) => (rows.some((r) => r.indicator_id === id) ? rows : [report, ...rows]));
+    try {
+      await api.patch(`/api/history/${id}/archive`, { archived: false }, { getToken });
+    } catch {
+      reloadMine();
+      reloadArchived();
+    }
+  }
+
+  // Permanently delete one of MY reports (confirm first — it's irreversible). Removes it from
+  // whichever list it's in. Backend only touches my Submission rows, never the shared indicator.
+  const handleDelete = async (report) => {
+    const id = report.indicator_id;
+    if (!window.confirm("Delete this report permanently? This can't be undone.")) return;
+    setReports((rows) => rows.filter((r) => r.indicator_id !== id));
+    setArchivedReports((rows) => rows.filter((r) => r.indicator_id !== id));
+    if (selected?.indicator_id === id) setSelected(null); // close the modal if it was showing this one
+    try {
+      await api.delete(`/api/history/${id}`, { getToken });
+    } catch {
+      reloadMine();
+      reloadArchived();
+    }
+  }
+
+  // Small reload helpers used to recover from a failed optimistic update.
+  const reloadMine = () =>
+    api.get("/api/history?mine=1", { getToken }).then((d) => setReports(d.reports ?? [])).catch(() => {});
+  const reloadArchived = () =>
+    api.get("/api/history?mine=1&archived=1", { getToken }).then((d) => setArchivedReports(d.reports ?? [])).catch(() => {});
+
+  // Which dataset is active: Team History, my archived list, or my active list. Then apply the
+  // selected filter on top of whichever is showing. "Forwarded" filters by report SOURCE (how it
+  // arrived); the rest filter by verdict KIND.
+  const activeReports = scope === "team" ? teamReports : showArchived ? archivedReports : reports;
   const visibleReports =
     filter === "all" ? activeReports
       : filter === "email" ? activeReports.filter(isForwardedEmail)
       : activeReports.filter((r) => r.kind === filter);
+  // Row actions only make sense on MY History (not Team History, which is other people's reports).
+  const canManage = scope === "mine";
+  // Only solo individuals may permanently delete: a member's report feeds the analyst queue, so the
+  // backend forbids member deletes (they archive instead). Mirror that here so we don't offer a
+  // Delete that would just 403. Archive/restore stay available to everyone on My History.
+  const canDelete = canManage && !isMember;
 
   return (
     <div style={{ maxWidth: 720, margin: "40px auto", padding: "0 20px" }}>
@@ -79,10 +145,34 @@ const MyChecks = ({ role }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
         flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
         <h1 style={{ color: "var(--navy)", margin: 0 }}>
-          {scope === "team" ? "Team History" : "My checks"}
+          {scope === "team" ? "Team History" : showArchived ? "Archived" : "My checks"}
         </h1>
         {isMember && <HistoryScopeToggle scope={scope} onChange={setScope} />}
       </div>
+
+      {/* Active | Archived sub-toggle — My History only (Team History has no archived view). */}
+      {canManage && (
+        <div style={{ display: "flex", gap: 20, marginBottom: 16 }}>
+          {[
+            { value: false, label: "Active" },
+            { value: true,  label: "Archived" },
+          ].map(({ value, label }) => {
+            const isActive = showArchived === value;
+            return (
+              <button
+                key={label}
+                onClick={() => setShowArchived(value)}
+                style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
+                  background: "none", border: "none", padding: "4px 2px", fontSize: "0.9em",
+                  fontWeight: 600, color: isActive ? "var(--navy)" : "var(--text-dim)",
+                  borderBottom: isActive ? "2px solid var(--primary)" : "2px solid transparent" }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Verdict filter pills */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
@@ -116,11 +206,17 @@ const MyChecks = ({ role }) => {
         <p style={{ color: "var(--text-dim)" }}>
           {scope === "team"
             ? "No team checks yet — your organization's reports will show up here."
-            : "No checks yet — paste a link on the Home page to get started."}
+            : showArchived
+              ? "No archived reports — archive a check from its ⋯ menu to tuck it away here."
+              : "No checks yet — paste a link on the Home page to get started."}
         </p>
       ) : visibleReports.length === 0 ? (
         <p style={{ color: "var(--text-dim)" }}>
-          {filter === "email" ? "No forwarded emails yet." : `No ${filter} reports.`}
+          {/* Forwarded emails get their own wording; every other filter uses the pill's
+              user-facing label ("Suspicious"), not the raw kind ("review"). */}
+          {filter === "email"
+            ? "No forwarded emails yet."
+            : `No ${(FILTERS.find((f) => f.value === filter)?.label ?? filter).toLowerCase()} reports.`}
         </p>
       ) : (
         <div style={{ display: "grid", gap: 8 }}>
@@ -130,6 +226,12 @@ const MyChecks = ({ role }) => {
               report={r}
               showReviewStatus={isMember}
               onOpen={() => setSelected(r)}
+              // Row actions on My History only. Archived rows offer Restore; active rows offer
+              // Archive. Delete is individual-only (members archive instead — see canDelete).
+              isArchived={showArchived}
+              onArchive={canManage && !showArchived ? () => handleArchive(r) : undefined}
+              onRestore={canManage && showArchived ? () => handleRestore(r) : undefined}
+              onDelete={canDelete ? () => handleDelete(r) : undefined}
             />
           ))}
         </div>
