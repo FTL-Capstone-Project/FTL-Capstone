@@ -9,6 +9,8 @@ import ConfirmDialog from "./ConfirmDialog.jsx";
 import { NAV_BY_ROLE } from "../config/constants.js";
 import { useOrbisRole } from "../lib/useOrbisRole.js";
 import { useMediaQuery, MOBILE_QUERY } from "../lib/useMediaQuery.js";
+import { useResolvedTheme } from "../lib/useResolvedTheme.js";
+import { getClerkAppearance } from "../lib/clerkAppearance.js";
 import { listConversations, searchConversations, subscribe, deleteConversation, renameConversation, togglePin, groupConversations } from "../lib/conversations.js";
 
 // NOTE: SHARED COMPONENT (app frame). Merged: David's wireframe styling + real Orbis logo +
@@ -24,32 +26,12 @@ const NAV_ICON = {
   "/insights": BarChart3,
 };
 
-// Clerk components (OrganizationSwitcher, UserButton) render their own DOM and DON'T
-// read our CSS variables, so in dark mode their default near-black text/surfaces blend
-// into the dark sidebar. We hand Clerk our theme tokens via `variables` so it follows
-// the active theme. Passing var(--...) means it re-themes automatically on toggle.
-const clerkAppearance = {
-  variables: {
-    colorText: "var(--text)",
-    colorTextSecondary: "var(--text-dim)",
-    colorBackground: "var(--surface)",
-    colorInputBackground: "var(--surface)",
-    colorInputText: "var(--text)",
-    colorPrimary: "var(--primary)",
-    borderRadius: "10px",
-  },
-  elements: {
-    // The switcher trigger sits on the sidebar; give it a visible border so it reads
-    // in both themes instead of melting into the surface.
-    organizationSwitcherTrigger: {
-      color: "var(--text)",
-      border: "1px solid var(--border)",
-      padding: "6px 10px",
-    },
-  },
-};
-
 const AppShell = () => {
+  // Clerk's appearance is a JS object (it can't read our CSS var() tokens from its portal), so we
+  // build it from the reactive resolved theme and let it re-render on light/dark toggle. Shared
+  // config lives in lib/clerkAppearance.js so the sidebar UserButton/OrgSwitcher match the
+  // profile/org MODALS exactly (which are themed via the provider in main.jsx).
+  const clerkAppearance = getClerkAppearance(useResolvedTheme());
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState("");
   const [recents, setRecents] = useState(() => listConversations());

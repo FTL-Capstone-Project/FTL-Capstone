@@ -5,9 +5,24 @@ import { ClerkProvider } from "@clerk/clerk-react";
 import App from "./App.jsx";
 import "./theme/global.css";
 import { watchSystemTheme } from "./lib/theme.js";
+import { useResolvedTheme } from "./lib/useResolvedTheme.js";
+import { getClerkAppearance } from "./lib/clerkAppearance.js";
 
 // Keep the app in sync with the OS theme while the user's preference is "system".
 watchSystemTheme();
+
+// Wraps ClerkProvider so ALL Clerk UI (UserButton, OrganizationSwitcher, and the profile/org
+// MODALS + sign-in flow) follows the Orbis theme — and re-themes live when the user toggles
+// light/dark. Putting appearance on the PROVIDER (not just individual components) is what covers
+// the modals, which render in a portal at the document root.
+const ThemedClerkProvider = ({ children, ...props }) => {
+  const resolved = useResolvedTheme();
+  return (
+    <ClerkProvider {...props} appearance={getClerkAppearance(resolved)}>
+      {children}
+    </ClerkProvider>
+  );
+}
 
 // Clerk publishable key comes from client/.env.local (see .env.example).
 const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -27,7 +42,7 @@ if (!clerkKey) {
 } else {
   root.render(
     <React.StrictMode>
-      <ClerkProvider
+      <ThemedClerkProvider
           publishableKey={clerkKey}
           signInUrl="/signin"
           signUpUrl="/create-account"
@@ -37,7 +52,7 @@ if (!clerkKey) {
         <BrowserRouter>
           <App />
         </BrowserRouter>
-      </ClerkProvider>
+      </ThemedClerkProvider>
     </React.StrictMode>
   );
 }
