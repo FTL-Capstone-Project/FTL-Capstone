@@ -349,9 +349,37 @@ const asArray = (v) => (Array.isArray(v) ? v : null);
 
 // Shape one indicator for the client poll (GET /api/indicators/:id), merging the
 // caller's org_review if any. Field names match what the client + Reports card expect.
+//
+// Self-heal a dead scan: a scan should reach done/error within ~85s (urlscan cap) plus the
+// verdict LLM call. If a row is still pending/scanning WELL past that, its background pipeline
+// almost certainly died (e.g. a Render free-tier spindown mid-scan) and nothing else will ever
+// flip it — so on read we mark it "error", and the next poll gets a terminal verdict instead of
+// hanging forever. STALE_MS is deliberately far above the real pipeline max so we never reap a
+// scan that's merely slow. Known gap: a URL getting fresh submissions faster than STALE_MS keeps
+// bumping updatedAt (via the reportCount increment) and can delay this reap — a durable fix needs
+// a dedicated scanStartedAt column or a background sweeper (follow-up, see indicators.service).
+const STALE_MS = 180_000;
+
 export const readIndicatorForClient = async (indicatorId, user) => {
-  const indicator = await prisma.indicator.findUnique({ where: { id: indicatorId } });
+  let indicator = await prisma.indicator.findUnique({ where: { id: indicatorId } });
   if (!indicator) return null;
+
+  const stale = (indicator.status === "pending" || indicator.status === "scanning")
+    && Date.now() - new Date(indicator.updatedAt).getTime() > STALE_MS;
+  if (stale) {
+    // CONDITIONAL update: the WHERE re-checks status + age at write time, so if runPipeline
+    // committed a real verdict in the race window between our read and this write, we match 0
+    // rows and DON'T clobber it. Then re-read to return whatever is now true.
+    await prisma.indicator.updateMany({
+      where: {
+        id: indicatorId,
+        status: { in: ["pending", "scanning"] },
+        updatedAt: { lt: new Date(Date.now() - STALE_MS) },
+      },
+      data: { status: "error", aiVerdict: errorMessage() },
+    });
+    indicator = await prisma.indicator.findUnique({ where: { id: indicatorId } }) ?? indicator;
+  }
 
   // The caller-org's private review (analyst verdict / closure status), if it exists.
   let review = null;

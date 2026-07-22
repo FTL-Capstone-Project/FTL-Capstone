@@ -201,6 +201,29 @@ const Home = () => {
     add({ role: "orbo", kind: "text", pose: "wave", text: chip.reply });
   }
 
+  // Keep ONLY the immutable, non-sensitive parts of a finished verdict for the cache. We drop:
+  //   • screenshot_url / final_url / final_host — caller-only detail the server IDOR-gates to the
+  //     submitter; localStorage is shared across users on one device, so we never persist them.
+  //   • report_count / global_review_status / reported_count — global, mutable counters that go
+  //     stale the moment anyone else reports the link; the live card reads those fresh instead.
+  const cacheVerdict = (v) => ({
+    status: v.status,
+    ai_score: v.ai_score ?? null,
+    ai_verdict: v.ai_verdict ?? null,
+    ai_confidence: v.ai_confidence ?? null,
+    evidence: Array.isArray(v.evidence) ? v.evidence : [],
+  });
+
+  // A verdict scan just finished → cache that safe snapshot onto the message so reopening the
+  // chat renders it instantly instead of re-polling for ~90s. Guarded: match by message id
+  // (indicatorIds can repeat) and only write when the field is still empty, so this fires once
+  // and can't loop the [messages] save effect. Length is unchanged, so the sidebar won't reorder.
+  const handleVerdictResolved = (msgId, resolved) => {
+    if (!resolved) return;
+    setMessages((prev) => prev.map((m) =>
+      (m.id === msgId && m.kind === "verdict" && !m.indicator) ? { ...m, indicator: cacheVerdict(resolved) } : m));
+  }
+
   // "Ask Orbo more" on a verdict card → invite the user to ask; questions route to askOrbo.
   const handleAskMore = (indicatorId) => {
     lastIndicatorId.current = indicatorId;
@@ -361,7 +384,10 @@ const Home = () => {
               // local state, e.g. the old screenshot) instead of remounting. Composing with the
               // conversation id makes the key unique per chat, forcing a proper remount on switch.
               const key = `${convoId.current ?? "c"}:${m.id}`;
-              if (m.kind === "verdict") return <VerdictMessage key={key} indicatorId={m.indicatorId} onAskMore={handleAskMore} />;
+              if (m.kind === "verdict") return (
+                <VerdictMessage key={key} indicatorId={m.indicatorId} cachedIndicator={m.indicator}
+                  onAskMore={handleAskMore} onResolved={(resolved) => handleVerdictResolved(m.id, resolved)} />
+              );
               if (m.kind === "senderReport") return (
                 <ChatMessage key={key} role="orbo" pose={m.pose}>
                   <VerdictCard indicator={m.indicator} onAskMore={() => handleAskMore(null)} />
