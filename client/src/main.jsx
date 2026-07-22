@@ -27,7 +27,13 @@ if (!clerkKey) {
 } else {
   root.render(
     <React.StrictMode>
-      <ClerkProvider publishableKey={clerkKey}>
+      <ClerkProvider
+          publishableKey={clerkKey}
+          signInUrl="/signin"
+          signUpUrl="/create-account"
+          afterSignInUrl="/ask-orbo"
+          afterSignUpUrl="/ask-orbo"
+        >
         <BrowserRouter>
           <App />
         </BrowserRouter>
