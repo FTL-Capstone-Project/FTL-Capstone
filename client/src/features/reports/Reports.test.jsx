@@ -21,9 +21,17 @@ vi.mock("@clerk/clerk-react", () => {
   return { useAuth: () => ({ getToken }) };
 });
 
-// api.get backs the ?mine=1 / ?org=1 fetches.
+// api.get backs the ?mine=1 / ?org=1 fetches; patch/delete back archive + delete.
 const apiGet = vi.fn();
-vi.mock("../../lib/api.js", () => ({ api: { get: (...a) => apiGet(...a) } }));
+const apiPatch = vi.fn();
+const apiDelete = vi.fn();
+vi.mock("../../lib/api.js", () => ({
+  api: {
+    get: (...a) => apiGet(...a),
+    patch: (...a) => apiPatch(...a),
+    delete: (...a) => apiDelete(...a),
+  },
+}));
 
 // Stub the heavy children to simple markers (their behavior is tested elsewhere).
 vi.mock("./TriageQueue.jsx", () => ({ default: () => <div data-testid="triage-queue" /> }));
@@ -43,11 +51,15 @@ const TEAM_RESPONSE = { reports: teamRows };
 
 beforeEach(() => {
   apiGet.mockReset();
+  apiPatch.mockReset();
+  apiDelete.mockReset();
   mockRole.mockReset();
   // Route each history scope to its canned (stable) response.
   apiGet.mockImplementation((path) =>
     Promise.resolve(path.includes("org=1") ? TEAM_RESPONSE : MINE_RESPONSE)
   );
+  apiPatch.mockResolvedValue({});
+  apiDelete.mockResolvedValue({ deleted: 1 });
 });
 
 describe("Reports role-router", () => {
@@ -132,5 +144,31 @@ describe("Reports role-router", () => {
     await user.click(screen.getAllByRole("button", { name: /report options/i })[0]);
     expect(screen.getByRole("menuitem", { name: /archive/i })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /delete/i })).not.toBeInTheDocument();
+  });
+
+  it("Delete opens our themed confirm dialog (not window.confirm); Cancel aborts, Delete calls the API", async () => {
+    const user = userEvent.setup();
+    mockRole.mockReturnValue({ role: "individual" });
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText("Dangerous link")).toBeInTheDocument());
+
+    // Open the first card's ⋯ menu → click Delete → our dialog appears (a real dialog, in the DOM).
+    await user.click(screen.getAllByRole("button", { name: /report options/i })[0]);
+    await user.click(screen.getByRole("menuitem", { name: /delete/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText(/can't be undone/i)).toBeInTheDocument();
+
+    // Cancel → no API call, dialog closes.
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(apiDelete).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Reopen and confirm → the delete API fires for that indicator, and the card disappears.
+    await user.click(screen.getAllByRole("button", { name: /report options/i })[0]);
+    await user.click(screen.getByRole("menuitem", { name: /delete/i }));
+    await user.click(screen.getByRole("button", { name: "Delete" })); // the dialog's confirm button
+    expect(apiDelete).toHaveBeenCalledWith("/api/history/1", expect.any(Object));
+    await waitFor(() => expect(screen.queryByText("Dangerous link")).not.toBeInTheDocument());
   });
 });

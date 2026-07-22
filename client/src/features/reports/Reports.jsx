@@ -6,6 +6,7 @@ import ReportCard from "./ReportCard.jsx";
 import ReportDetailModal from "./ReportDetailModal.jsx";
 import HistoryScopeToggle from "./HistoryScopeToggle.jsx";
 import TriageQueue from "./TriageQueue.jsx";
+import ConfirmDialog from "../../components/ConfirmDialog.jsx";
 import { isForwardedEmail } from "./triagePriority.js";
 
 // The filter options (O2). Most compare against each report's verdict `kind`; "Forwarded" is a
@@ -45,6 +46,7 @@ const MyChecks = ({ role }) => {
   const [filter, setFilter] = useState("all"); // which verdict is selected; "all" = show everything
   const [showArchived, setShowArchived] = useState(false); // My History sub-view: active vs archived
   const [selected, setSelected] = useState(null); // the report whose detail modal is open (null = closed)
+  const [pendingDelete, setPendingDelete] = useState(null); // report awaiting the "are you sure?" confirm
 
   // Members see the closure chip + Team History toggle; solo individuals don't.
   // (Analysts never reach here — they get TriageQueue above.) FRONTEND role = what
@@ -102,14 +104,18 @@ const MyChecks = ({ role }) => {
     }
   }
 
-  // Permanently delete one of MY reports (confirm first — it's irreversible). Removes it from
-  // whichever list it's in. Backend only touches my Submission rows, never the shared indicator.
-  const handleDelete = async (report) => {
+  // Permanently deleting is irreversible, so it's a two-step: the ⋯ "Delete" opens our themed
+  // ConfirmDialog (setPendingDelete), and only confirmDelete() below actually removes it. (We use
+  // our own dialog, not window.confirm — the native one can't be themed and looks like a raw
+  // browser popup.)
+  const confirmDelete = async () => {
+    const report = pendingDelete;
+    setPendingDelete(null); // close the dialog
+    if (!report) return;
     const id = report.indicator_id;
-    if (!window.confirm("Delete this report permanently? This can't be undone.")) return;
     setReports((rows) => rows.filter((r) => r.indicator_id !== id));
     setArchivedReports((rows) => rows.filter((r) => r.indicator_id !== id));
-    if (selected?.indicator_id === id) setSelected(null); // close the modal if it was showing this one
+    if (selected?.indicator_id === id) setSelected(null); // close the detail modal if it was showing this one
     try {
       await api.delete(`/api/history/${id}`, { getToken });
     } catch {
@@ -231,7 +237,7 @@ const MyChecks = ({ role }) => {
               isArchived={showArchived}
               onArchive={canManage && !showArchived ? () => handleArchive(r) : undefined}
               onRestore={canManage && showArchived ? () => handleRestore(r) : undefined}
-              onDelete={canDelete ? () => handleDelete(r) : undefined}
+              onDelete={canDelete ? () => setPendingDelete(r) : undefined}
             />
           ))}
         </div>
@@ -244,6 +250,18 @@ const MyChecks = ({ role }) => {
           report={selected}
           isMember={isMember}
           onClose={() => setSelected(null)}
+        />
+      )}
+
+      {/* Themed "are you sure?" for permanent delete (replaces the browser's window.confirm). */}
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Delete this report?"
+          message="This permanently removes it from your history and can't be undone."
+          confirmLabel="Delete"
+          danger
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
         />
       )}
     </div>

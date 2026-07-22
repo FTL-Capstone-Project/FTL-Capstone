@@ -5,6 +5,7 @@ import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Orbit, PanelLef
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import OrbisLogo from "./OrbisLogo.jsx";
+import ConfirmDialog from "./ConfirmDialog.jsx";
 import { NAV_BY_ROLE } from "../config/constants.js";
 import { useOrbisRole } from "../lib/useOrbisRole.js";
 import { useMediaQuery, MOBILE_QUERY } from "../lib/useMediaQuery.js";
@@ -260,6 +261,7 @@ const EmptyRecents = ({ label }) => {
 const RecentItem = ({ convo, active, onOpen, onDelete }) => {
   const [hover, setHover] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false); // themed "delete this chat?" dialog
   const highlight = active || hover;
 
   // Rename via a simple prompt (beginner-friendly, no custom modal). Cancel leaves it as-is.
@@ -274,10 +276,11 @@ const RecentItem = ({ convo, active, onOpen, onDelete }) => {
     setMenuOpen(false);
     togglePin(convo.id);
   }
+  // Open the themed confirm dialog (not window.confirm, which can't be styled).
   const handleDelete = (e) => {
     e.stopPropagation();
     setMenuOpen(false);
-    if (window.confirm("Delete this chat?")) onDelete();
+    setConfirmingDelete(true);
   }
 
   return (
@@ -308,6 +311,21 @@ const RecentItem = ({ convo, active, onOpen, onDelete }) => {
           <button onClick={handleDelete} style={{ ...menuItemStyle, color: "var(--danger)" }}>
             <Trash2 size={14} /> Delete
           </button>
+        </div>
+      )}
+
+      {/* Themed "delete this chat?" confirm. stopPropagation on the wrapper so clicks inside the
+          dialog don't bubble up to the row's onClick (which would reopen the chat). */}
+      {confirmingDelete && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ConfirmDialog
+            title="Delete this chat?"
+            message="This removes the conversation from your history."
+            confirmLabel="Delete"
+            danger
+            onConfirm={() => { setConfirmingDelete(false); onDelete(); }}
+            onCancel={() => setConfirmingDelete(false)}
+          />
         </div>
       )}
     </div>
