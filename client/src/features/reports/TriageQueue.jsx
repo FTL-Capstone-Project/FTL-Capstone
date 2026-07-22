@@ -5,7 +5,7 @@ import { api } from "../../lib/api.js";
 import ReportCard from "./ReportCard.jsx";
 import ReportDetailModal from "./ReportDetailModal.jsx";
 import CampaignGroupRow from "./CampaignGroupRow.jsx";
-import { sortByPriority, isPending, groupByCampaign } from "./triagePriority.js";
+import { sortByPriority, isPending, groupByCampaign, isForwardedEmail } from "./triagePriority.js";
 
 // ── feature: reports · analyst triage queue · owner: Ozias ──
 // The ANALYST variant of the Reports page (card G1·05): an org-wide triage queue.
@@ -18,6 +18,7 @@ import { sortByPriority, isPending, groupByCampaign } from "./triagePriority.js"
 const Filters = {
   ALL: "all",
   PENDING: "pending",
+  EMAIL: "email", // forwarded emails only (report.source === "email")
 };
 
 const TriageQueue = () => {
@@ -43,17 +44,22 @@ const TriageQueue = () => {
       .catch(() => setCampaigns([]));
   }, [getToken]);
 
-  // How many still need a verdict — shown on the "Pending review" pill.
+  // Counts shown on the pills.
   const pendingCount = reports.filter(isPending).length;
+  const emailCount = reports.filter(isForwardedEmail).length;
 
-  // Apply the pending filter first, THEN priority-sort, THEN cluster by campaign.
-  const filtered = filter === Filters.PENDING ? reports.filter(isPending) : reports;
+  // Apply the selected filter first, THEN priority-sort, THEN cluster by campaign.
+  const filtered =
+    filter === Filters.PENDING ? reports.filter(isPending)
+      : filter === Filters.EMAIL ? reports.filter(isForwardedEmail)
+      : reports;
   const visible = sortByPriority(filtered);
   const items = groupByCampaign(visible, campaigns); // report + campaign items, in priority order
 
   const PILLS = [
     { value: Filters.ALL, label: `All reports (${reports.length})` },
     { value: Filters.PENDING, label: `Pending review (${pendingCount})` },
+    { value: Filters.EMAIL, label: `Forwarded (${emailCount})` },
   ];
 
   return (

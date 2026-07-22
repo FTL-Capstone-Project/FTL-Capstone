@@ -12,6 +12,10 @@ export const isPending = (report) => {
   return status === "pending review" || status === "investigating";
 };
 
+// Did this report arrive via a forwarded email (vs the web check form)? Powers the
+// "Forwarded" filter pill on the Reports page. Pure so it's trivially unit-tested.
+export const isForwardedEmail = (report) => report.source === "email";
+
 // Group priority-sorted reports by campaign (card G1·06). Reports sharing a
 // campaign_id collapse into ONE campaign item; reports with no campaign stay as
 // standalone items. Preserves the incoming priority order: each item appears at the
