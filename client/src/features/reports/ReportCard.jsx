@@ -191,7 +191,10 @@ const RowActionsMenu = ({ isArchived, onArchive, onRestore, onDelete }) => {
   }
 
   return (
-    <div style={{ position: "absolute", top: 10, right: 10, zIndex: 2 }}>
+    // Bottom-right of the card — keeps the ⋯ off the top-right "SAFETY SCORE" label (which it used
+    // to overlap and clip to "SAFETY SC"). The menu opens UPWARD (bottom: 100%) so it isn't cut off
+    // at the card's lower edge.
+    <div style={{ position: "absolute", bottom: 10, right: 10, zIndex: 2 }}>
       <button
         ref={triggerRef}
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
@@ -214,9 +217,9 @@ const RowActionsMenu = ({ isArchived, onArchive, onRestore, onDelete }) => {
             onClick={(e) => { e.stopPropagation(); close(); }}
             style={{ position: "fixed", inset: 0, zIndex: 2 }}
           />
-          <div role="menu" style={{ position: "absolute", top: "100%", right: 0, zIndex: 3, minWidth: 160,
-            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
-            boxShadow: "var(--shadow)", padding: 4 }}>
+          <div role="menu" style={{ position: "absolute", bottom: "100%", right: 0, marginBottom: 4,
+            zIndex: 3, minWidth: 160, background: "var(--surface)", border: "1px solid var(--border)",
+            borderRadius: 10, boxShadow: "var(--shadow)", padding: 4 }}>
             {/* Archived rows offer "Restore"; active rows offer "Archive". */}
             {isArchived ? (
               <button role="menuitem" onClick={run(onRestore)} style={menuItemStyle}>
