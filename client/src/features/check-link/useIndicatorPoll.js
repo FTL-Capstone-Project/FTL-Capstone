@@ -3,18 +3,22 @@ import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../lib/api.js";
 import { POLL_INTERVAL_MS } from "../../config/constants.js";
 
-const MAX_POLLS = 40; // ~60s cap so a stuck scan can't poll forever
+const MAX_POLLS = 60; // ~90s cap: covers the server's ~85s scan window before we give up
 
 // Polls GET /api/indicators/:id until status is "done" or "error".
 // Used by each verdict message in the chat (one poll per checked link).
 // Returns { indicator, error } — indicator is null until the first response.
-export const useIndicatorPoll = (indicatorId) => {
+// cachedIndicator: if a reopened chat already saved the finished verdict onto its message,
+// we seed from it and skip polling entirely (no network call for an already-resolved check).
+export const useIndicatorPoll = (indicatorId, cachedIndicator = null) => {
   const { getToken } = useAuth();
-  const [indicator, setIndicator] = useState(null);
+  const [indicator, setIndicator] = useState(cachedIndicator);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!indicatorId) return;
+    // Already resolved on a previous open → nothing to poll, render straight from the cache.
+    if (cachedIndicator && (cachedIndicator.status === "done" || cachedIndicator.status === "error")) return;
     let timer, cancelled = false, tries = 0;
 
     const poll = async () => {
@@ -35,7 +39,7 @@ export const useIndicatorPoll = (indicatorId) => {
     }
     poll();
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [indicatorId, getToken]);
+  }, [indicatorId, getToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { indicator, error };
 }

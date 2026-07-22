@@ -6,8 +6,8 @@
 // an email code → we show the verify step → setActive → into the app.
 // "At least 15 characters" hint turns green live (matches the wireframe).
 import { useState } from "react";
-import { useSignUp } from "@clerk/clerk-react";
-import { useNavigate, Link } from "react-router-dom";
+import { useSignUp, useAuth } from "@clerk/clerk-react";
+import { Navigate, Link } from "react-router-dom";
 import {
   AuthCard, SocialButton, Field, PrimaryButton, Divider, PrivacyNote, GoogleMark, AppleMark,
 } from "./AuthKit.jsx";
@@ -24,7 +24,7 @@ const ErrorText = ({ children }) => (
 
 const CreateAccount = () => {
   const { signUp, isLoaded, setActive } = useSignUp();
-  const navigate = useNavigate();
+  const { isSignedIn } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,6 +34,9 @@ const CreateAccount = () => {
   const [busy, setBusy] = useState(false);
 
   const passwordOk = password.length >= MIN_PASSWORD;
+
+  // Once Clerk confirms the session, redirect off real state (not imperative navigate).
+  if (isSignedIn) return <Navigate to={AFTER_AUTH} replace />;
 
   const oauth = async (strategy) => {
     if (!isLoaded) return;
@@ -73,8 +76,7 @@ const CreateAccount = () => {
     try {
       const res = await signUp.attemptEmailAddressVerification({ code });
       if (res.status === "complete") {
-        await setActive({ session: res.createdSessionId });
-        navigate(AFTER_AUTH);
+        await setActive({ session: res.createdSessionId }); // isSignedIn flips → top <Navigate>
       } else {
         setError("That code didn't work. Try again.");
       }

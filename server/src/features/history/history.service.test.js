@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { scoreToKind, toReportJson } from "./history.service.js";
+import { describe, it, expect, vi } from "vitest";
+import { scoreToKind, toReportJson, setArchivedForUser, deleteForUser } from "./history.service.js";
 
 describe("scoreToKind (0-100 SAFETY score → verdict word)", () => {
   it("high score = safe", () => {
@@ -87,5 +87,39 @@ describe("toReportJson (DB row → Reports-card shape)", () => {
   it("falls back to 'you' when no reporter name is given", () => {
     const r = toReportJson(submission, null, null);
     expect(r.reported_by).toBe("you");
+  });
+});
+
+describe("setArchivedForUser (soft-archive / restore the caller's own submissions)", () => {
+  it("archive → writes the given timestamp, scoped to userId + indicatorId", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 2 });
+    const now = new Date("2026-07-22T00:00:00Z");
+    const count = await setArchivedForUser(
+      { submission: { updateMany } },
+      { userId: 5, indicatorId: 42, archived: true, now }
+    );
+    expect(count).toBe(2);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { userId: 5, indicatorId: 42 },
+      data: { archivedAt: now },
+    });
+  });
+
+  it("restore (archived:false) → sets archivedAt back to null", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    await setArchivedForUser(
+      { submission: { updateMany } },
+      { userId: 5, indicatorId: 42, archived: false, now: new Date() }
+    );
+    expect(updateMany.mock.calls[0][0].data).toEqual({ archivedAt: null });
+  });
+});
+
+describe("deleteForUser (hard-delete the caller's own submissions only)", () => {
+  it("deletes rows scoped to userId + indicatorId and returns the count", async () => {
+    const deleteMany = vi.fn().mockResolvedValue({ count: 3 });
+    const count = await deleteForUser({ submission: { deleteMany } }, { userId: 5, indicatorId: 42 });
+    expect(count).toBe(3);
+    expect(deleteMany).toHaveBeenCalledWith({ where: { userId: 5, indicatorId: 42 } });
   });
 });

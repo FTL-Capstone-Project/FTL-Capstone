@@ -1,12 +1,11 @@
-// ── feature: dashboard (Personal) · owner: Michael ──
-// "My Dashboard" — one fetch to GET /api/dashboard, then renders:
-//   top row : 4 stat tiles
-//   middle  : My Submission History (bar) + My Results (donut)   [next step]
-//   bottom  : My Recent Submissions list                         [next step]
-//   right   : My Activity feed + Ask Orbo mini-box               [next step]
-// Personal-only for now (no org/analyst variants yet). All colors via theme tokens.
+// ── feature: dashboard · owner: Michael ──
+// Role-router: analysts get the org-wide AnalystDashboard; everyone else gets the
+// personal "My Dashboard". The two variants are separate components so they can
+// fetch from different endpoints and render different chart sets independently.
 import { useEffect, useState } from "react";
 import { useApi } from "../../lib/useApi.js";
+import { useOrbisRole } from "../../lib/useOrbisRole.js";
+import AnalystDashboard from "./AnalystDashboard.jsx";
 import StatTile from "./StatTile.jsx";
 import SubmissionHistoryChart from "./SubmissionHistoryChart.jsx";
 import ResultsDonut from "./ResultsDonut.jsx";
@@ -15,6 +14,11 @@ import ActivityRail from "./ActivityRail.jsx";
 import DashboardEmpty from "./DashboardEmpty.jsx";
 
 const Dashboard = () => {
+  const { role } = useOrbisRole();
+
+  // Analysts see the org-wide triage dashboard; all other roles see their personal one.
+  if (role === "analyst") return <AnalystDashboard />;
+
   const api = useApi();
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);

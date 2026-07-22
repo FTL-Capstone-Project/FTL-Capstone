@@ -3,13 +3,17 @@ import express from "express";
 import request from "supertest";
 
 // Mock the DB module the router imports, so no live Postgres is needed.
-// Each test sets what findMany returns via these fns.
+// Each test sets what findMany/count returns via these fns.
 const submissionFindMany = vi.fn();
 const orgReviewFindMany = vi.fn();
+const orgReviewCount = vi.fn();
 vi.mock("../../db.js", () => ({
   prisma: {
     submission: { findMany: (...a) => submissionFindMany(...a) },
-    orgReview: { findMany: (...a) => orgReviewFindMany(...a) },
+    orgReview: {
+      findMany: (...a) => orgReviewFindMany(...a),
+      count: (...a) => orgReviewCount(...a),
+    },
   },
 }));
 
@@ -41,6 +45,7 @@ const sub = ({ id, indicatorId, aiScore, name, createdAt }) => {
 beforeEach(() => {
   submissionFindMany.mockReset();
   orgReviewFindMany.mockReset();
+  orgReviewCount.mockReset();
 });
 
 describe("GET /api/history?org=1 (Team History)", () => {
@@ -151,5 +156,104 @@ describe("GET /api/history?org=1 (Team History)", () => {
     expect(res.body.reports).toHaveLength(1);            // one card, not two
     expect(res.body.reports[0].reported_by).toBe("Marcus T."); // newest wins
     expect(res.body.reports[0].review.shared_with_org).toBe(true);
+  });
+});
+
+describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
+  // Mock setup: the stats branch calls submission.findMany TWICE (all subs + recent)
+  // and orgReview.count ONCE. We queue two return values on submissionFindMany.
+  const analystUser = { id: 7, orgId: 99, role: "analyst", name: "Priya S." };
+
+  const makeSub = (indicatorId, aiScore, createdAt, name = "Anya K.") => ({
+    indicatorId,
+    rawUrl: `https://example.com/${indicatorId}`,
+    createdAt: new Date(createdAt),
+    indicator: { aiTitle: `title-${indicatorId}`, domain: `d${indicatorId}.com`, aiScore },
+    user: { name },
+  });
+
+  it("403 for a non-analyst (member)", async () => {
+    const res = await request(appAs({ id: 2, orgId: 99, role: "member", name: "David" }))
+      .get("/api/history");
+    expect(res.status).toBe(403);
+    expect(submissionFindMany).not.toHaveBeenCalled();
+  });
+
+  it("403 for an individual (no org)", async () => {
+    const res = await request(appAs({ id: 1, orgId: null, role: "individual", name: "Solo" }))
+      .get("/api/history");
+    expect(res.status).toBe(403);
+  });
+
+  it("returns stats + recent scoped strictly to req.user.orgId", async () => {
+    // submission.findMany is called TWICE: all-subs for verdict breakdown, then recent.
+    submissionFindMany
+      .mockResolvedValueOnce([
+        // all org subs (for verdict breakdown)
+        makeSub(10, 22, "2026-07-15"),  // dangerous
+        makeSub(11, 91, "2026-07-14"),  // safe
+        makeSub(12, 54, "2026-07-13"),  // review
+      ])
+      .mockResolvedValueOnce([
+        // recent 7-day subs (for trend — just createdAt needed)
+        { createdAt: new Date("2026-07-15") },
+        { createdAt: new Date("2026-07-14") },
+      ])
+      .mockResolvedValueOnce([
+        // recent activity feed
+        { ...makeSub(10, 22, "2026-07-15", "Marcus T."), rawUrl: "https://ex.com/10" },
+      ]);
+    orgReviewCount.mockResolvedValue(2); // 2 pending reviews
+
+    const res = await request(appAs(analystUser)).get("/api/history");
+
+    expect(res.status).toBe(200);
+
+    // Every submission.findMany call must be scoped to the analyst's orgId.
+    for (const call of submissionFindMany.mock.calls) {
+      expect(call[0].where).toMatchObject({ orgId: 99 });
+    }
+    // orgReview.count must also be scoped to the same orgId.
+    expect(orgReviewCount).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ orgId: 99 }) })
+    );
+
+    // Verdict breakdown reflects the 3 unique indicators above.
+    expect(res.body.stats.verdictBreakdown).toMatchObject({
+      safe: 1,
+      review: 1,
+      dangerous: 1,
+      total: 3,
+    });
+    expect(res.body.stats.pendingCount).toBe(2);
+
+    // Trend has exactly 7 buckets (one per day).
+    expect(res.body.stats.trend).toHaveLength(7);
+
+    // Recent activity has the indicator details.
+    expect(res.body.recent).toHaveLength(1);
+    expect(res.body.recent[0]).toMatchObject({
+      indicatorId: 10,
+      kind: "dangerous",
+      reporter: "Marcus T.",
+    });
+  });
+
+  it("deduplicates the verdict breakdown (same indicator reported multiple times)", async () => {
+    // Indicator 10 reported twice → counts as ONE verdict, not two.
+    submissionFindMany
+      .mockResolvedValueOnce([
+        makeSub(10, 22, "2026-07-15"),
+        makeSub(10, 22, "2026-07-14"), // duplicate
+      ])
+      .mockResolvedValueOnce([])  // recent subs (trend)
+      .mockResolvedValueOnce([]); // recent activity
+    orgReviewCount.mockResolvedValue(0);
+
+    const res = await request(appAs(analystUser)).get("/api/history");
+
+    expect(res.status).toBe(200);
+    expect(res.body.stats.verdictBreakdown.total).toBe(1);   // deduplicated
+    expect(res.body.stats.verdictBreakdown.dangerous).toBe(1);
   });
 });

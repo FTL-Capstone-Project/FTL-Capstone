@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import { UserButton, OrganizationSwitcher } from "@clerk/clerk-react";
-import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Inbox, Orbit, PanelLeftClose, PanelLeft, Clock, MoreHorizontal, Pencil, Pin, Trash2, BarChart3, Menu } from "lucide-react";
+import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Orbit, PanelLeftClose, PanelLeft, Clock, MoreHorizontal, Pencil, Pin, Trash2, BarChart3, Menu } from "lucide-react";
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import OrbisLogo from "./OrbisLogo.jsx";
@@ -218,10 +218,6 @@ const AppShell = () => {
               </button>
             )}
             {orgName && <span style={{ marginRight: isMobile ? 0 : "auto", color: "var(--text-dim)", fontSize: "0.9em" }}>{orgName}</span>}
-            <button title="Inbox" aria-label="Inbox"
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
-              <Inbox size={20} />
-            </button>
             <NotificationBell />
             <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
           </header>
