@@ -27,6 +27,7 @@ vi.mock("../askOrbo/senderReport.js", () => ({ generateSenderReport: vi.fn().moc
 vi.mock("../webhooks/emailAnalysis.js", () => ({
   analyzeEmailBody: vi.fn().mockResolvedValue(null),
   combineEmailReports: vi.fn().mockReturnValue({ ai_score: null, ai_verdict: "x", ai_confidence: "low", title: "x", tags: [], evidence: [] }),
+  combineLinkReports: vi.fn().mockReturnValue(null),
 }));
 
 const { submitEmail } = await import("./indicators.service.js");

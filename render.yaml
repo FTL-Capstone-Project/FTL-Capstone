@@ -44,6 +44,10 @@ services:
         sync: false          # shared secret the Gmail Apps Script relay sends as x-orbis-token
       - key: INBOUND_EMAIL_TOKENS
         sync: false          # optional plus-token map "david:david@acme.com,..."
+      - key: OUTBOUND_EMAIL_URL
+        sync: false          # our reverse Apps Script Web App URL (report emails); see DEPLOY.md Step 8
+      - key: OUTBOUND_EMAIL_TOKEN
+        sync: false          # shared secret sent in the POST body to that relay
       - key: CLIENT_URL
         sync: false          # set to the static site's URL after first deploy (CORS)
       # NOTE: do NOT set ORBIS_DEV_STUB in production. Its absence makes auth fail closed.

@@ -21,8 +21,8 @@ import { registeredDomain } from "../../services/typosquat.js";
 import { escalateSubmission } from "../submissions/submissions.service.js";
 import { createNotification } from "../notifications/notifications.service.js";
 import { generateSenderReport } from "../askOrbo/senderReport.js";
-import { analyzeEmailBody, combineEmailReports } from "../webhooks/emailAnalysis.js";
-import { extractEmailAddress, extractOriginalSender } from "../webhooks/inboundEmail.js";
+import { analyzeEmailBody, combineEmailReports, combineLinkReports } from "../webhooks/emailAnalysis.js";
+import { extractEmailAddress, extractOriginalSender, extractOriginalSenderParts, extractHtmlLinks, parseAuthResults } from "../webhooks/inboundEmail.js";
 
 // In dev-stub auth mode, req.user is a fake { id: 1, ... } that may not exist in the DB,
 // so a submission FK would fail. Resolve a REAL mirror row for it (upsert by a stable
@@ -175,8 +175,8 @@ const emailCanonicalKey = ({ from, subject = "", body = "" }) => {
 //
 // Returns immediately with { indicatorId, submissionId, escalated } (verdict fills in a few
 // seconds later, like a link scan). Two forwards of the same email dedup to one Indicator.
-// @param {{ from, subject, body, hasLink, rawUrl?, user, contextText? }}
-export const submitEmail = async ({ from, subject = "", body = "", hasLink = false, rawUrl = null, user, contextText = null }) => {
+// @param {{ from, subject, body, html?, headers?, replyTo?, hasLink, rawUrl?, rawUrls?, user, contextText? }}
+export const submitEmail = async ({ from, subject = "", body = "", html = null, headers = null, replyTo = null, hasLink = false, rawUrl = null, rawUrls = [], user, contextText = null }) => {
   const canonicalKey = emailCanonicalKey({ from, subject, body });
   // Pull the bare address out of a "Display Name <addr>" header before deriving the domain / rawUrl,
   // else a trailing ">" leaks into the domain (e.g. "acme.com>"). Fall back to the raw string.
@@ -213,16 +213,20 @@ export const submitEmail = async ({ from, subject = "", body = "", hasLink = fal
   }
 
   // Analyze in the background for a NEW email, OR re-run a stale one (stuck pending/error).
+  // `recipient` is the forwarder we email the finished report to (Feature 2) — carry their id +
+  // email through; when analysis completes, runEmailPipeline sends them the report.
+  const recipient = { id: userId, email: user?.email ?? null, orgId };
   const needsAnalysis = !seenBefore || indicator.status === "pending" || indicator.status === "error";
-  if (needsAnalysis) runEmailPipeline(indicator.id, { from, subject, body, hasLink, rawUrl, contextText });
+  if (needsAnalysis) runEmailPipeline(indicator.id, { from, subject, body, html, headers, replyTo, hasLink, rawUrl, rawUrls, contextText, recipient });
 
   return { indicatorId: indicator.id, submissionId: submission.id, status: indicator.status, seenBefore, escalated };
 }
 
-// Background finalize for a forwarded email: run sender + body + (optional) link analysis, combine
-// worst-of, and write the verdict onto the email Indicator (→ "done"). Mirrors runPipeline's shape.
-// Imported analysis helpers live in webhooks/emailAnalysis.js; sender in askOrbo/senderReport.js.
-const runEmailPipeline = async (indicatorId, { from, subject, body, hasLink, rawUrl, contextText }) => {
+// Background finalize for a forwarded email: run sender + body + EVERY-link analysis, combine
+// worst-of, write the verdict onto the email Indicator (→ "done"), then email the forwarder their
+// report (Feature 2). Mirrors runPipeline's shape. Analysis helpers live in webhooks/emailAnalysis.js;
+// sender in askOrbo/senderReport.js.
+const runEmailPipeline = async (indicatorId, { from, subject, body, html, headers, replyTo, hasLink, rawUrl, rawUrls = [], contextText, recipient = null }) => {
   try {
     await prisma.indicator.update({ where: { id: indicatorId }, data: { status: "scanning" } });
 
@@ -233,16 +237,31 @@ const runEmailPipeline = async (indicatorId, { from, subject, body, hasLink, raw
     // `from` upstream — this only changes who the sender-trust leg analyzes.)
     const senderToJudge = extractOriginalSender(body) || extractEmailAddress(from) || String(from || "");
 
-    // Three legs, each best-effort (a failed leg is simply absent from the combine).
-    const [sender, bodyReport, link] = await Promise.all([
+    // DETERMINISTIC inputs for the body leg — proven from the email's own structure, not guessed:
+    //   - senderIdentity: display name + address from the forwarded "From:" line → sender_mismatch.
+    //   - htmlLinks:      anchors from the HTML body (if the relay forwarded it) → link_mismatch.
+    //   - auth:           SPF/DKIM/DMARC from the original headers (if forwarded) → forged-sender.
+    const senderIdentity = extractOriginalSenderParts(body);
+    const htmlLinks = extractHtmlLinks(html);
+    const auth = parseAuthResults(headers);
+
+    // Which links to scan: every extracted URL (rawUrls), falling back to the single rawUrl for
+    // back-compat, else none. Each scan is best-effort and tagged with its URL for the per-link rows.
+    const urls = (Array.isArray(rawUrls) && rawUrls.length) ? rawUrls : (hasLink && rawUrl ? [rawUrl] : []);
+
+    // Sender + body + all links, each best-effort (a failed leg is simply absent from the combine).
+    const [sender, bodyReport, linkScans] = await Promise.all([
       generateSenderReport({ email: senderToJudge, context: subject || "" })
         .catch((e) => { console.warn("⚠ email sender leg failed:", e.message); return null; }),
-      analyzeEmailBody({ from, subject, body }),
-      hasLink && rawUrl
-        ? scanLinkForReport(rawUrl, contextText).catch((e) => { console.warn("⚠ email link leg failed:", e.message); return null; })
-        : Promise.resolve(null),
+      analyzeEmailBody({ from, subject, body, senderIdentity, htmlLinks, auth }),
+      Promise.all(urls.map((url) =>
+        scanLinkForReport(url, contextText)
+          .then((report) => ({ url, report }))
+          .catch((e) => { console.warn(`⚠ email link leg failed for ${url}:`, e.message); return { url, report: null }; })
+      )),
     ]);
 
+    const link = combineLinkReports(linkScans); // one link leg from N scans (worst-of + per-link rows)
     const report = combineEmailReports({ sender, body: bodyReport, link });
     await prisma.indicator.update({
       where: { id: indicatorId },
@@ -254,10 +273,22 @@ const runEmailPipeline = async (indicatorId, { from, subject, body, hasLink, raw
         aiTitle: report.title ?? null,
         aiTags: report.tags ?? [],
         aiReasons: report.evidence ?? [],
-        // Fold in the link's sandbox screenshot when the email had a scanned link.
+        // Fold in the worst link's sandbox screenshot when the email had a scanned link.
         screenshotUrl: link?.screenshot_url ?? null,
       },
     });
+
+    // Feature 2 — email the forwarder their finished report (sibling to the in-app notification).
+    // Best-effort + lazy import (breaks the reportEmail ↔ indicators circular import): a mail failure
+    // must never turn a completed analysis into an error.
+    if (recipient?.email) {
+      try {
+        const { sendReportEmail } = await import("../reportEmail/reportEmail.service.js");
+        await sendReportEmail({ user: recipient, indicatorId, subject: "Your forwarded email has been checked" });
+      } catch (e) {
+        console.warn("⚠ report email (email pipeline) failed (non-fatal):", e.message);
+      }
+    }
   } catch (e) {
     console.warn(`⚠ email pipeline failed for indicator ${indicatorId}:`, e.message);
     await prisma.indicator.update({
@@ -349,9 +380,37 @@ const asArray = (v) => (Array.isArray(v) ? v : null);
 
 // Shape one indicator for the client poll (GET /api/indicators/:id), merging the
 // caller's org_review if any. Field names match what the client + Reports card expect.
+//
+// Self-heal a dead scan: a scan should reach done/error within ~85s (urlscan cap) plus the
+// verdict LLM call. If a row is still pending/scanning WELL past that, its background pipeline
+// almost certainly died (e.g. a Render free-tier spindown mid-scan) and nothing else will ever
+// flip it — so on read we mark it "error", and the next poll gets a terminal verdict instead of
+// hanging forever. STALE_MS is deliberately far above the real pipeline max so we never reap a
+// scan that's merely slow. Known gap: a URL getting fresh submissions faster than STALE_MS keeps
+// bumping updatedAt (via the reportCount increment) and can delay this reap — a durable fix needs
+// a dedicated scanStartedAt column or a background sweeper (follow-up, see indicators.service).
+const STALE_MS = 180_000;
+
 export const readIndicatorForClient = async (indicatorId, user) => {
-  const indicator = await prisma.indicator.findUnique({ where: { id: indicatorId } });
+  let indicator = await prisma.indicator.findUnique({ where: { id: indicatorId } });
   if (!indicator) return null;
+
+  const stale = (indicator.status === "pending" || indicator.status === "scanning")
+    && Date.now() - new Date(indicator.updatedAt).getTime() > STALE_MS;
+  if (stale) {
+    // CONDITIONAL update: the WHERE re-checks status + age at write time, so if runPipeline
+    // committed a real verdict in the race window between our read and this write, we match 0
+    // rows and DON'T clobber it. Then re-read to return whatever is now true.
+    await prisma.indicator.updateMany({
+      where: {
+        id: indicatorId,
+        status: { in: ["pending", "scanning"] },
+        updatedAt: { lt: new Date(Date.now() - STALE_MS) },
+      },
+      data: { status: "error", aiVerdict: errorMessage() },
+    });
+    indicator = await prisma.indicator.findUnique({ where: { id: indicatorId } }) ?? indicator;
+  }
 
   // The caller-org's private review (analyst verdict / closure status), if it exists.
   let review = null;

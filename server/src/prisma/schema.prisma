@@ -36,6 +36,9 @@ model User {
   email       String   @unique // copied from Clerk; used to match forwarded emails
   name        String?
   role        String   @default("individual") // individual | member | analyst
+  // Opt-out for the emailed report we send after a forwarded-email check finishes. Default true =
+  // opted in (no behavior change for existing users); set false to get in-app notifications only.
+  emailReports Boolean @default(true)
   // SHA-256 hash of the user's browser-extension API key (never the raw key). Null = no key
   // issued yet. Unique so a presented key resolves to exactly one user; rotating overwrites it,
   // which instantly invalidates the old key (per-user revocation). See services/apiKey.js.

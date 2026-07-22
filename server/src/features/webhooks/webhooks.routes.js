@@ -14,9 +14,15 @@ import { applyClerkEvent, findUserByEmail, findUserByToken } from "../users/user
 import { submitEmail } from "../indicators/indicators.service.js";
 import { createNotification } from "../notifications/notifications.service.js";
 import { normalizeUrl } from "../../services/canonicalize.js";
-import { extractEmailAddress, extractPlusToken, extractFirstUrl } from "./inboundEmail.js";
+import { extractEmailAddress, extractPlusToken, extractAllUrls } from "./inboundEmail.js";
 
 export const webhooksRouter = Router();
+
+// A forwarded email can carry many links; scan them all, but bound the fan-out — each link is a
+// slow urlscan sandbox call and the free tier is rate-limited. If an email has more than this, we
+// scan the first few and log that we truncated (never a SILENT cap — that would read as "all
+// links were clean" when we simply didn't look).
+const MAX_EMAIL_LINKS = 5;
 
 webhooksRouter.post("/clerk", async (req, res, next) => {
   try {
@@ -74,7 +80,11 @@ webhooksRouter.post("/inbound-email", async (req, res, next) => {
     }
 
     // 3) Parse the forwarded email. We need at least a from OR a to to identify the sender.
-    const { from, to, subject, body } = req.body || {};
+    //    html/headers/replyTo are OPTIONAL richer fields: a basic relay sends only plain text, but
+    //    an upgraded relay can forward the HTML body + original headers, which unlock the strongest
+    //    signals (SPF/DKIM/DMARC results, real anchor-vs-href link checks). Absent = analysis just
+    //    skips those legs — fully back-compatible with the plain-text relay.
+    const { from, to, subject, body, html, headers, replyTo } = req.body || {};
     if (typeof from !== "string" && typeof to !== "string") {
       return res.status(400).json({ error: "Missing from/to" });
     }
@@ -92,21 +102,41 @@ webhooksRouter.post("/inbound-email", async (req, res, next) => {
       return res.status(202).json({ status: "ignored" });
     }
 
-    // 6) Try to extract + validate a link. A missing/invalid link is NOT fatal anymore — a
+    // 6) Extract + validate EVERY link in the email (subject + body), not just the first — a scam
+    //    often hides the malicious link among safe ones. Normalize + dedup here (this is where
+    //    normalizeUrl already lives), and cap the fan-out. A missing/invalid link is NOT fatal — a
     //    text-only scam still gets a sender+body verdict (link-less email).
-    const found = extractFirstUrl(`${subject || ""} ${body || ""}`);
-    let normalizedUrl = null;
-    if (found) {
-      try { normalizedUrl = normalizeUrl(found); } catch { normalizedUrl = null; }
+    const candidates = extractAllUrls(`${subject || ""} ${body || ""}`);
+    const seen = new Set();
+    const rawUrls = [];
+    for (const candidate of candidates) {
+      let normalized;
+      try { normalized = normalizeUrl(candidate); } catch { continue; } // drops bad/internal hosts
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rawUrls.push(normalized);
+      if (rawUrls.length >= MAX_EMAIL_LINKS) {
+        if (seen.size < candidates.length) {
+          console.warn(`⚠ inbound-email: capping link scan at ${MAX_EMAIL_LINKS} (more links were present)`);
+        }
+        break;
+      }
     }
 
-    // 7) One reviewable email Indicator (sender + body + optional link, analyzed in the background).
+    // 7) One reviewable email Indicator (sender + body + every link, analyzed in the background).
+    //    We pass rawUrls (all links) AND rawUrl (the first, for back-compat with the single-link
+    //    shape) so the pipeline can scan them all and combine the verdicts.
     const { submissionId, indicatorId, escalated } = await submitEmail({
       from,
       subject,
       body,
-      hasLink: Boolean(normalizedUrl),
-      rawUrl: normalizedUrl,
+      html,
+      headers,
+      replyTo,
+      hasLink: rawUrls.length > 0,
+      rawUrl: rawUrls[0] ?? null,
+      rawUrls,
       user,
       contextText: subject ? String(subject).slice(0, 1000) : null,
     });

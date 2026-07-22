@@ -42,6 +42,18 @@ export const env = {
     tokens: parseTokenMap(process.env.INBOUND_EMAIL_TOKENS),
   },
 
+  // Outbound email — the SAME Gmail + Apps Script relay pattern in REVERSE. The server POSTs report
+  // JSON (over HTTPS, not SMTP — so Render's free-tier SMTP block can't stop it) to OUR OWN Apps
+  // Script Web App on script.google.com, which sends the report from orbischecks@gmail.com. Both
+  // must be set or outbound is a no-op (fail-safe: a missing config never breaks the pipeline).
+  //   url   — our Apps Script Web App URL (script.google.com/…). SECURITY: it's OUR configured URL,
+  //           never a user-supplied one — no SSRF surface (see code-style.md).
+  //   token — shared secret sent in the POST body so only we can trigger a send.
+  outboundEmail: {
+    url: process.env.OUTBOUND_EMAIL_URL || null,
+    token: process.env.OUTBOUND_EMAIL_TOKEN || null,
+  },
+
   // LLM access — OpenAI (Chat Completions API). The client (services/llm.js) speaks the
   // OpenAI wire format: Bearer auth, POST {base}/chat/completions, `messages`. Base URL and
   // model are env-overridable so we can point at OpenAI-compatible proxies without code changes.
@@ -80,5 +92,8 @@ export const warnMissingEnv = () => {
   }
   if (!env.inboundEmail.token) {
     console.warn("⚠ env: INBOUND_EMAIL_TOKEN missing — /api/webhooks/inbound-email will 503 until set.");
+  }
+  if (!env.outboundEmail.url || !env.outboundEmail.token) {
+    console.warn("⚠ env: OUTBOUND_EMAIL_URL/OUTBOUND_EMAIL_TOKEN missing — report emails are off (in-app notifications still fire).");
   }
 }

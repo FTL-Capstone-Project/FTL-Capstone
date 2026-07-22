@@ -91,7 +91,7 @@ describe("POST /api/webhooks/inbound-email", () => {
     });
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ submissionId: 1, indicatorId: 2, matched: true, escalated: true });
-    // Reused pipeline gets the FULL user row + the extracted link + hasLink true.
+    // Reused pipeline gets the FULL user row + the extracted link + hasLink true (rawUrl = first link).
     expect(submitEmail).toHaveBeenCalledWith(
       expect.objectContaining({ user: orgMember, hasLink: true, rawUrl: "https://paypa1-secure.com/verify" })
     );
@@ -99,6 +99,37 @@ describe("POST /api/webhooks/inbound-email", () => {
     expect(createNotification).toHaveBeenCalledWith(
       {},
       expect.objectContaining({ userId: 10, type: "email_received", indicatorId: 2 })
+    );
+  });
+
+  it("scans EVERY link: passes all as rawUrls (first also in rawUrl for back-compat), deduped", async () => {
+    findUserByEmail.mockResolvedValue(orgMember);
+    const res = await post({
+      from: "david@acme.com",
+      subject: "Fwd",
+      // three distinct links (one repeated) + a bare www link
+      body: "safe https://paypal.com bad https://paypa1-secure.com/verify again https://paypal.com and www.example.com",
+    });
+    expect(res.status).toBe(201);
+    const arg = submitEmail.mock.calls[0][0];
+    expect(arg.rawUrl).toBe("https://paypal.com");           // first link, back-compat
+    expect(arg.rawUrls).toContain("https://paypa1-secure.com/verify");
+    expect(arg.rawUrls).toContain("https://www.example.com"); // bare www → https prepended
+    // deduped: paypal.com appears once even though it was in the body twice
+    expect(arg.rawUrls.filter((u) => u === "https://paypal.com")).toHaveLength(1);
+  });
+
+  it("passes optional richer fields (html/headers/replyTo) through to submitEmail", async () => {
+    findUserByEmail.mockResolvedValue(orgMember);
+    await post({
+      from: "david@acme.com",
+      body: "text",
+      html: "<a href='https://evil.ru'>www.paypal.com</a>",
+      headers: "dmarc=fail",
+      replyTo: "attacker@evil.ru",
+    });
+    expect(submitEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ html: "<a href='https://evil.ru'>www.paypal.com</a>", headers: "dmarc=fail", replyTo: "attacker@evil.ru" })
     );
   });
 

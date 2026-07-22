@@ -47,6 +47,8 @@ In the Render dashboard, on each service → **Environment**:
 | `GOOGLE_SAFE_BROWSING_KEY` | Safe Browsing key (optional) |
 | `INBOUND_EMAIL_TOKEN` | shared secret for the email-forwarding relay (see Step 7); `/inbound-email` 503s until set |
 | `INBOUND_EMAIL_TOKENS` | optional plus-token map `david:david@acme.com,...` |
+| `OUTBOUND_EMAIL_URL` | our reverse Apps Script Web App URL for report emails (see Step 8); report emails off until set |
+| `OUTBOUND_EMAIL_TOKEN` | shared secret sent in the POST body to that relay |
 | `CLIENT_URL` | **fill in Step 4** (the client's URL) |
 | `NODE_ENV` | `production` (already set in render.yaml) |
 
@@ -100,13 +102,41 @@ mail infrastructure**; a free Gmail account relays forwards to the API.
 3. (Optional) Set **`INBOUND_EMAIL_TOKENS`** to map plus-tokens to registered emails so
    `orbischecks+<token>@gmail.com` beats a spoofable From header.
 
-Test without Gmail (simulate a forward) — expect `201 …escalated:true` for a seed org member:
+Test without Gmail (simulate a forward) — expect `201 …escalated:true` for a seed org member.
+The `body` can contain MULTIPLE links (every one is scanned) and a forwarded `From:` header (the
+display name vs address is checked for impersonation):
 ```bash
 curl -i -X POST https://orbis-api.onrender.com/api/webhooks/inbound-email \
   -H "content-type: application/json" -H "x-orbis-token: YOUR_TOKEN" \
   -d '{"from":"David M. <david@acme.com>","to":"orbischecks@gmail.com",
-       "subject":"Fwd: account locked","body":"verify https://paypa1-secure.com/verify"}'
+       "subject":"Fwd: account locked",
+       "body":"From: PayPal Security <no-reply@paypa1-secure.com>\nverify https://paypa1-secure.com/verify or visit https://paypal.com"}'
 ```
+
+> **Richer signals (optional relay upgrade).** The basic relay forwards `{from,to,subject,body}` as
+> plain text. If you upgrade the Apps Script to also send the original **headers**
+> (`message.getRawContent()`) and **HTML body** (`message.getBody()`) as `headers` / `html` fields,
+> Orbis unlocks its strongest checks: the sender's real **SPF/DKIM/DMARC** results (a DKIM/DMARC
+> fail = forged sender) and true **anchor-text-vs-href** link disguise detection. Absent those
+> fields, analysis falls back to the plain-text signals — fully backward-compatible.
+
+## Step 8 — (Optional) Enable outbound report emails
+
+After a user forwards an email and Orbis finishes checking it, email them the full report (verdict,
+score, threat vectors, per-link breakdown, screenshot) so they don't have to open the app. Uses the
+SAME Gmail + Apps Script pattern as Step 7, in **reverse** — no new mail infrastructure, no SMTP.
+
+1. In the same `orbischecks@gmail.com` account, create a **second Apps Script Web App** with a
+   `doPost(e)` that (a) checks the shared token in the JSON body, then (b) calls
+   `GmailApp.sendEmail(to, subject, "", { htmlBody: html })`. Deploy it as a Web App (execute as
+   you; access "Anyone") and copy its `https://script.google.com/…/exec` URL.
+2. On `orbis-api` set **`OUTBOUND_EMAIL_URL`** = that URL and **`OUTBOUND_EMAIL_TOKEN`** = a long
+   random string (match it in the Apps Script). Until BOTH are set, report emails are a silent
+   no-op (the in-app notification still fires).
+3. Users can opt out via the `User.emailReports` flag (default on).
+
+Test end-to-end: run the Step 7 curl with `OUTBOUND_EMAIL_*` set, then confirm `orbischecks@gmail.com`
+sends the forwarding address an HTML report once the check finishes.
 
 ---
 
