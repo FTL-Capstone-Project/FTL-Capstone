@@ -28,8 +28,20 @@ indicatorsRouter.get("/:id", requireAuth, async (req, res) => {
 indicatorsRouter.post("/:id/report", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: "Bad id" });
+
+  // Optional free-text "why". Cap at 200 WORDS (the modal enforces this too) so a huge blob can't
+  // be posted, and reject an over-limit reason rather than silently truncating the user's words.
+  let reason = req.body?.reason;
+  if (reason != null) {
+    if (typeof reason !== "string") return res.status(400).json({ error: "reason must be text" });
+    reason = reason.trim();
+    if (reason.split(/\s+/).filter(Boolean).length > 200) {
+      return res.status(400).json({ error: "Please keep your reason under 200 words." });
+    }
+  }
+
   try {
-    const result = await reportIndicator(id);
+    const result = await reportIndicator(id, { reason: reason || null, userId: req.user?.id ?? null });
     if (!result) return res.status(404).json({ error: "Not found" });
     return res.json(result);
   } catch (e) {

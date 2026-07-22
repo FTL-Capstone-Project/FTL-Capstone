@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@clerk/clerk-react";
 import { Eye, ShieldCheck, Flag, Clock } from "lucide-react";
-import { api } from "../../lib/api.js";
 import { VERDICT_STYLES } from "../../config/constants.js";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import ScoreGauge from "./ScoreGauge.jsx";
 import EvidenceList from "./EvidenceList.jsx";
 import ScreenshotReader from "./ScreenshotReader.jsx";
+import ReportModal from "./ReportModal.jsx";
 
 // Maps a 0–100 SAFETY score to a verdict bucket (100 = safe, matches the DB/whole app).
 // High score = safe; low = dangerous.
@@ -23,7 +22,6 @@ const bucket = (score) => {
 //   indicatorId  — the DB id of this check. Needed for "Report it". Sender reports are
 //                  ephemeral (no persisted indicator), so they pass none → no Report button.
 const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
-  const { getToken } = useAuth();
   const { ai_score, ai_verdict, ai_confidence, screenshot_url, report_count, evidence } = indicator;
   const kind = bucket(ai_score);
   const style = VERDICT_STYLES[kind];
@@ -33,24 +31,18 @@ const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
   // works for sender reports too, not just URL checks.
   const reportId = indicatorId ?? indicator.indicator_id ?? null;
 
-  // "Report it" state: an indicator can be flagged for the global security-team review.
-  // Seed from the server so a URL already under review shows that on load.
+  // "Report it" state: opens a modal that collects a WHY reason before flagging for the global
+  // security-team review. Seed from the server so a URL already under review shows that on load.
   const [reviewStatus, setReviewStatus] = useState(indicator.global_review_status ?? null);
-  const [reporting, setReporting] = useState(false);
+  const [reportedCount, setReportedCount] = useState(indicator.reported_count ?? 0);
+  const [modalOpen, setModalOpen] = useState(false);
   const canReport = reportId != null;
   const underReview = reviewStatus === "pending review";
 
-  const handleReport = async () => {
-    if (!canReport || reporting || underReview) return;
-    setReporting(true);
-    try {
-      const res = await api.post(`/api/indicators/${reportId}/report`, {}, { getToken });
-      setReviewStatus(res.global_review_status ?? "pending review");
-    } catch {
-      // Non-fatal: show a soft failure by leaving the button as-is; the user can retry.
-    } finally {
-      setReporting(false);
-    }
+  // The modal owns the POST; on success it hands back the updated count + status.
+  const handleReported = (res) => {
+    setReviewStatus(res?.global_review_status ?? "pending review");
+    if (typeof res?.reported_count === "number") setReportedCount(res.reported_count);
   }
 
   // urlscan screenshots are best-effort and can lag the verdict: retry once, then hide.
@@ -66,6 +58,7 @@ const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
     setShotOk(true);
     setRetried(false);
     setReviewStatus(indicator.global_review_status ?? null);
+    setReportedCount(indicator.reported_count ?? 0);
   }, [screenshot_url, indicator.global_review_status]);
   const handleShotError = () => {
     if (!retried) { setRetried(true); setTimeout(() => setShotSrc(`${screenshot_url}?r=${Date.now()}`), 2500); }
@@ -120,6 +113,7 @@ const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
         {underReview && (
           <p style={{ marginTop: 14, fontSize: "0.85em", color: "var(--review)", display: "flex", alignItems: "center", gap: 6 }}>
             <Clock size={14} /> Reported — a security reviewer will take a closer look at this.
+            {reportedCount > 1 && ` (${reportedCount} reports so far)`}
           </p>
         )}
 
@@ -127,9 +121,9 @@ const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
             community "I trust this" flow, coming soon (disabled for now). */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
           {canReport && (
-            <button onClick={handleReport} disabled={reporting || underReview}
-              style={btn(style.color, true, reporting || underReview)}>
-              <Flag size={14} /> {underReview ? "Reported" : reporting ? "Reporting…" : "Report it"}
+            <button onClick={() => setModalOpen(true)} disabled={underReview}
+              style={btn(style.color, true, underReview)}>
+              <Flag size={14} /> {underReview ? "Reported" : "Report it"}
             </button>
           )}
           <button disabled title="Community trust notes are coming soon"
@@ -137,6 +131,15 @@ const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
           <button onClick={() => onAskMore?.()} style={btn("var(--primary)", false)}>Ask Orbo more</button>
         </div>
       </div>
+
+      {modalOpen && (
+        <ReportModal
+          indicatorId={reportId}
+          currentCount={reportedCount}
+          onClose={() => setModalOpen(false)}
+          onReported={handleReported}
+        />
+      )}
     </div>
   );
 }
