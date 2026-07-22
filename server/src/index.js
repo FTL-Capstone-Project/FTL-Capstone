@@ -52,7 +52,10 @@ export function createApp() {
   app.use(
     cors({
       origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin)),
-      methods: ["GET", "POST", "PATCH", "OPTIONS"],
+      // DELETE is needed for "delete my report" (DELETE /api/history/:id). Without it the browser's
+      // CORS preflight fails and the real request is never sent — which looked like a silent delete
+      // failure. Keep this in sync when adding routes with new HTTP verbs.
+      methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
     })
   );
