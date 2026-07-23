@@ -82,6 +82,16 @@ describe("detectLookalike", () => {
     expect(detectLookalike("www.paypal.com")).toBeNull();
     expect(detectLookalike("amzn.to")).toBeNull(); // legit Amazon short link
   });
+  it("does NOT flag Google's own infra domains as a 'google' lookalike", () => {
+    // Regression: Gmail routes every email image through googleusercontent.com, whose label
+    // contains "google" and used to trip the combosquat hunt → every email warned 60/100.
+    expect(detectLookalike("ci3.googleusercontent.com")).toBeNull();
+    expect(detectLookalike("lh3.googleusercontent.com")).toBeNull();
+    expect(detectLookalike("www.googleapis.com")).toBeNull();
+    expect(detectLookalike("ssl.gstatic.com")).toBeNull();
+    // …but a genuine google lookalike is still caught.
+    expect(detectLookalike("g00gle.com")?.brand).toBe("google");
+  });
   it("does NOT flag unrelated domains", () => {
     expect(detectLookalike("wikipedia.org")).toBeNull();
     expect(detectLookalike("my-cool-startup.io")).toBeNull();

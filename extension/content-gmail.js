@@ -16,6 +16,12 @@
 // the full sandbox scan — that's one right-click away via "Check with Orbis").
 
 const SKIP_HOSTS = new Set(["mail.google.com", "accounts.google.com"]);
+// Google/Gmail INFRASTRUCTURE hosts that appear in nearly every email but aren't user-facing
+// content links: image proxies + static assets. Screening these is pure noise (Gmail routes every
+// image through googleusercontent). Match by suffix so all subdomains (ci3.googleusercontent.com,
+// lh3.…, mail-attachment.…) are covered. NOTE: we do NOT skip google.com itself — sites.google.com
+// / docs.google.com can host real phishing and must still be screened.
+const SKIP_HOST_SUFFIXES = ["googleusercontent.com", "googleapis.com", "gstatic.com"];
 
 // Read config (apiUrl, token, webUrl) — same storage the popup/options use.
 const getConfig = async () => {
@@ -27,11 +33,17 @@ const getConfig = async () => {
   };
 };
 
-// Should we screen this link? External http(s) only; skip Gmail's own chrome + mailto/anchors.
+// Should we screen this link? External http(s) only; skip Gmail's own chrome, Google infra
+// (image proxies/static), and mailto/anchors.
 const shouldScreen = (a) => {
   const href = a.href || "";
   if (!/^https?:\/\//i.test(href)) return false;
-  try { return !SKIP_HOSTS.has(new URL(href).hostname.toLowerCase()); } catch { return false; }
+  try {
+    const host = new URL(href).hostname.toLowerCase();
+    if (SKIP_HOSTS.has(host)) return false;
+    if (SKIP_HOST_SUFFIXES.some((s) => host === s || host.endsWith("." + s))) return false;
+    return true;
+  } catch { return false; }
 };
 
 // Call the instant pre-check with a sender and/or a batch of urls → { level, score, reasons }.

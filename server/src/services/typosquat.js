@@ -87,7 +87,12 @@ const BRANDS = [
   { brand: "ledger", domains: ["ledger.com"], noFuzzy: true },
   { brand: "opensea", domains: ["opensea.io"] },
   // ── Big tech / social ──
-  { brand: "google", domains: ["google.com", "google.co.uk", "goo.gl", "youtube.com", "youtu.be", "gmail.com"] },
+  // Google infra domains (googleusercontent/googleapis/gstatic) are REAL Google-owned domains, but
+  // their labels contain "google", so without listing them the combosquat hunt flags them as a
+  // "google lookalike". That mattered badly for the Gmail extension: Gmail routes every email image
+  // through googleusercontent.com, so every email was warned. Listing them here makes LEGIT_DOMAINS
+  // recognize them as authentic and short-circuit the fuzzy hunt.
+  { brand: "google", domains: ["google.com", "google.co.uk", "goo.gl", "youtube.com", "youtu.be", "gmail.com", "googleusercontent.com", "googleapis.com", "gstatic.com", "withgoogle.com"] },
   { brand: "microsoft", domains: ["microsoft.com", "live.com", "office.com", "outlook.com", "microsoftonline.com"] },
   { brand: "apple", domains: ["apple.com", "icloud.com", "me.com"] },
   { brand: "meta", domains: ["meta.com"], noFuzzy: true },
