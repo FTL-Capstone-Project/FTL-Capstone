@@ -49,8 +49,12 @@ const ReportCard = ({ report, showReviewStatus = false, onOpen,
     // button; a stretched invisible overlay keeps the whole card clickable.
     <article
       className="report-card"
+      // minHeight + top-aligned children give every card the same floor so short cards (no
+      // description/tags) and tall ones (member analyst-score column) don't render at wildly
+      // different heights — which is what made the list look like it "jumps around" and resizes.
       style={{ position: "relative", display: "flex", gap: 14, background: "var(--surface)",
-        border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 16 }}>
+        border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 16,
+        minHeight: 104, alignItems: "flex-start" }}>
 
       {/* Row-actions "⋯" menu (My History only). Sits ABOVE the card's click overlay so its
           clicks open the menu instead of the detail modal. */}
@@ -124,8 +128,11 @@ const ReportCard = ({ report, showReviewStatus = false, onOpen,
       </div>
 
       {/* Right: the Orbo (AI) score. Org members ALSO see the analyst's score
-          (matches the Organizational wireframe's stacked "Orbo + Analyst" column). */}
-      <div className="report-card__score" style={{ flexShrink: 0, textAlign: "right", minWidth: 96 }}>
+          (matches the Organizational wireframe's stacked "Orbo + Analyst" column).
+          FIXED width (not minWidth) so the score column is identical on every card — a
+          content-sized column widened/narrowed per card ("Scored by <name>" vs "Pending"),
+          which shoved the middle column around and made cards look inconsistent. */}
+      <div className="report-card__score" style={{ flexShrink: 0, textAlign: "right", width: 104 }}>
         {/* Orbo (AI) score — shown to everyone. Individuals see it as "SAFETY SCORE";
             org members see the dual layout, so it's labeled "ORBO SCORE". */}
         <div style={scoreLabelStyle}>{showReviewStatus ? "ORBO SCORE" : "SAFETY SCORE"}</div>

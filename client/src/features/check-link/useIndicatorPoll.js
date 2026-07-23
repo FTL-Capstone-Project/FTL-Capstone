@@ -3,7 +3,12 @@ import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../lib/api.js";
 import { POLL_INTERVAL_MS } from "../../config/constants.js";
 
-const MAX_POLLS = 60; // ~90s cap: covers the server's ~85s scan window before we give up
+// ~195s cap (130 × 1.5s). Must exceed the server's STALE_MS self-heal (180s in
+// indicators.service.js): a stuck check is reaped to "error" at 180s, so we need to still be
+// polling then to SHOW that verdict instead of giving up first. The old 90s cap gave up while
+// the check was still legitimately running — which got more common once the LLM verdict leg (a
+// slower OpenAI call) was added to the pipeline, so we kept hitting "taking longer than expected".
+const MAX_POLLS = 130;
 
 // Polls GET /api/indicators/:id until status is "done" or "error".
 // Used by each verdict message in the chat (one poll per checked link).

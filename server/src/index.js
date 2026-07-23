@@ -35,6 +35,12 @@ warnMissingEnv();
 export function createApp() {
   const app = express();
 
+  // Trust the first proxy hop (Render/most PaaS terminate TLS at a proxy). Without this, req.ip is
+  // the proxy's address, so IP-keyed rate limiting on PUBLIC routes (e.g. the landing demo) would
+  // lump every visitor into one bucket. Trusting exactly ONE hop keeps a client from spoofing its
+  // IP via a forged X-Forwarded-For (we only believe the hop our own proxy adds).
+  app.set("trust proxy", 1);
+
   // 1) RAW body for the Clerk webhook (svix signature verification needs it).
   app.use("/api/webhooks/clerk", express.raw({ type: "*/*" }));
 
@@ -57,7 +63,10 @@ export function createApp() {
   app.use(
     cors({
       origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin)),
-      methods: ["GET", "POST", "PATCH", "OPTIONS"],
+      // DELETE is needed for "delete my report" (DELETE /api/history/:id). Without it the browser's
+      // CORS preflight fails and the real request is never sent — which looked like a silent delete
+      // failure. Keep this in sync when adding routes with new HTTP verbs.
+      methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
     })
   );

@@ -53,12 +53,89 @@ a:hover { text-decoration: underline; }
   .landing-feature > * { order: 0 !important; }
   .landing-navlinks { display: none !important; }
   .landing-footer { grid-template-columns: 1fr 1fr !important; }
+  /* The About stats band: 4-up → 2-up on tablet. */
+  .landing-grid-4 { grid-template-columns: 1fr 1fr !important; }
 }
 @media (max-width: 560px) {
   .landing-footer { grid-template-columns: 1fr !important; }
+  .landing-grid-4 { grid-template-columns: 1fr !important; }
   /* Settings appearance cards stack on narrow screens. */
   .settings-theme-grid { grid-template-columns: 1fr !important; }
 }
+
+/* ── Landing page motion (Apple-style fluid reveals) ──
+   Philosophy: content is VISIBLE BY DEFAULT (accessible, works with no JS, and honored when the
+   user prefers reduced motion). Only when motion is welcome AND the reveal script runs do elements
+   start hidden and glide in as they scroll into view. All easing uses one soft curve so the whole
+   page feels like it moves as a single system, not scattered effects. */
+
+/* Reveal-on-scroll: elements get .landing-reveal; the IntersectionObserver in Landing.jsx toggles
+   .is-visible as they enter/leave the viewport, so the reveal REPLAYS every time you scroll a
+   section back into view (not just once). Default (and reduced-motion) = fully shown. */
+.landing-reveal { opacity: 1; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-reveal {
+    opacity: 0;
+    transform: translateY(26px);
+    transition: opacity 0.6s cubic-bezier(0.22, 0.7, 0.2, 1),
+                transform 0.6s cubic-bezier(0.22, 0.7, 0.2, 1);
+    /* No persistent will-change: keeping it on every reveal element permanently forces GPU layers
+       and can HURT scroll perf. The transition alone is enough for these one-off moves. */
+  }
+  .landing-reveal.is-visible { opacity: 1; transform: none; }
+
+  /* Hero load sequence: headline, sub, buttons, and the demo card assemble in a short stagger
+     the moment the page loads (the page's one orchestrated moment). */
+  .landing-load { opacity: 0; animation: landingRise 0.8s cubic-bezier(0.22, 0.7, 0.2, 1) forwards; }
+  .landing-load-1 { animation-delay: 0.05s; }
+  .landing-load-2 { animation-delay: 0.16s; }
+  .landing-load-3 { animation-delay: 0.27s; }
+  .landing-load-4 { animation-delay: 0.38s; }
+
+  /* The hero demo card breathes with a slow float, and its "scanning" sweep runs once on load. */
+  .landing-float { animation: landingFloat 7s ease-in-out infinite; }
+  .landing-scanline::after {
+    content: "";
+    position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    animation: landingScan 2.6s ease-in-out 0.6s 1 forwards;
+    opacity: 0.9;
+  }
+}
+
+@keyframes landingRise {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes landingFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+@keyframes landingScan {
+  0%   { top: 0; opacity: 0; }
+  10%  { opacity: 0.9; }
+  90%  { opacity: 0.9; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* Card hover lift — a small, consistent micro-interaction across landing cards. */
+@media (prefers-reduced-motion: no-preference) {
+  .landing-lift { transition: transform 0.35s cubic-bezier(0.22, 0.7, 0.2, 1), box-shadow 0.35s ease, border-color 0.35s ease; }
+  .landing-lift:hover { transform: translateY(-6px); }
+}
+
+/* Spinner for the live hero demo's "Checking…" state. Always allowed (a loading indicator that
+   froze under reduced-motion would read as a hang), but it's a cheap transform-only rotate. */
+.landing-spin { animation: landingSpin 0.8s linear infinite; }
+@keyframes landingSpin { to { transform: rotate(360deg); } }
+
+/* Smooth in-page anchor scrolling (Features / Solutions / About nav links). */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+/* Anchored sections land below the sticky nav instead of under it. */
+.landing-anchor { scroll-margin-top: 84px; }
 
 /* ── Verdict card LED glow (both themes) ──
    The verdict card renders as a glowing "LED strip" frame instead of a filled tint,

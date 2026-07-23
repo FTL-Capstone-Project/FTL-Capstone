@@ -10,16 +10,35 @@
 // ============================================================
 import { env } from "../config/env.js";
 
+// Hard ceiling on a single LLM call. A `fetch` with no timeout can hang until the platform's
+// default socket timeout, which stalls the whole verdict pipeline and pushes checks past the
+// client's poll window ("taking longer than expected"). Abort at 60s → a clean, catchable error
+// so the pipeline finishes as "error" instead of hanging. Well under the 180s pipeline budget.
+const LLM_TIMEOUT_MS = 60_000;
+
 // Low-level call. `messages` is the OpenAI messages array (content may be a string
 // or an array of {type:text|image_url} parts). Returns the raw assistant string.
 const chat = async ({ messages, model = env.llmModel, maxTokens = 512, temperature = 0 }) => {
   if (!env.llmApiKey) throw new Error("LLM key not set");
 
-  const res = await fetch(`${env.llmBaseUrl}/chat/completions`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${env.llmApiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, max_tokens: maxTokens, temperature, messages }),
-  });
+  // AbortController so a slow/hung upstream call fails fast instead of blocking the pipeline.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(`${env.llmBaseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.llmApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, max_tokens: maxTokens, temperature, messages }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    // A timeout surfaces as an AbortError — translate it to a clear message for the caller's logs.
+    if (e.name === "AbortError") throw new Error(`LLM call timed out after ${LLM_TIMEOUT_MS / 1000}s`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`LLM gateway ${res.status}: ${body.slice(0, 200)}`);

@@ -2,6 +2,26 @@ import { useState } from "react";
 import { Bell, CheckCircle } from "lucide-react";
 import { useNotifications } from "../context/NotificationsContext.jsx";
 
+// Turn a notification's createdAt (an ISO timestamp from the server) into a short, human "time
+// ago" label — "just now", "5m ago", "3h ago", "2d ago", then a plain "Jul 22" date once it's
+// older than a week. Before this we rendered the raw ISO string ("2026-07-22T15:03:28.535Z"),
+// which is what looked "strange". Guarded so a missing/invalid date shows nothing, not "NaN".
+const timeAgo = (value) => {
+  if (!value) return "";
+  const then = new Date(value);
+  if (isNaN(then.getTime())) return "";
+  const secs = Math.round((Date.now() - then.getTime()) / 1000);
+  if (secs < 45) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  // Older than a week → a short calendar date (no time-of-day noise).
+  return then.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 // Bell + unread count in the top bar, with a dropdown list of notifications (O5).
 // Opening the dropdown marks everything read (clears the badge) — story #7 closure.
 const NotificationBell = () => {
@@ -57,7 +77,7 @@ const NotificationBell = () => {
                     <CheckCircle size={16} color="var(--primary)" style={{ flexShrink: 0, marginTop: 2 }} />
                     <div>
                       <p style={{ margin: 0, fontSize: "0.85em", color: "var(--text)" }}>{n.message}</p>
-                      <p style={{ margin: "2px 0 0", fontSize: "0.72em", color: "var(--text-dim)" }}>{n.created_at}</p>
+                      <p style={{ margin: "2px 0 0", fontSize: "0.72em", color: "var(--text-dim)" }}>{timeAgo(n.created_at)}</p>
                     </div>
                   </li>
                 ))}
