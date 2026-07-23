@@ -98,9 +98,13 @@ mail infrastructure**; a free Gmail account relays forwards to the API.
 1. Set **`INBOUND_EMAIL_TOKEN`** on `orbis-api` to any long random string (the shared secret).
 2. Create/pick a Gmail inbox (e.g. `orbischecks@gmail.com`) and install the Orbis inbound relay:
    open [script.google.com](https://script.google.com), paste [`server/appsscript/inbound-relay.gs`](server/appsscript/inbound-relay.gs),
-   set `ORBIS_API_URL` + `ORBIS_TOKEN` (same token as step 1), and add a **1-minute time trigger**
-   on `relayForwards`. The relay POSTs `{from,to,subject,body,html,headers,replyTo,threadId}` to
-   `/api/webhooks/inbound-email` with the `x-orbis-token` header.
+   set `ORBIS_API_URL` (the **base URL only** — the script appends the path) + `ORBIS_TOKEN` (same
+   token as step 1). Then **run `baselineExistingInbox()` ONCE** (labels any existing inbox+spam mail
+   as processed WITHOUT sending, so you don't get a flood of reports for old mail), and add a
+   **1-minute time trigger** on `relayForwards`. The relay watches **inbox AND spam** (forwarded
+   scams often get auto-filed as spam), marks each processed thread read, and POSTs
+   `{from,to,subject,body,html,headers,replyTo,threadId}` to `/api/webhooks/inbound-email` with the
+   `x-orbis-token` header.
 3. (Optional) Set **`INBOUND_EMAIL_TOKENS`** to map plus-tokens to registered emails so
    `orbischecks+<token>@gmail.com` beats a spoofable From header.
 

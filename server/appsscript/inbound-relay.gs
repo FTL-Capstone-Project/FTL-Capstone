@@ -17,22 +17,33 @@
  *   - threadId → lets the report email REPLY into this same thread (see outbound-relay.gs)
  * All four are OPTIONAL on the server: a plain-text relay that omits them still works.
  *
+ * We watch INBOX **and SPAM** — a forwarded scam is often auto-filed as spam, and `in:inbox` alone
+ * would never see it. Each processed thread is labeled (so it won't loop), marked READ (so forwards
+ * don't keep the unread look), and pulled into the inbox (so every forward is consistently visible).
+ * We deliberately do NOT watch Trash or Sent — you'd never auto-relay deleted mail or our own report
+ * replies. Category tabs (Promotions/Social/Updates) are already inside `in:inbox`.
+ *
  * SETUP:
- *   1. Set ORBIS_API_URL to your deployed API (e.g. https://orbis-api.onrender.com).
+ *   1. Set ORBIS_API_URL to your deployed API BASE URL (e.g. https://orbis-api.onrender.com) — the
+ *      fetch appends the "/api/webhooks/inbound-email" path, so do NOT include it here.
  *   2. Set ORBIS_TOKEN to the SAME value as the server's INBOUND_EMAIL_TOKEN env var.
- *   3. Add a time-driven trigger: Triggers → Add Trigger → relayForwards → Time-driven → Minutes → Every minute.
- *   4. Forward suspicious emails into this inbox; label/handling below marks them processed so they
- *      aren't sent twice.
+ *   3. Run baselineExistingInbox() ONCE (labels the current inbox+spam backlog WITHOUT sending, so
+ *      you don't get a flood of reports for mail that was already sitting there).
+ *   4. Add a time-driven trigger: Triggers → Add Trigger → relayForwards → Time-driven → Minutes → Every minute.
  */
 
-const ORBIS_API_URL = "https://orbis-api.onrender.com"; // ← your deployed API base URL
+const ORBIS_API_URL = "https://orbis-api.onrender.com"; // ← your deployed API BASE URL (no path)
 const ORBIS_TOKEN = "PASTE_INBOUND_EMAIL_TOKEN_HERE";   // ← must equal the server's INBOUND_EMAIL_TOKEN
-const PROCESSED_LABEL = "orbis-sent";                    // threads we've already relayed get this label
+const PROCESSED_LABEL = "orbis-sent";                   // threads we've already relayed get this label
+
+// Work to do: unprocessed threads in INBOX or SPAM. Parentheses group the location filters so the
+// -label exclusion applies to both. Shared by relayForwards + baselineExistingInbox so they can't drift.
+const RELAY_QUERY = "(in:inbox OR in:spam) -label:" + PROCESSED_LABEL;
 
 function relayForwards() {
   const label = getOrCreateLabel_(PROCESSED_LABEL);
-  // Unprocessed inbox threads only. Cap the batch so a backlog can't time out one run.
-  const threads = GmailApp.search("in:inbox -label:" + PROCESSED_LABEL, 0, 10);
+  // Cap the batch so a backlog can't time out one run.
+  const threads = GmailApp.search(RELAY_QUERY, 0, 10);
 
   for (const thread of threads) {
     try {
@@ -60,8 +71,13 @@ function relayForwards() {
     } catch (err) {
       Logger.log("Orbis relay error: " + err);
     }
-    // Mark processed either way, so a poison message can't loop forever.
+    // Housekeeping (always runs, even on error, so a poison message can't loop forever):
+    //   • label → excluded from RELAY_QUERY next time (never re-sent)
+    //   • read  → so forwards don't keep the unread look
+    //   • inbox → pull out of spam so every forward is consistently visible
     thread.addLabel(label);
+    thread.markRead();
+    thread.moveToInbox();
   }
 }
 
@@ -79,4 +95,23 @@ function rawHeaderBlock_(msg) {
 
 function getOrCreateLabel_(name) {
   return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
+}
+
+/**
+ * Run ONCE, manually, before enabling the trigger. Labels all CURRENT inbox + spam mail as processed
+ * (and marks it read) WITHOUT relaying it — so only emails that arrive AFTER now ever get sent to
+ * Orbis. Without this, the first run would relay the entire existing backlog and email a report for
+ * every one.
+ */
+function baselineExistingInbox() {
+  const label = getOrCreateLabel_(PROCESSED_LABEL);
+  let n = 0;
+  while (true) {
+    const threads = GmailApp.search(RELAY_QUERY, 0, 100);
+    if (threads.length === 0) break;
+    threads.forEach((t) => { t.addLabel(label); t.markRead(); });
+    n += threads.length;
+    if (threads.length < 100) break;
+  }
+  Logger.log("Baselined %s existing threads.", n);
 }
