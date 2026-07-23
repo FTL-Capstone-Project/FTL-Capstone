@@ -1,23 +1,23 @@
 // ── extension: Gmail content script · owner: David ──
-// Injected into mail.google.com. Intercepts clicks on links INSIDE an open email, runs an instant
-// deterministic pre-check (POST /api/prescreen — no slow scan), and shows an inline Orbo badge
-// with the verdict BEFORE the browser navigates. "See why" deep-links to the Orbis web app for the
-// full report. This is the "before you interact" moment, scoped to the actual danger: the click.
+// Two layers of protection inside Gmail, both using the INSTANT deterministic pre-check
+// (POST /api/prescreen — no slow sandbox, ~80ms), so nothing here waits on a scan:
 //
-// Why click-interception (not full on-open DOM parsing): Gmail's DOM is obfuscated and volatile;
-// parsing "the email that just opened" is brittle. A link click gives us the exact href reliably,
-// and the click IS the risky action — so we guard it directly. (On-open parsing is a later v2.)
+//   1. AUTO-SCAN ON OPEN (passive): when you open an email, Orbo reads the sender + every link in
+//      the message and shows a fixed safe / warning / danger badge in the TOP-RIGHT — with zero
+//      interaction. This is the guard against "just clicking" phishing: you see the danger before
+//      you touch anything. Click the badge to expand the reasons.
+//   2. CLICK GUARD (active): if you click a link, we re-check that exact link and block navigation
+//      behind a warning if it's risky. This is the moment-of-action backstop.
 //
-// PRIVACY: we send ONLY the link's hostname-bearing URL to /api/prescreen — never email content.
+// PRIVACY: the auto-scan sends the SENDER ADDRESS + the LINK URLs in the open email to
+// /api/prescreen. It never sends the email BODY text — only the sender and the links, which is what
+// the deterministic detectors (lookalike sender / homoglyph / URL shape) need. The pre-check is
+// honest: it flags what it can PROVE instantly and says "no obvious red flags" otherwise (it's not
+// the full sandbox scan — that's one right-click away via "Check with Orbis").
 
-// Gmail's OWN chrome links to skip — the exact hosts, not all of *.google.com. (The old
-// broad /(^|\.)google\.com$/ also excluded sites.google.com / docs.google.com, which CAN host
-// phishing, so those were never screened.) We only skip Gmail + the Google account/login chrome.
 const SKIP_HOSTS = new Set(["mail.google.com", "accounts.google.com"]);
 
-// Read config (apiUrl, token, webUrl) — same storage the popup/options use. webUrl is the Orbis
-// WEB APP url (for "See why" deep-links); it's separate from the API url because in production
-// they're different hosts (api vs client) — deriving one from the other's port only works locally.
+// Read config (apiUrl, token, webUrl) — same storage the popup/options use.
 const getConfig = async () => {
   const { apiUrl, token, webUrl } = await chrome.storage.sync.get(["apiUrl", "token", "webUrl"]);
   return {
@@ -27,129 +27,201 @@ const getConfig = async () => {
   };
 };
 
-// Is this a link we should screen? Real external http(s) links in the message body — skip Gmail's
-// own UI links, anchors, mailto:, and same-host navigation.
+// Should we screen this link? External http(s) only; skip Gmail's own chrome + mailto/anchors.
 const shouldScreen = (a) => {
   const href = a.href || "";
   if (!/^https?:\/\//i.test(href)) return false;
-  try {
-    const host = new URL(href).hostname.toLowerCase();
-    if (SKIP_HOSTS.has(host)) return false;
-    return true;
-  } catch { return false; }
+  try { return !SKIP_HOSTS.has(new URL(href).hostname.toLowerCase()); } catch { return false; }
 };
 
-// Call the instant pre-check.
-const prescreen = async (url) => {
+// Call the instant pre-check with a sender and/or a batch of urls → { level, score, reasons }.
+const prescreen = async ({ sender, urls }) => {
   const { apiUrl, token } = await getConfig();
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${apiUrl}/api/prescreen`, {
-    method: "POST", headers, body: JSON.stringify({ urls: [url] }),
+    method: "POST", headers, body: JSON.stringify({ sender, urls }),
   });
   if (!res.ok) throw Object.assign(new Error("prescreen failed"), { status: res.status });
-  return res.json(); // { level, score, reasons }
+  return res.json();
 };
 
 const LEVELS = {
-  safe:      { color: "#198038", label: "Looks safe",  emoji: "" },
-  warning:   { color: "#B28600", label: "Be careful",  emoji: "" },
-  dangerous: { color: "#DA1E28", label: "Dangerous",   emoji: "" },
+  safe:      { color: "#198038", bg: "#E6F4EA", label: "Looks safe",  pose: "orbo-safe.png" },
+  warning:   { color: "#B28600", bg: "#FCF3D6", label: "Be careful",  pose: "orbo-caution.png" },
+  dangerous: { color: "#DA1E28", bg: "#FBE7E8", label: "Dangerous",   pose: "orbo-danger.png" },
 };
 
-let activeBadge = null;
-const removeBadge = () => { activeBadge?.remove(); activeBadge = null; };
+const escapeHtml = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const asset = (name) => chrome.runtime.getURL(`assets/${name}`);
 
-// Render the inline verdict badge near the click point. Returns nothing; wires its own buttons.
-const showBadge = async (url, verdict, x, y) => {
-  removeBadge();
+// ── Layer 1: the fixed top-right "email verdict" badge (auto-scan on open) ─────────────────────
+let emailBadge = null;
+const removeEmailBadge = () => { emailBadge?.remove(); emailBadge = null; };
+
+// Render (or replace) the fixed top-right badge. Collapsed = a pill (Orbo + level); clicking it
+// expands the reasons. Sits in the empty top-right space above the message, never over content.
+const showEmailBadge = (verdict) => {
+  removeEmailBadge();
+  const lvl = LEVELS[verdict.level] || LEVELS.warning;
+  const reasons = (verdict.reasons || []).slice(0, 4);
+
+  const el = document.createElement("div");
+  el.setAttribute("data-orbis-email-badge", "1");
+  Object.assign(el.style, {
+    position: "fixed", top: "72px", right: "20px", zIndex: "2147483646",
+    width: "300px", background: "#fff", color: "#1A2233",
+    border: `1.5px solid ${lvl.color}`, borderRadius: "16px",
+    boxShadow: "0 10px 30px rgba(10,37,64,0.18)",
+    font: "13px -apple-system,Segoe UI,Roboto,sans-serif", overflow: "hidden",
+  });
+  el.innerHTML = `
+    <div data-orbis-head style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;background:${lvl.bg}">
+      <img src="${asset(lvl.pose)}" alt="" width="34" height="34" style="flex-shrink:0" />
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:800;color:${lvl.color};font-size:14px">${lvl.label}</div>
+        <div style="font-size:11px;color:#5A6675">Orbo checked this email${verdict.score != null ? ` · ${verdict.score}/100` : ""}</div>
+      </div>
+      <span data-orbis-caret style="color:${lvl.color};font-weight:800;transform:rotate(0deg);transition:transform .15s">⌄</span>
+      <button data-orbis-email-close aria-label="Dismiss" style="background:transparent;border:none;color:#5A6675;cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>
+    </div>
+    <div data-orbis-body style="display:none;padding:12px 14px;border-top:1px solid #E2E6EC">
+      ${reasons.length
+        ? `<ul style="margin:0;padding-left:16px;line-height:1.5">${reasons.map((r) => `<li style="margin:4px 0">${escapeHtml(r.text)}</li>`).join("")}</ul>`
+        : `<p style="margin:0;color:#5A6675;line-height:1.5">No obvious red flags in the sender or links. This is a quick check, not a full scan — right-click a link and choose “Check with Orbis” for the deep scan.</p>`}
+    </div>`;
+  document.body.appendChild(el);
+  emailBadge = el;
+
+  const body = el.querySelector("[data-orbis-body]");
+  const caret = el.querySelector("[data-orbis-caret]");
+  el.querySelector("[data-orbis-head]").addEventListener("click", (e) => {
+    if (e.target.closest("[data-orbis-email-close]")) return;
+    const open = body.style.display === "none";
+    body.style.display = open ? "block" : "none";
+    caret.style.transform = open ? "rotate(180deg)" : "rotate(0deg)";
+  });
+  el.querySelector("[data-orbis-email-close]").addEventListener("click", removeEmailBadge);
+};
+
+// Pull the sender address + link URLs out of the currently-open email. Gmail's DOM is volatile, so
+// we lean on the STABLE bits: the sender sits in an [email="..."] attribute; links are <a href> in
+// the message body ([role=listitem] wraps an open message). Returns null if no message is open.
+const readOpenEmail = () => {
+  // The open message container. Gmail marks message bodies with these roles/classes; try a few.
+  const container = document.querySelector('[role="listitem"] .a3s, .a3s.aiL, [role="listitem"]');
+  if (!container) return null;
+  // Sender: the [email] attribute on the from line is the most stable signal Gmail exposes.
+  const senderEl = document.querySelector('[role="listitem"] [email], .gD[email], span[email]');
+  const sender = senderEl?.getAttribute("email") || null;
+  // Links in the visible body only (skip Gmail chrome links elsewhere on the page).
+  const bodyScope = container.querySelector(".a3s") || container;
+  const urls = [...bodyScope.querySelectorAll("a[href]")]
+    .filter(shouldScreen)
+    .map((a) => a.href);
+  if (!sender && urls.length === 0) return null;
+  return { sender, urls: [...new Set(urls)].slice(0, 20) };
+};
+
+// A stable signature of "which email is open" so we don't re-scan the same one on every DOM tick.
+let lastScanKey = "";
+const scanOpenEmail = async () => {
+  const found = readOpenEmail();
+  if (!found) { removeEmailBadge(); lastScanKey = ""; return; }
+  const key = `${found.sender || ""}|${found.urls.join(",")}`;
+  if (key === lastScanKey) return; // same email already scanned
+  lastScanKey = key;
+  try {
+    const verdict = await prescreen(found);
+    // Only surface the passive badge for warning/dangerous OR a clean scan that actually had
+    // something to check — a "safe" with no signals still reassures the user it was looked at.
+    showEmailBadge(verdict);
+  } catch {
+    // Auto-scan is best-effort + silent on failure: a passive feature must never nag with errors.
+    removeEmailBadge();
+    lastScanKey = "";
+  }
+};
+
+// Gmail is a SPA — the DOM mutates as you open/close messages. Debounce a re-scan on mutations so
+// we catch a newly-opened email without hammering (the readOpenEmail dedup key prevents rescans).
+let scanTimer = null;
+const scheduleScan = () => {
+  clearTimeout(scanTimer);
+  scanTimer = setTimeout(scanOpenEmail, 400);
+};
+const observer = new MutationObserver(scheduleScan);
+observer.observe(document.body, { childList: true, subtree: true });
+scheduleScan(); // initial
+
+// ── Layer 2: click guard (unchanged behavior — block a risky link at click time) ───────────────
+let clickBadge = null;
+const removeClickBadge = () => { clickBadge?.remove(); clickBadge = null; };
+
+const showClickBadge = async (url, verdict, x, y) => {
+  removeClickBadge();
   const { apiUrl, webUrl } = await getConfig();
   const lvl = LEVELS[verdict.level] || LEVELS.warning;
-  // Prefer the explicitly-configured web app URL. Fall back to the localhost port swap for dev
-  // (API :3001 → Vite client :5173); that swap is a no-op on the deployed API host, so without a
-  // configured webUrl "See why" would wrongly point at the API host in production.
   const clientUrl = webUrl || apiUrl.replace(":3001", ":5173");
   const seeWhy = `${clientUrl}/ask-orbo?check=${encodeURIComponent(url)}`;
 
   const el = document.createElement("div");
   el.setAttribute("data-orbis-badge", "1");
   Object.assign(el.style, {
-    position: "fixed", zIndex: 2147483647,
+    position: "fixed", zIndex: "2147483647",
     left: Math.min(x, window.innerWidth - 320) + "px",
-    top: Math.min(y + 12, window.innerHeight - 160) + "px",
+    top: Math.min(y + 12, window.innerHeight - 170) + "px",
     width: "300px", background: "#fff", color: "#1A2233",
-    border: `2px solid ${lvl.color}`, borderRadius: "12px",
-    boxShadow: "0 8px 28px rgba(10,37,64,0.22)", padding: "12px 14px",
+    border: `1.5px solid ${lvl.color}`, borderRadius: "16px",
+    boxShadow: "0 10px 30px rgba(10,37,64,0.2)", padding: "14px",
     font: "13px -apple-system,Segoe UI,Roboto,sans-serif", lineHeight: "1.45",
   });
   const reasonsHtml = (verdict.reasons || []).slice(0, 3)
     .map((r) => `<li style="margin:3px 0">${escapeHtml(r.text)}</li>`).join("");
   el.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <b style="color:${lvl.color};font-size:14px">Orbo — ${lvl.label}</b>
+    <div style="display:flex;align-items:center;gap:10px">
+      <img src="${asset(lvl.pose)}" alt="" width="34" height="34" style="flex-shrink:0" />
+      <b style="flex:1;color:${lvl.color};font-size:14px">${lvl.label}</b>
       <span style="font-weight:800;color:${lvl.color}">${verdict.score ?? ""}</span>
     </div>
-    <div style="color:#5A6675;font-size:11px;word-break:break-all;margin:4px 0 6px">${escapeHtml(url)}</div>
-    ${reasonsHtml ? `<ul style="margin:6px 0;padding-left:16px;color:#1A2233">${reasonsHtml}</ul>` : ""}
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div style="color:#5A6675;font-size:11px;word-break:break-all;margin:8px 0 6px">${escapeHtml(url)}</div>
+    ${reasonsHtml ? `<ul style="margin:6px 0;padding-left:16px">${reasonsHtml}</ul>` : ""}
+    <div style="display:flex;gap:8px;margin-top:10px">
       <a href="${seeWhy}" target="_blank" rel="noopener"
-         style="flex:1;text-align:center;background:#0F62FE;color:#fff;text-decoration:none;padding:7px 0;border-radius:9px;font-weight:700">See why</a>
-      <button data-orbis-open style="flex:1;background:transparent;border:1.5px solid ${lvl.color};color:${lvl.color};border-radius:9px;font-weight:700;cursor:pointer">Open anyway</button>
+         style="flex:1;text-align:center;background:#0F62FE;color:#fff;text-decoration:none;padding:8px 0;border-radius:10px;font-weight:700">See why</a>
+      <button data-orbis-open style="flex:1;background:transparent;border:1.5px solid ${lvl.color};color:${lvl.color};border-radius:10px;font-weight:700;cursor:pointer">Open anyway</button>
       <button data-orbis-close style="background:transparent;border:none;color:#5A6675;cursor:pointer;font-size:16px">×</button>
     </div>`;
   document.body.appendChild(el);
-  activeBadge = el;
-
-  el.querySelector("[data-orbis-close]").addEventListener("click", removeBadge);
-  el.querySelector("[data-orbis-open]").addEventListener("click", () => { removeBadge(); window.open(url, "_blank", "noopener"); });
+  clickBadge = el;
+  el.querySelector("[data-orbis-close]").addEventListener("click", removeClickBadge);
+  el.querySelector("[data-orbis-open]").addEventListener("click", () => { removeClickBadge(); window.open(url, "_blank", "noopener"); });
 };
 
-const escapeHtml = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-
-// We prevented the link's default, so WE navigate when it should proceed. Use the CURRENT tab
-// (location.assign) — a post-await window.open("_blank") is treated as a non-gesture popup and gets
-// blocked, silently swallowing the click. Same-tab navigation is never popup-blocked.
 const proceedTo = (url) => { window.location.assign(url); };
 
-// Capture-phase click handler: intercept BEFORE Gmail's own handler navigates. For a dangerous/
-// warning link we block navigation and show the badge; a safe link proceeds; if the pre-check
-// can't run we FAIL OPEN (navigate anyway) so a broken check never traps the user's click.
 const onLinkClick = async (e) => {
-  // Never intercept clicks INSIDE our own badge (its "See why" / "Open anyway" / close controls) —
-  // otherwise the badge's links get re-screened instead of doing their job.
-  if (e.target.closest?.("[data-orbis-badge]")) return;
-
+  if (e.target.closest?.("[data-orbis-badge]")) return; // don't re-screen our own badge's links
   const a = e.target.closest?.("a[href]");
   if (!a || !shouldScreen(a)) return;
-
-  // Let the browser handle modified/middle clicks natively (new tab, download, etc.). We can't
-  // faithfully reproduce those after an async check, and intercepting them risks double-opening.
-  if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+  if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; // native for modified clicks
 
   const url = a.href;
-  // Hold the click: prevent the default open until we have a verdict.
   e.preventDefault();
   e.stopPropagation();
   const { clientX: x, clientY: y } = e;
-
   try {
-    const verdict = await prescreen(url);
-    if (verdict.level === "safe") {
-      proceedTo(url); // safe → don't nag; go where the user intended (same tab)
-    } else {
-      showBadge(url, verdict, x, y); // warning/dangerous → badge, user decides
-    }
-  } catch (err) {
-    // Pre-check unavailable (server down / not signed in) → truly FAIL OPEN: navigate anyway rather
-    // than trap the click behind a badge. A security tool that silently eats clicks is worse than
-    // one that defers. (The full check is still one right-click away.)
-    proceedTo(url);
+    const verdict = await prescreen({ urls: [url] });
+    if (verdict.level === "safe") proceedTo(url);
+    else showClickBadge(url, verdict, x, y);
+  } catch {
+    proceedTo(url); // fail open — never trap a click behind a broken check
   }
 };
 
-document.addEventListener("click", onLinkClick, true);   // capture = before Gmail's own handlers
-document.addEventListener("auxclick", onLinkClick, true); // middle-click path (returns early above)
+document.addEventListener("click", onLinkClick, true);
+document.addEventListener("auxclick", onLinkClick, true);
 
-// Dismiss the badge on Escape or outside click.
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") removeBadge(); });
-document.addEventListener("click", (e) => { if (activeBadge && !e.target.closest("[data-orbis-badge]")) removeBadge(); });
+// Dismiss the CLICK badge on Escape / outside click (the top-right email badge stays until closed).
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") removeClickBadge(); });
+document.addEventListener("click", (e) => { if (clickBadge && !e.target.closest("[data-orbis-badge]")) removeClickBadge(); });

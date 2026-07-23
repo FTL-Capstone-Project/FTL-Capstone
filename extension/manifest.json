@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Orbis — Check with Orbo",
-  "version": "0.1.0",
-  "description": "Right-click any link and check it for phishing with Orbis. Reuses the Orbis check-link API.",
+  "version": "0.2.0",
+  "description": "Orbo checks your email for phishing: an instant safe/warning/danger read when you open a message, plus a right-click check on any link or sender.",
   "permissions": ["contextMenus", "storage"],
   "host_permissions": [
     "http://localhost:3001/*",
@@ -17,6 +17,12 @@
       "matches": ["https://mail.google.com/*"],
       "js": ["content-gmail.js"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*"],
+      "matches": ["https://mail.google.com/*"]
     }
   ],
   "action": {
