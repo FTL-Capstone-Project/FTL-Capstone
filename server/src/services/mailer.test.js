@@ -35,6 +35,20 @@ describe("sendMail (outbound relay)", () => {
     expect(body).toMatchObject({ token: "secret", to: "a@b.com", subject: "Report", html: "<p>hi</p>" });
   });
 
+  it("includes threadId in the POST body when passed (relay replies into the thread)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true });
+    await sendMail({ to: "a@b.com", subject: "s", html: "<p>x</p>", threadId: "thread-123" });
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.threadId).toBe("thread-123");
+  });
+
+  it("sends threadId:null when not passed (standalone email, back-compat)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true });
+    await sendMail({ to: "a@b.com", subject: "s", html: "<p>x</p>" });
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.threadId).toBeNull();
+  });
+
   it("returns false (no throw) on a non-ok response", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: false, status: 500 });
     expect(await sendMail({ to: "a@b.com", subject: "s", html: "<p>x</p>" })).toBe(false);

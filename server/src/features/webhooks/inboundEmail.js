@@ -103,8 +103,11 @@ export const extractOriginalSenderParts = (body) => {
 export const parseAuthResults = (headers) => {
   const empty = { spf: null, dkim: null, dmarc: null };
   if (typeof headers !== "string" || !headers) return empty;
+  // Cap the scan: Authentication-Results sits in the TOP headers, so the first 50k is plenty. This
+  // bounds the regex work if an upgraded relay forwards a huge raw-headers blob.
+  const top = headers.slice(0, 50_000);
   const grab = (key) => {
-    const m = headers.match(new RegExp(`\\b${key}=([a-z]+)`, "i"));
+    const m = top.match(new RegExp(`\\b${key}=([a-z]+)`, "i"));
     return m ? m[1].toLowerCase() : null;
   };
   return { spf: grab("spf"), dkim: grab("dkim"), dmarc: grab("dmarc") };
@@ -114,13 +117,19 @@ export const parseAuthResults = (headers) => {
 // forward there are no anchors (so this returns []), but if the relay forwards the HTML body we can
 // finally do the real "link_mismatch" check: does the visible link TEXT claim one destination while
 // the href points somewhere else? Pure string → array; the mismatch decision lives in emailAnalysis.js.
+// Bounds: slice the HTML to ~200k and return at most MAX_HTML_ANCHORS anchors, so a huge/hostile body
+// can't drive an unbounded matchAll or an unbounded result array (the link_mismatch check only needs
+// to find ONE disguised anchor — the first several are plenty).
+const MAX_HTML_ANCHORS = 50;
 export const extractHtmlLinks = (html) => {
   if (typeof html !== "string" || !html) return [];
+  const capped = html.slice(0, 200_000);
   const links = [];
-  for (const m of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+  for (const m of capped.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
     const href = m[1].trim();
     const text = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); // strip nested tags
     links.push({ text, href });
+    if (links.length >= MAX_HTML_ANCHORS) break;
   }
   return links;
 }

@@ -9,6 +9,7 @@ const submissionCreate = vi.fn();
 const userUpsert = vi.fn();
 const $transaction = vi.fn(async (ops) => Promise.all(ops));
 const escalateSubmission = vi.fn();
+const sendReportEmail = vi.fn();
 
 vi.mock("../../db.js", () => ({
   prisma: {
@@ -29,6 +30,8 @@ vi.mock("../webhooks/emailAnalysis.js", () => ({
   combineEmailReports: vi.fn().mockReturnValue({ ai_score: null, ai_verdict: "x", ai_confidence: "low", title: "x", tags: [], evidence: [] }),
   combineLinkReports: vi.fn().mockReturnValue(null),
 }));
+// The re-forward resend path lazy-imports this module — mock it so we can assert the resend fires.
+vi.mock("../reportEmail/reportEmail.service.js", () => ({ sendReportEmail: (...a) => sendReportEmail(...a) }));
 
 const { submitEmail } = await import("./indicators.service.js");
 
@@ -37,11 +40,12 @@ const individual = { id: 4, clerkUserId: "user_y", orgId: null };
 
 describe("submitEmail — a forwarded email becomes ONE reviewable Indicator", () => {
   beforeEach(() => {
-    [indicatorFindUnique, indicatorCreate, indicatorUpdate, submissionCreate, userUpsert, escalateSubmission].forEach((m) => m.mockReset());
+    [indicatorFindUnique, indicatorCreate, indicatorUpdate, submissionCreate, userUpsert, escalateSubmission, sendReportEmail].forEach((m) => m.mockReset());
     userUpsert.mockResolvedValue({ id: 3, orgId: 7 });
     submissionCreate.mockResolvedValue({ id: 99 });
     indicatorUpdate.mockResolvedValue({ id: 87 });
     escalateSubmission.mockResolvedValue({});
+    sendReportEmail.mockResolvedValue(true);
   });
 
   it("creates a PENDING indicator keyed by email:<hash> + a Submission (source email)", async () => {
@@ -93,5 +97,36 @@ describe("submitEmail — a forwarded email becomes ONE reviewable Indicator", (
     expect(out.indicatorId).toBe(87);
     expect(indicatorCreate).not.toHaveBeenCalled(); // deduped — no second indicator
     expect(out.seenBefore).toBe(true);
+  });
+
+  it("stores the Gmail threadId on the Submission (source email)", async () => {
+    indicatorFindUnique.mockResolvedValue(null);
+    indicatorCreate.mockResolvedValue({ id: 87, status: "pending" });
+
+    await submitEmail({ from: "david@acme.com", subject: "s", body: "b", hasLink: false, threadId: "thread-xyz", user: orgUser });
+
+    expect(submissionCreate.mock.calls[0][0].data.emailThreadId).toBe("thread-xyz");
+  });
+
+  it("re-forward of a DONE indicator resends the finished report immediately (Change A)", async () => {
+    // Already analyzed → dedup skips the pipeline; the resend branch should still email the report.
+    indicatorFindUnique.mockResolvedValue({ id: 87, status: "done", canonicalKey: "email:abc" });
+    const emailUser = { id: 3, clerkUserId: "user_x", orgId: 7, email: "david@acme.com" };
+
+    await submitEmail({ from: "david@acme.com", subject: "s", body: "b", hasLink: false, threadId: "thread-xyz", user: emailUser });
+
+    // Give the fire-and-forget async IIFE a tick to run.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(sendReportEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ indicatorId: 87, threadId: "thread-xyz", user: expect.objectContaining({ email: "david@acme.com" }) })
+    );
+  });
+
+  it("re-forward of a done indicator does NOT resend when the user has no email", async () => {
+    indicatorFindUnique.mockResolvedValue({ id: 87, status: "done", canonicalKey: "email:abc" });
+
+    await submitEmail({ from: "david@acme.com", subject: "s", body: "b", hasLink: false, user: orgUser }); // orgUser has no email
+    await new Promise((r) => setTimeout(r, 0));
+    expect(sendReportEmail).not.toHaveBeenCalled();
   });
 });

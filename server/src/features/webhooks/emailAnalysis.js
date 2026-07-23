@@ -14,6 +14,7 @@ import { chatJSON } from "../../services/llm.js";
 import { env } from "../../config/env.js";
 import { SIGNAL_CATALOG, buildImageReport } from "../vision/phishingSignals.js";
 import { knownBrandDomain, detectLookalike, registeredDomain } from "../../services/typosquat.js";
+import { extractEmailAddress } from "./inboundEmail.js";
 
 // Two signals the LLM must NEVER be trusted to GUESS from plain text — it was firing them on SAFE
 // forwarded emails (marketing reminders) and tanking every score to ~10:
@@ -110,22 +111,43 @@ export const assessAuthResults = (auth) => {
   return null;
 }
 
+// DETERMINISTIC reply-to mismatch (no LLM): a scam often spoofs a trusted "From" but sets a DIFFERENT
+// "Reply-To" so your replies quietly go to the attacker. When the forwarded email's Reply-To lands on
+// a DIFFERENT registered domain than its (original) From, that's a classic tell. Returns a
+// { text, severity } evidence row, or null. We compare the ORIGINAL sender (parsed from the forwarded
+// body) when we have it — the envelope `from` is the forwarder, not the suspect. Pure → unit-testable.
+export const detectReplyToMismatch = (fromAddr, replyTo) => {
+  const fromEmail = extractEmailAddress(fromAddr);
+  const replyEmail = extractEmailAddress(replyTo);
+  if (!fromEmail || !replyEmail) return null; // need both to compare
+  const fromDom = registeredDomain(fromEmail.slice(fromEmail.lastIndexOf("@") + 1));
+  const replyDom = registeredDomain(replyEmail.slice(replyEmail.lastIndexOf("@") + 1));
+  if (!fromDom || !replyDom || fromDom === replyDom) return null; // same domain (or unparseable) = fine
+  return {
+    text: `Replies would go to a different domain (${replyDom}) than the sender's (${fromDom}) — a common trick to route your reply to a scammer`,
+    severity: "dangerous",
+  };
+}
+
 // Assemble the DETERMINISTIC signals we can PROVE from a forwarded email's structure (never guessed
-// by the LLM): a display-name-vs-address brand mismatch, a disguised HTML anchor, and a DKIM/DMARC
-// auth failure. Returns { signals, evidence } — signal KEYS feed the shared deterministic scorer
-// (so they carry their catalog weight), and evidence holds the SPECIFIC extra "why" rows (the auth
-// row, whose wording is more precise than the generic catalog line). Pure → unit-testable.
-const collectDeterministicSignals = ({ senderIdentity, htmlLinks, auth }) => {
+// by the LLM): a display-name-vs-address brand mismatch, a disguised HTML anchor, a DKIM/DMARC auth
+// failure, and a Reply-To-vs-From domain mismatch. Returns { signals, evidence } — signal KEYS feed
+// the shared deterministic scorer (so they carry their catalog weight), and evidence holds the
+// SPECIFIC extra "why" rows (auth / reply-to, whose wording beats the generic catalog line). Pure.
+//   replyToSender = the address to compare Reply-To against (the ORIGINAL/suspect sender, not the forwarder).
+const collectDeterministicSignals = ({ senderIdentity, htmlLinks, auth, replyTo = null, replyToSender = null }) => {
   const signals = [];
   const evidence = [];
   if (detectSenderMismatch(senderIdentity)) signals.push("sender_mismatch");
   if (detectLinkMismatch(htmlLinks)) signals.push("link_mismatch");
   const authRow = assessAuthResults(auth);
-  if (authRow) {
-    // A forged sender IS a sender_mismatch (scorePhishingSignals dedups, so this never double-counts
-    // if the display-name check already added it) — plus the precise auth evidence row.
+  const replyRow = detectReplyToMismatch(replyToSender, replyTo);
+  if (authRow || replyRow) {
+    // A forged sender / hidden reply-to IS a sender_mismatch (scorePhishingSignals dedups, so this
+    // never double-counts if the display-name check already added it) — plus the precise evidence row(s).
     if (!signals.includes("sender_mismatch")) signals.push("sender_mismatch");
-    evidence.push(authRow);
+    if (authRow) evidence.push(authRow);
+    if (replyRow) evidence.push(replyRow);
   }
   return { signals, evidence };
 }
@@ -139,8 +161,11 @@ const collectDeterministicSignals = ({ senderIdentity, htmlLinks, auth }) => {
 // inject that signal into the scorer even though the LLM is never allowed to guess it. So a genuinely
 // disguised link or forged sender scores its full weight — reproducibly — while a safe marketing
 // email (where code proves nothing) is unaffected. These signals fire even with NO LLM key.
-export const analyzeEmailBody = async ({ from = "", subject = "", body = "", senderIdentity = null, htmlLinks = [], auth = null }) => {
-  const proven = collectDeterministicSignals({ senderIdentity, htmlLinks, auth });
+export const analyzeEmailBody = async ({ from = "", subject = "", body = "", senderIdentity = null, htmlLinks = [], auth = null, replyTo = null }) => {
+  // Compare Reply-To against the ORIGINAL sender (from the forwarded body) when we parsed one, else
+  // the envelope from. `senderIdentity.address` is the real suspect; `from` is the forwarder.
+  const replyToSender = senderIdentity?.address || from;
+  const proven = collectDeterministicSignals({ senderIdentity, htmlLinks, auth, replyTo, replyToSender });
 
   // Build the final report from a signal set + optional model words. Deterministic signals are
   // ALWAYS included; the model can only ADD catalog flags it observed (its unverifiable guesses are

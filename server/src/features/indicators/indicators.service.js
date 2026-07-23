@@ -178,8 +178,8 @@ const emailCanonicalKey = ({ from, subject = "", body = "" }) => {
 //
 // Returns immediately with { indicatorId, submissionId, escalated } (verdict fills in a few
 // seconds later, like a link scan). Two forwards of the same email dedup to one Indicator.
-// @param {{ from, subject, body, html?, headers?, replyTo?, hasLink, rawUrl?, rawUrls?, user, contextText? }}
-export const submitEmail = async ({ from, subject = "", body = "", html = null, headers = null, replyTo = null, hasLink = false, rawUrl = null, rawUrls = [], user, contextText = null }) => {
+// @param {{ from, subject, body, html?, headers?, replyTo?, threadId?, hasLink, rawUrl?, rawUrls?, user, contextText? }}
+export const submitEmail = async ({ from, subject = "", body = "", html = null, headers = null, replyTo = null, threadId = null, hasLink = false, rawUrl = null, rawUrls = [], user, contextText = null }) => {
   const canonicalKey = emailCanonicalKey({ from, subject, body });
   // Pull the bare address out of a "Display Name <addr>" header before deriving the domain / rawUrl,
   // else a trailing ">" leaks into the domain (e.g. "acme.com>"). Fall back to the raw string.
@@ -198,7 +198,8 @@ export const submitEmail = async ({ from, subject = "", body = "", html = null, 
   const [submission] = await prisma.$transaction([
     prisma.submission.create({
       // rawUrl carries the sender address for the "email" source (mirrors persistSenderReport).
-      data: { userId, orgId, indicatorId: indicator.id, rawUrl: fromAddr, contextText, source: "email" },
+      // emailThreadId lets the report REPLY into the user's forward thread (null if the relay didn't send it).
+      data: { userId, orgId, indicatorId: indicator.id, rawUrl: fromAddr, contextText, source: "email", emailThreadId: threadId ?? null },
     }),
     prisma.indicator.update({ where: { id: indicator.id }, data: { reportCount: { increment: 1 } } }),
   ]);
@@ -220,7 +221,22 @@ export const submitEmail = async ({ from, subject = "", body = "", html = null, 
   // email through; when analysis completes, runEmailPipeline sends them the report.
   const recipient = { id: userId, email: user?.email ?? null, orgId };
   const needsAnalysis = !seenBefore || indicator.status === "pending" || indicator.status === "error";
-  if (needsAnalysis) runEmailPipeline(indicator.id, { from, subject, body, html, headers, replyTo, hasLink, rawUrl, rawUrls, contextText, recipient });
+  if (needsAnalysis) {
+    runEmailPipeline(indicator.id, { from, subject, body, html, headers, replyTo, threadId, hasLink, rawUrl, rawUrls, contextText, recipient });
+  } else if (indicator.status === "done" && recipient.email) {
+    // Re-forward of an ALREADY-analyzed email: dedup skips the pipeline, so the user would otherwise
+    // get no report back. Send the already-finished report immediately (best-effort, sibling to the
+    // in-app notification). Lazy import + try/catch mirror the pipeline's trigger (breaks the
+    // reportEmail ↔ indicators circular import; a mail failure must never break intake).
+    (async () => {
+      try {
+        const { sendReportEmail } = await import("../reportEmail/reportEmail.service.js");
+        await sendReportEmail({ user: recipient, indicatorId: indicator.id, subject: "Your forwarded email has been checked", threadId });
+      } catch (e) {
+        console.warn("⚠ report email (re-forward resend) failed (non-fatal):", e.message);
+      }
+    })();
+  }
 
   return { indicatorId: indicator.id, submissionId: submission.id, status: indicator.status, seenBefore, escalated };
 }
@@ -229,7 +245,7 @@ export const submitEmail = async ({ from, subject = "", body = "", html = null, 
 // worst-of, write the verdict onto the email Indicator (→ "done"), then email the forwarder their
 // report (Feature 2). Mirrors runPipeline's shape. Analysis helpers live in webhooks/emailAnalysis.js;
 // sender in askOrbo/senderReport.js.
-const runEmailPipeline = async (indicatorId, { from, subject, body, html, headers, replyTo, hasLink, rawUrl, rawUrls = [], contextText, recipient = null }) => {
+const runEmailPipeline = async (indicatorId, { from, subject, body, html, headers, replyTo, threadId = null, hasLink, rawUrl, rawUrls = [], contextText, recipient = null }) => {
   try {
     await prisma.indicator.update({ where: { id: indicatorId }, data: { status: "scanning" } });
 
@@ -256,7 +272,7 @@ const runEmailPipeline = async (indicatorId, { from, subject, body, html, header
     const [sender, bodyReport, linkScans] = await Promise.all([
       generateSenderReport({ email: senderToJudge, context: subject || "" })
         .catch((e) => { console.warn("⚠ email sender leg failed:", e.message); return null; }),
-      analyzeEmailBody({ from, subject, body, senderIdentity, htmlLinks, auth }),
+      analyzeEmailBody({ from, subject, body, senderIdentity, htmlLinks, auth, replyTo }),
       Promise.all(urls.map((url) =>
         scanLinkForReport(url, contextText)
           .then((report) => ({ url, report }))
@@ -287,7 +303,7 @@ const runEmailPipeline = async (indicatorId, { from, subject, body, html, header
     if (recipient?.email) {
       try {
         const { sendReportEmail } = await import("../reportEmail/reportEmail.service.js");
-        await sendReportEmail({ user: recipient, indicatorId, subject: "Your forwarded email has been checked" });
+        await sendReportEmail({ user: recipient, indicatorId, subject: "Your forwarded email has been checked", threadId });
       } catch (e) {
         console.warn("⚠ report email (email pipeline) failed (non-fatal):", e.message);
       }

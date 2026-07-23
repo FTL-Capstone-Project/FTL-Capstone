@@ -11,8 +11,11 @@ import { buildReportEmailHtml } from "./reportEmailTemplate.js";
 import { sendMail } from "../../services/mailer.js";
 import { env } from "../../config/env.js";
 
-// @param {{ user: { id, email, orgId, emailReports? }, indicatorId, subject? }}
-export const sendReportEmail = async ({ user, indicatorId, subject }) => {
+// @param {{ user: { id, email, orgId, emailReports? }, indicatorId, subject?, threadId? }}
+// threadId (optional): the Gmail thread of the user's original forward → the report REPLIES into it.
+// When the caller doesn't have it (e.g. re-forward path), we fall back to the thread id stored on the
+// user's most recent email Submission for this indicator, so re-forwards still thread.
+export const sendReportEmail = async ({ user, indicatorId, subject, threadId = null }) => {
   try {
     if (!user?.email) return false;                       // no deliverable address on record
     if (String(user.email).endsWith("@placeholder.orbis")) return false; // Clerk gave us no real email
@@ -30,11 +33,24 @@ export const sendReportEmail = async ({ user, indicatorId, subject }) => {
     const report = await readIndicatorForClient(indicatorId, user);
     if (!report || report.status !== "done") return false; // don't email a pending/errored check
 
+    // Recover the thread id if the caller didn't pass one (re-forward resend): use the most recent
+    // email submission this user made for this indicator. Best-effort — a miss just sends standalone.
+    let thread = threadId;
+    if (!thread && user.id != null) {
+      const sub = await prisma.submission.findFirst({
+        where: { indicatorId, userId: user.id, source: "email", emailThreadId: { not: null } },
+        orderBy: { createdAt: "desc" },
+        select: { emailThreadId: true },
+      });
+      thread = sub?.emailThreadId ?? null;
+    }
+
     const html = buildReportEmailHtml({ report, appUrl: env.clientUrl });
     return await sendMail({
       to: user.email,
       subject: subject || `Orbis report: ${report.title ?? "your check"}`,
       html,
+      threadId: thread,
     });
   } catch (e) {
     console.warn("⚠ sendReportEmail failed (non-fatal):", e.message);

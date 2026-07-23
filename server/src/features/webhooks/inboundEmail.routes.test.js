@@ -119,7 +119,7 @@ describe("POST /api/webhooks/inbound-email", () => {
     expect(arg.rawUrls.filter((u) => u === "https://paypal.com")).toHaveLength(1);
   });
 
-  it("passes optional richer fields (html/headers/replyTo) through to submitEmail", async () => {
+  it("passes optional richer fields (html/headers/replyTo/threadId) through to submitEmail", async () => {
     findUserByEmail.mockResolvedValue(orgMember);
     await post({
       from: "david@acme.com",
@@ -127,9 +127,15 @@ describe("POST /api/webhooks/inbound-email", () => {
       html: "<a href='https://evil.ru'>www.paypal.com</a>",
       headers: "dmarc=fail",
       replyTo: "attacker@evil.ru",
+      threadId: "gmail-thread-abc",
     });
     expect(submitEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ html: "<a href='https://evil.ru'>www.paypal.com</a>", headers: "dmarc=fail", replyTo: "attacker@evil.ru" })
+      expect.objectContaining({
+        html: "<a href='https://evil.ru'>www.paypal.com</a>",
+        headers: "dmarc=fail",
+        replyTo: "attacker@evil.ru",
+        threadId: "gmail-thread-abc",
+      })
     );
   });
 

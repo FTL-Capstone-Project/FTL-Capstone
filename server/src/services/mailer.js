@@ -15,7 +15,7 @@
 // break the analysis pipeline that calls it.
 import { env } from "../config/env.js";
 
-export const sendMail = async ({ to, subject, html }) => {
+export const sendMail = async ({ to, subject, html, threadId = null }) => {
   const { url, token } = env.outboundEmail;
   if (!url || !token) return false;          // not configured → silent no-op (feature is off)
   if (!to || !subject || !html) return false; // nothing to send
@@ -25,7 +25,9 @@ export const sendMail = async ({ to, subject, html }) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       // token in the BODY (a query string would leak the secret into Google's access logs).
-      body: JSON.stringify({ token, to, subject, html }),
+      // threadId (optional): when present the relay REPLIES into that Gmail thread instead of
+      // sending a standalone message; an absent/null value keeps today's standalone behavior.
+      body: JSON.stringify({ token, to, subject, html, threadId }),
     });
     if (!res.ok) {
       console.warn(`⚠ sendMail: relay responded ${res.status}`);

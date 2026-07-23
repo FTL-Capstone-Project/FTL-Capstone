@@ -169,4 +169,23 @@ describe("extractHtmlLinks", () => {
     expect(extractHtmlLinks("no html here")).toEqual([]);
     expect(extractHtmlLinks(null)).toEqual([]);
   });
+
+  it("caps the number of anchors (bounds work on a hostile/huge body)", () => {
+    const many = Array.from({ length: 200 }, (_, i) => `<a href="https://x${i}.com">link${i}</a>`).join("");
+    const links = extractHtmlLinks(many);
+    expect(links.length).toBe(50);        // MAX_HTML_ANCHORS
+    expect(links[0]).toEqual({ text: "link0", href: "https://x0.com" });
+  });
+
+  it("still finds an early disguised anchor inside a very large body (slice is generous)", () => {
+    const html = '<a href="https://evil.ru">www.paypal.com</a>' + "x".repeat(300_000);
+    expect(extractHtmlLinks(html)[0]).toEqual({ text: "www.paypal.com", href: "https://evil.ru" });
+  });
+});
+
+describe("parseAuthResults — size cap", () => {
+  it("reads auth results near the top even when the header blob is huge", () => {
+    const headers = "Authentication-Results: mx.google.com; dkim=fail; dmarc=fail\n" + "X-Filler: " + "y".repeat(500_000);
+    expect(parseAuthResults(headers)).toEqual({ spf: null, dkim: "fail", dmarc: "fail" });
+  });
 });

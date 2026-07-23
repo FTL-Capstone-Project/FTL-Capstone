@@ -84,7 +84,8 @@ webhooksRouter.post("/inbound-email", async (req, res, next) => {
     //    an upgraded relay can forward the HTML body + original headers, which unlock the strongest
     //    signals (SPF/DKIM/DMARC results, real anchor-vs-href link checks). Absent = analysis just
     //    skips those legs — fully back-compatible with the plain-text relay.
-    const { from, to, subject, body, html, headers, replyTo } = req.body || {};
+    //    threadId is the Gmail thread of the forward, so the report email can REPLY into that thread.
+    const { from, to, subject, body, html, headers, replyTo, threadId } = req.body || {};
     if (typeof from !== "string" && typeof to !== "string") {
       return res.status(400).json({ error: "Missing from/to" });
     }
@@ -134,6 +135,7 @@ webhooksRouter.post("/inbound-email", async (req, res, next) => {
       html,
       headers,
       replyTo,
+      threadId,
       hasLink: rawUrls.length > 0,
       rawUrl: rawUrls[0] ?? null,
       rawUrls,

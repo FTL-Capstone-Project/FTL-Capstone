@@ -16,6 +16,7 @@ const {
   detectSenderMismatch,
   detectLinkMismatch,
   assessAuthResults,
+  detectReplyToMismatch,
 } = await import("./emailAnalysis.js");
 
 beforeEach(() => {
@@ -196,6 +197,50 @@ describe("assessAuthResults (SPF/DKIM/DMARC — forwarding-aware)", () => {
   it("returns null when nothing failed / no headers", () => {
     expect(assessAuthResults({ spf: "pass", dkim: "pass", dmarc: "pass" })).toBeNull();
     expect(assessAuthResults(null)).toBeNull();
+  });
+});
+
+describe("detectReplyToMismatch (deterministic, no LLM)", () => {
+  it("flags when Reply-To domain differs from the From domain", () => {
+    expect(detectReplyToMismatch("PayPal <service@paypal.com>", "attacker@evil.ru"))
+      .toMatchObject({ severity: "dangerous" });
+  });
+
+  it("does NOT flag when Reply-To and From share a registered domain (incl. subdomains)", () => {
+    expect(detectReplyToMismatch("service@paypal.com", "noreply@mail.paypal.com")).toBeNull();
+    expect(detectReplyToMismatch("service@paypal.com", "help@paypal.com")).toBeNull();
+  });
+
+  it("returns null when either address is missing / unparseable", () => {
+    expect(detectReplyToMismatch("service@paypal.com", "")).toBeNull();
+    expect(detectReplyToMismatch("service@paypal.com", null)).toBeNull();
+    expect(detectReplyToMismatch("not-an-email", "a@b.com")).toBeNull();
+  });
+});
+
+describe("analyzeEmailBody — replyTo mismatch enters the score", () => {
+  it("injects sender_mismatch (weight 25) when Reply-To domain differs, no LLM needed", async () => {
+    env.llmApiKey = ""; // prove it's code-derived, not the model
+    const report = await analyzeEmailBody({
+      from: "PayPal <service@paypal.com>",
+      body: "hello",
+      replyTo: "attacker@evil.ru",
+    });
+    expect(report).not.toBeNull();
+    expect(report.ai_score).toBe(75); // 100 - 25 (sender_mismatch)
+    expect(report.evidence.some((e) => /Replies would go to a different domain/i.test(e.text))).toBe(true);
+  });
+
+  it("compares Reply-To against the ORIGINAL sender parsed from the body, not the forwarder", async () => {
+    env.llmApiKey = "";
+    // Envelope from is the forwarder's Gmail; the real sender sits in the forwarded body.
+    const report = await analyzeEmailBody({
+      from: "Me <me@gmail.com>",
+      body: "From: PayPal <service@paypal.com>\nPlease confirm",
+      senderIdentity: { displayName: "PayPal", address: "service@paypal.com" },
+      replyTo: "attacker@evil.ru", // differs from paypal.com → mismatch
+    });
+    expect(report.evidence.some((e) => /Replies would go to a different domain/i.test(e.text))).toBe(true);
   });
 });
 

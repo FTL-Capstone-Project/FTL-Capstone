@@ -4,9 +4,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const readIndicatorForClient = vi.fn();
 const sendMail = vi.fn();
 const userFindUnique = vi.fn();
+const submissionFindFirst = vi.fn();
 const env = { clientUrl: "https://orbis.app" };
 
-vi.mock("../../db.js", () => ({ prisma: { user: { findUnique: (...a) => userFindUnique(...a) } } }));
+vi.mock("../../db.js", () => ({ prisma: {
+  user: { findUnique: (...a) => userFindUnique(...a) },
+  submission: { findFirst: (...a) => submissionFindFirst(...a) },
+} }));
 vi.mock("../indicators/indicators.service.js", () => ({ readIndicatorForClient: (...a) => readIndicatorForClient(...a) }));
 vi.mock("../../services/mailer.js", () => ({ sendMail: (...a) => sendMail(...a) }));
 vi.mock("../../config/env.js", () => ({ env }));
@@ -20,8 +24,10 @@ describe("sendReportEmail", () => {
     readIndicatorForClient.mockReset();
     sendMail.mockReset();
     userFindUnique.mockReset();
+    submissionFindFirst.mockReset();
     sendMail.mockResolvedValue(true);
     readIndicatorForClient.mockResolvedValue(doneReport);
+    submissionFindFirst.mockResolvedValue(null); // no stored thread id unless a test sets one
   });
 
   it("skips (false) when the user has no email", async () => {
@@ -69,5 +75,23 @@ describe("sendReportEmail", () => {
   it("swallows errors (returns false, never throws)", async () => {
     readIndicatorForClient.mockRejectedValue(new Error("db down"));
     expect(await sendReportEmail({ user: { id: 1, email: "a@b.com", emailReports: true }, indicatorId: 2 })).toBe(false);
+  });
+
+  it("forwards a passed threadId to sendMail (reply into the thread)", async () => {
+    await sendReportEmail({ user: { id: 1, email: "a@b.com", emailReports: true }, indicatorId: 2, threadId: "thread-9" });
+    expect(sendMail.mock.calls[0][0].threadId).toBe("thread-9");
+    expect(submissionFindFirst).not.toHaveBeenCalled(); // caller had it → no fallback lookup
+  });
+
+  it("falls back to the stored Submission.emailThreadId when the caller didn't pass one (resend path)", async () => {
+    submissionFindFirst.mockResolvedValue({ emailThreadId: "stored-thread-42" });
+    await sendReportEmail({ user: { id: 1, email: "a@b.com", emailReports: true }, indicatorId: 2 });
+    expect(submissionFindFirst).toHaveBeenCalled();
+    expect(sendMail.mock.calls[0][0].threadId).toBe("stored-thread-42");
+  });
+
+  it("sends threadId null when neither passed nor stored (standalone email)", async () => {
+    await sendReportEmail({ user: { id: 1, email: "a@b.com", emailReports: true }, indicatorId: 2 });
+    expect(sendMail.mock.calls[0][0].threadId).toBeNull();
   });
 });

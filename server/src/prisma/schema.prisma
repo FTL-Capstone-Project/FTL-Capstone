@@ -67,6 +67,10 @@ model Submission {
   // NOT deleted (reversible). Only affects THIS user's own view — the global Indicator and other
   // users' submissions are untouched. null = active. See history route ?archived= filter.
   archivedAt  DateTime?
+  // Gmail thread id of the forwarded email (source "email" only; null otherwise). Lets the report
+  // email REPLY into the user's original forward thread instead of arriving as a standalone message.
+  // Stored per-forward (not on the shared global Indicator) so a later re-forward can still thread.
+  emailThreadId String?
   createdAt   DateTime @default(now())
 
   user      User      @relation(fields: [userId], references: [id])

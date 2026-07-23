@@ -43,6 +43,11 @@ export function createApp() {
   //    a 12mb limit everywhere is a needless DoS surface (an attacker could POST 12mb of JSON
   //    to any endpoint). Mount the big parser on /api/vision FIRST so it wins for that path.
   app.use("/api/vision", express.json({ limit: "12mb" }));
+  // Inbound forwarded emails carry the original HTML body + raw headers, which routinely exceed the
+  // 256kb default — give this ONE route modest headroom (still far below vision's 12mb). Mounted
+  // before the global parser so it wins for this path; the per-field slices in inboundEmail.js bound
+  // the actual regex work regardless.
+  app.use("/api/webhooks/inbound-email", express.json({ limit: "1mb" }));
   app.use(express.json({ limit: "256kb" }));
 
   // 3) CORS for the Vite client + the browser extension (if configured). An allowlist rather

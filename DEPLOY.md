@@ -96,29 +96,35 @@ shows up as a report an analyst can review — even a text-only scam with no lin
 mail infrastructure**; a free Gmail account relays forwards to the API.
 
 1. Set **`INBOUND_EMAIL_TOKEN`** on `orbis-api` to any long random string (the shared secret).
-2. Create/pick a Gmail inbox (e.g. `orbischecks@gmail.com`) and install the Orbis Apps Script relay
-   (separate setup guide) with the **same** token + a 1-minute time trigger. The relay POSTs
-   `{from,to,subject,body}` to `/api/webhooks/inbound-email` with the `x-orbis-token` header.
+2. Create/pick a Gmail inbox (e.g. `orbischecks@gmail.com`) and install the Orbis inbound relay:
+   open [script.google.com](https://script.google.com), paste [`server/appsscript/inbound-relay.gs`](server/appsscript/inbound-relay.gs),
+   set `ORBIS_API_URL` + `ORBIS_TOKEN` (same token as step 1), and add a **1-minute time trigger**
+   on `relayForwards`. The relay POSTs `{from,to,subject,body,html,headers,replyTo,threadId}` to
+   `/api/webhooks/inbound-email` with the `x-orbis-token` header.
 3. (Optional) Set **`INBOUND_EMAIL_TOKENS`** to map plus-tokens to registered emails so
    `orbischecks+<token>@gmail.com` beats a spoofable From header.
 
 Test without Gmail (simulate a forward) — expect `201 …escalated:true` for a seed org member.
 The `body` can contain MULTIPLE links (every one is scanned) and a forwarded `From:` header (the
-display name vs address is checked for impersonation):
+display name vs address is checked for impersonation). The optional `headers` / `replyTo` fields
+unlock the strongest checks:
 ```bash
 curl -i -X POST https://orbis-api.onrender.com/api/webhooks/inbound-email \
   -H "content-type: application/json" -H "x-orbis-token: YOUR_TOKEN" \
   -d '{"from":"David M. <david@acme.com>","to":"orbischecks@gmail.com",
        "subject":"Fwd: account locked",
+       "headers":"Authentication-Results: mx.google.com; dkim=fail; spf=fail; dmarc=fail",
+       "replyTo":"attacker@evil.ru",
        "body":"From: PayPal Security <no-reply@paypa1-secure.com>\nverify https://paypa1-secure.com/verify or visit https://paypal.com"}'
 ```
 
-> **Richer signals (optional relay upgrade).** The basic relay forwards `{from,to,subject,body}` as
-> plain text. If you upgrade the Apps Script to also send the original **headers**
-> (`message.getRawContent()`) and **HTML body** (`message.getBody()`) as `headers` / `html` fields,
-> Orbis unlocks its strongest checks: the sender's real **SPF/DKIM/DMARC** results (a DKIM/DMARC
-> fail = forged sender) and true **anchor-text-vs-href** link disguise detection. Absent those
-> fields, analysis falls back to the plain-text signals — fully backward-compatible.
+> **Richer signals — now sent by the committed relay.** The relay forwards, in addition to the
+> plain-text `body`: the original **HTML body** (`message.getBody()` → `html`), the top **header
+> block** (`message.getRawContent()` → `headers`), the **Reply-To** (`message.getReplyTo()` →
+> `replyTo`), and the **Gmail thread id** (`thread.getId()` → `threadId`). These unlock Orbis's
+> strongest deterministic checks — SPF/DKIM/DMARC forged-sender detection, Reply-To-vs-From domain
+> mismatch, and true anchor-text-vs-href link disguise — and let the outbound report **reply into
+> the same thread** (Step 8). All are OPTIONAL: a plain-text relay that omits them still works.
 
 ## Step 8 — (Optional) Enable outbound report emails
 
@@ -126,17 +132,24 @@ After a user forwards an email and Orbis finishes checking it, email them the fu
 score, threat vectors, per-link breakdown, screenshot) so they don't have to open the app. Uses the
 SAME Gmail + Apps Script pattern as Step 7, in **reverse** — no new mail infrastructure, no SMTP.
 
-1. In the same `orbischecks@gmail.com` account, create a **second Apps Script Web App** with a
-   `doPost(e)` that (a) checks the shared token in the JSON body, then (b) calls
-   `GmailApp.sendEmail(to, subject, "", { htmlBody: html })`. Deploy it as a Web App (execute as
-   you; access "Anyone") and copy its `https://script.google.com/…/exec` URL.
+1. In the same `orbischecks@gmail.com` account, create a **second Apps Script Web App**: paste
+   [`server/appsscript/outbound-relay.gs`](server/appsscript/outbound-relay.gs), set `OUTBOUND_TOKEN`,
+   and deploy it as a **Web app** (execute as you; access "Anyone"). Copy its
+   `https://script.google.com/…/exec` URL. Its `doPost(e)` checks the token, then — if the payload
+   carries a `threadId` — **replies into that Gmail thread** (`GmailApp.getThreadById(id).reply(...)`)
+   so the report nests under the user's forward; otherwise it sends a standalone
+   `GmailApp.sendEmail(...)`.
 2. On `orbis-api` set **`OUTBOUND_EMAIL_URL`** = that URL and **`OUTBOUND_EMAIL_TOKEN`** = a long
    random string (match it in the Apps Script). Until BOTH are set, report emails are a silent
    no-op (the in-app notification still fires).
 3. Users can opt out via the `User.emailReports` flag (default on).
 
+> **Editing the script later:** Apps Script serves the last *deployed* version, not the last saved
+> one. After any edit: **Deploy → Manage deployments → Edit (✏️) → Version: New version → Deploy.**
+
 Test end-to-end: run the Step 7 curl with `OUTBOUND_EMAIL_*` set, then confirm `orbischecks@gmail.com`
-sends the forwarding address an HTML report once the check finishes.
+sends the forwarding address an HTML report once the check finishes. Re-forwarding the SAME email
+sends the finished report again immediately (no re-scan), threaded under the original forward.
 
 ---
 
