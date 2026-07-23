@@ -7,10 +7,12 @@ document.getElementById("settings-link").addEventListener("click", () => chrome.
 
 // Same score→bucket thresholds as the app (verdict.js scoreBucket): >=70 safe, >=35 review, else dangerous.
 const bucketOf = (score) => (score == null ? "review" : score >= 70 ? "safe" : score >= 35 ? "review" : "dangerous");
+// Each verdict bucket gets its matching Orbo pose (same expressions the web app shows) so the
+// popup feels like the real Orbo reacting: happy when safe, cautioning on review, stop-hand on danger.
 const BUCKET = {
-  safe: { color: "var(--safe)", label: "Safe" },
-  review: { color: "var(--review)", label: "Review" },
-  dangerous: { color: "var(--danger)", label: "Dangerous" },
+  safe: { color: "var(--safe)", label: "Safe", orbo: "assets/orbo-safe.png" },
+  review: { color: "var(--review)", label: "Review", orbo: "assets/orbo-caution.png" },
+  dangerous: { color: "var(--danger)", label: "Dangerous", orbo: "assets/orbo-danger.png" },
 };
 const sevColor = (s) => (s === "safe" ? "var(--safe)" : s === "dangerous" ? "var(--danger)" : "var(--review)");
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -33,7 +35,10 @@ const renderVerdict = (target, indicator) => {
   render(`
     <div class="card" style="border-color:${b.color}55">
       <div class="card-head">
-        <span class="badge" style="background:${b.color}1a;color:${b.color}">${b.label}</span>
+        <span class="verdict-head">
+          <img class="orbo-pose" src="${b.orbo}" alt="" width="44" height="44" />
+          <span class="badge" style="background:${b.color}1a;color:${b.color}">${b.label}</span>
+        </span>
         <div>
           <div class="score" style="color:${b.color}">${indicator.ai_score ?? "?"}</div>
           <div class="score-label">Safety score</div>
@@ -79,13 +84,23 @@ const run = async () => {
   const target = activeTarget;
 
   if (!target) {
-    return render(`<p class="msg">Right-click any link, sender email, or selected text and choose <b>“Check with Orbis”</b> to scan it.</p>`);
+    return render(`
+      <div style="text-align:center">
+        <img class="orbo-loading" src="assets/orbo-wave.png" alt="Orbo" width="72" height="72" />
+        <p class="msg">Right-click any link, sender email, or selected text and choose <b>“Check with Orbis”</b> and I'll scan it for you.</p>
+      </div>`);
   }
 
   // An email address gets an instant sender report; a link gets the full sandbox scan.
   const isEmail = Boolean(OrbisApi.asEmail(target));
   const checking = isEmail ? "Checking this sender…" : "Checking this link safely in a sandbox…";
-  render(`<div class="spinner"></div><p class="msg" style="text-align:center">${checking}</p><p class="target">${esc(target)}</p>`);
+  render(`
+    <div style="text-align:center">
+      <img class="orbo-loading" src="assets/orbo-thinking.png" alt="Orbo" width="72" height="72" />
+      <div class="spinner"></div>
+      <p class="msg">${checking}</p>
+    </div>
+    <p class="target">${esc(target)}</p>`);
   try {
     const { indicator } = await OrbisApi.checkTarget(target, (n) => {
       if (n === 3) content.querySelector(".msg").textContent = "Still scanning — this can take 20–40 seconds…";

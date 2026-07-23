@@ -1,4 +1,6 @@
 /* ── extension: popup styles · owner: David ── Trust Blue palette (see brand memory). */
+/* LIGHT (default). The popup follows the SYSTEM theme via prefers-color-scheme below, so it
+   matches the OS chrome the popup floats over (a light popup on a dark desktop looks foreign). */
 :root {
   --primary: #0F62FE;
   --navy: #0A2540;
@@ -11,6 +13,23 @@
   --surface: #FFFFFF;
   --canvas: #F5F7FA;
 }
+
+/* DARK — same token NAMES, dark values (mirrors the web app's tokens.css). Everything in the
+   popup reads these vars, so this one block re-themes the whole popup on a dark system. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #3B82F6;
+    --navy: #E6ECF5;        /* "navy" = heading color → light on dark */
+    --safe: #34D07F;
+    --review: #E0A93A;
+    --danger: #F26B72;
+    --text: #E4E8EF;
+    --text-dim: #93A0B5;
+    --border: #24304A;
+    --surface: #131C2B;
+    --canvas: #0B1220;
+  }
+}
 * { box-sizing: border-box; }
 body {
   width: 360px;
@@ -21,8 +40,13 @@ body {
 }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 14px; background: var(--navy); color: #fff;
+  /* Fixed brand navy in BOTH themes (not var(--navy), which flips to light on dark and would
+     make the white logo text vanish). The bar is always the dark brand strip. */
+  padding: 10px 14px; background: #0A2540; color: #fff;
 }
+.brand { display: flex; align-items: center; gap: 8px; }
+.brand-mark { display: block; flex-shrink: 0; }
+.brand-orbo { display: block; flex-shrink: 0; margin-left: 2px; }
 .logo { font-weight: 800; letter-spacing: 0.3px; }
 .settings-btn {
   background: transparent; border: 1px solid rgba(255,255,255,0.4); color: #fff;
@@ -33,6 +57,7 @@ body {
 /* generic states */
 .msg { color: var(--text-dim); font-size: 0.9em; line-height: 1.5; }
 .target { word-break: break-all; font-size: 0.82em; color: var(--text-dim); margin: 6px 0 12px; }
+.orbo-loading { display: block; margin: 4px auto 0; }
 .spinner {
   width: 22px; height: 22px; border: 3px solid var(--border);
   border-top-color: var(--primary); border-radius: 50%;
@@ -49,6 +74,8 @@ body {
 /* verdict card */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
 .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.verdict-head { display: flex; align-items: center; gap: 8px; }
+.orbo-pose { display: block; flex-shrink: 0; }
 .badge { font-weight: 700; font-size: 0.8em; padding: 4px 10px; border-radius: 999px; }
 .score { font-size: 2.2em; font-weight: 800; line-height: 1; text-align: right; }
 .score-label { font-size: 0.62em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
