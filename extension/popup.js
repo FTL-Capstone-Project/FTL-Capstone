@@ -59,10 +59,24 @@ const showError = (target, err) => {
       needsToken ? "Open Settings" : "Try again"}</button>`);
 };
 
+// The target we're checking, held in memory for THIS popup session. We read pendingTarget from
+// storage ONCE (on first run) and clear storage immediately, so: (a) a failed/errored check can't
+// leave a stale target that silently re-scans the next time the popup is opened manually, and
+// (b) "Try again" retries THIS target instead of finding an empty storage and showing the idle
+// screen. Kept as a module var (not storage) so retries work after storage is cleared.
+let activeTarget = "";
+
 const run = async () => {
   await chrome.action.setBadgeText({ text: "" }); // clear the "1" nudge if it was set
-  const { pendingTarget } = await chrome.storage.session.get("pendingTarget");
-  const target = pendingTarget || "";
+
+  // First run picks up the context-menu target from storage, then clears it immediately (one-shot).
+  // Retries (the "Try again" button) reuse activeTarget without touching storage.
+  if (!activeTarget) {
+    const { pendingTarget } = await chrome.storage.session.get("pendingTarget");
+    activeTarget = pendingTarget || "";
+    if (pendingTarget) await chrome.storage.session.remove("pendingTarget");
+  }
+  const target = activeTarget;
 
   if (!target) {
     return render(`<p class="msg">Right-click any link, sender email, or selected text and choose <b>“Check with Orbis”</b> to scan it.</p>`);
@@ -76,8 +90,6 @@ const run = async () => {
     const { indicator } = await OrbisApi.checkTarget(target, (n) => {
       if (n === 3) content.querySelector(".msg").textContent = "Still scanning — this can take 20–40 seconds…";
     });
-    // one-shot: clear so reopening the popup doesn't re-run a stale target
-    await chrome.storage.session.remove("pendingTarget");
     renderVerdict(target, indicator);
   } catch (err) {
     showError(target, err);

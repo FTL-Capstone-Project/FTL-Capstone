@@ -10,12 +10,21 @@
 //
 // PRIVACY: we send ONLY the link's hostname-bearing URL to /api/prescreen — never email content.
 
-const WEBMAIL_HOSTS = /(^|\.)(mail\.google|google)\.com$/i; // don't screen Gmail's own chrome links
+// Gmail's OWN chrome links to skip — the exact hosts, not all of *.google.com. (The old
+// broad /(^|\.)google\.com$/ also excluded sites.google.com / docs.google.com, which CAN host
+// phishing, so those were never screened.) We only skip Gmail + the Google account/login chrome.
+const SKIP_HOSTS = new Set(["mail.google.com", "accounts.google.com"]);
 
-// Read config (apiUrl, token) — same storage the popup/options use.
+// Read config (apiUrl, token, webUrl) — same storage the popup/options use. webUrl is the Orbis
+// WEB APP url (for "See why" deep-links); it's separate from the API url because in production
+// they're different hosts (api vs client) — deriving one from the other's port only works locally.
 const getConfig = async () => {
-  const { apiUrl, token } = await chrome.storage.sync.get(["apiUrl", "token"]);
-  return { apiUrl: (apiUrl || "http://localhost:3001").replace(/\/$/, ""), token: token || "" };
+  const { apiUrl, token, webUrl } = await chrome.storage.sync.get(["apiUrl", "token", "webUrl"]);
+  return {
+    apiUrl: (apiUrl || "http://localhost:3001").replace(/\/$/, ""),
+    token: token || "",
+    webUrl: (webUrl || "").replace(/\/$/, ""),
+  };
 };
 
 // Is this a link we should screen? Real external http(s) links in the message body — skip Gmail's
@@ -24,8 +33,8 @@ const shouldScreen = (a) => {
   const href = a.href || "";
   if (!/^https?:\/\//i.test(href)) return false;
   try {
-    const host = new URL(href).hostname;
-    if (WEBMAIL_HOSTS.test(host)) return false;
+    const host = new URL(href).hostname.toLowerCase();
+    if (SKIP_HOSTS.has(host)) return false;
     return true;
   } catch { return false; }
 };
@@ -54,9 +63,12 @@ const removeBadge = () => { activeBadge?.remove(); activeBadge = null; };
 // Render the inline verdict badge near the click point. Returns nothing; wires its own buttons.
 const showBadge = async (url, verdict, x, y) => {
   removeBadge();
-  const { apiUrl } = await getConfig();
+  const { apiUrl, webUrl } = await getConfig();
   const lvl = LEVELS[verdict.level] || LEVELS.warning;
-  const clientUrl = apiUrl.replace(":3001", ":5173"); // dev: API 3001 → Vite client 5173
+  // Prefer the explicitly-configured web app URL. Fall back to the localhost port swap for dev
+  // (API :3001 → Vite client :5173); that swap is a no-op on the deployed API host, so without a
+  // configured webUrl "See why" would wrongly point at the API host in production.
+  const clientUrl = webUrl || apiUrl.replace(":3001", ":5173");
   const seeWhy = `${clientUrl}/ask-orbo?check=${encodeURIComponent(url)}`;
 
   const el = document.createElement("div");
@@ -94,14 +106,27 @@ const showBadge = async (url, verdict, x, y) => {
 
 const escapeHtml = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+// We prevented the link's default, so WE navigate when it should proceed. Use the CURRENT tab
+// (location.assign) — a post-await window.open("_blank") is treated as a non-gesture popup and gets
+// blocked, silently swallowing the click. Same-tab navigation is never popup-blocked.
+const proceedTo = (url) => { window.location.assign(url); };
+
 // Capture-phase click handler: intercept BEFORE Gmail's own handler navigates. For a dangerous/
-// warning link we block navigation and show the badge; safe links are let through untouched
-// (with a brief non-blocking "safe" flash could be added later — for now we don't nag on safe).
-document.addEventListener("click", async (e) => {
+// warning link we block navigation and show the badge; a safe link proceeds; if the pre-check
+// can't run we FAIL OPEN (navigate anyway) so a broken check never traps the user's click.
+const onLinkClick = async (e) => {
+  // Never intercept clicks INSIDE our own badge (its "See why" / "Open anyway" / close controls) —
+  // otherwise the badge's links get re-screened instead of doing their job.
+  if (e.target.closest?.("[data-orbis-badge]")) return;
+
   const a = e.target.closest?.("a[href]");
   if (!a || !shouldScreen(a)) return;
-  const url = a.href;
 
+  // Let the browser handle modified/middle clicks natively (new tab, download, etc.). We can't
+  // faithfully reproduce those after an async check, and intercepting them risks double-opening.
+  if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+
+  const url = a.href;
   // Hold the click: prevent the default open until we have a verdict.
   e.preventDefault();
   e.stopPropagation();
@@ -110,20 +135,20 @@ document.addEventListener("click", async (e) => {
   try {
     const verdict = await prescreen(url);
     if (verdict.level === "safe") {
-      // Safe → don't nag; just proceed to the link the user intended.
-      window.open(url, "_blank", "noopener");
+      proceedTo(url); // safe → don't nag; go where the user intended (same tab)
     } else {
       showBadge(url, verdict, x, y); // warning/dangerous → badge, user decides
     }
   } catch (err) {
-    // Pre-check unavailable (server down / not signed in) → fail OPEN but warn softly, so we never
-    // trap the user's click. A security tool that silently eats clicks is worse than one that defers.
-    const msg = err.status === 401
-      ? "Sign in to Orbis (extension Settings) to pre-check links. Opening was not blocked."
-      : "Orbis couldn't pre-check this link right now. Proceed with your own judgment.";
-    showBadge(url, { level: "warning", score: null, reasons: [{ text: msg }] }, x, y);
+    // Pre-check unavailable (server down / not signed in) → truly FAIL OPEN: navigate anyway rather
+    // than trap the click behind a badge. A security tool that silently eats clicks is worse than
+    // one that defers. (The full check is still one right-click away.)
+    proceedTo(url);
   }
-}, true); // capture = true: run before Gmail's bubble-phase handlers
+};
+
+document.addEventListener("click", onLinkClick, true);   // capture = before Gmail's own handlers
+document.addEventListener("auxclick", onLinkClick, true); // middle-click path (returns early above)
 
 // Dismiss the badge on Escape or outside click.
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") removeBadge(); });

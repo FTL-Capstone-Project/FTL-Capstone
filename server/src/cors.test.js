@@ -41,4 +41,16 @@ describe("CORS preflight allowed methods", () => {
       expect(allow).toMatch(new RegExp(verb));
     }
   });
+
+  it("allows the Gmail origin (the extension's content-script pre-check runs there)", async () => {
+    // The Gmail inline badge fetches /api/prescreen from the mail.google.com page origin, not the
+    // chrome-extension:// origin — so CORS must echo it back or the browser blocks the call.
+    const res = await request(app)
+      .options("/api/prescreen")
+      .set("Origin", "https://mail.google.com")
+      .set("Access-Control-Request-Method", "POST");
+
+    expect([200, 204]).toContain(res.status);
+    expect(res.headers["access-control-allow-origin"]).toBe("https://mail.google.com");
+  });
 });

@@ -21,6 +21,11 @@
   <input id="apiUrl" type="text" placeholder="http://localhost:3001" />
   <p class="hint">Where your Orbis backend runs. Leave as the default for local dev.</p>
 
+  <label for="webUrl">Web app URL <span style="font-weight:400;color:var(--text-dim)">(optional)</span></label>
+  <input id="webUrl" type="text" placeholder="https://orbis-client-8yu1.onrender.com" />
+  <p class="hint">The Orbis website, used by the Gmail "See why" link. Leave blank for local dev
+    (it defaults to the API host on port 5173).</p>
+
   <label for="token">Auth token <span style="font-weight:400;color:var(--text-dim)">(optional in dev-stub mode)</span></label>
   <input id="token" type="password" placeholder="Paste your Orbis token" />
   <p class="hint">

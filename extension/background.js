@@ -17,21 +17,21 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-chrome.contextMenus.onClicked.addListener(async (info) => {
+chrome.contextMenus.onClicked.addListener((info) => {
   if (info.menuItemId !== MENU_ID) return;
   // Prefer the actual link href; fall back to selected text (trimmed).
   const target = (info.linkUrl || info.selectionText || "").trim();
   if (!target) return;
 
-  // Hand the target to the popup via session storage (cleared when the browser closes), then
-  // open the popup. openPopup() needs a recent user gesture — the context-menu click qualifies.
-  await chrome.storage.session.set({ pendingTarget: target });
-  try {
-    await chrome.action.openPopup();
-  } catch {
-    // Some browsers/versions reject programmatic openPopup(); fall back to a badge nudge so the
-    // user knows to click the toolbar icon, where the pending target is waiting.
-    await chrome.action.setBadgeText({ text: "1" });
-    await chrome.action.setBadgeBackgroundColor({ color: "#0F62FE" });
-  }
+  // Fire-and-forget the storage write (don't AWAIT it) and open the popup while the context-menu
+  // click's user gesture is still live — awaiting storage first can consume the gesture so
+  // openPopup() throws and we'd always fall back to the badge. The popup only reads pendingTarget
+  // after it loads, so the un-awaited set() reliably lands first.
+  chrome.storage.session.set({ pendingTarget: target });
+  chrome.action.openPopup().catch(() => {
+    // Some browsers/versions (e.g. Brave) reject programmatic openPopup() — fall back to a badge
+    // nudge so the user knows to click the toolbar icon, where the pending target is waiting.
+    chrome.action.setBadgeText({ text: "1" });
+    chrome.action.setBadgeBackgroundColor({ color: "#0F62FE" });
+  });
 });

@@ -59,7 +59,12 @@ export function createApp() {
   // 3) CORS for the Vite client + the browser extension (if configured). An allowlist rather
   // than a single string so the extension's "chrome-extension://<id>" origin is accepted too.
   // Requests with no Origin header (curl, same-origin, server-to-server) are allowed through.
-  const allowedOrigins = [env.clientUrl, ...env.extensionOrigins];
+  //
+  // mail.google.com is allowed because the extension's Gmail CONTENT SCRIPT runs in the Gmail page
+  // origin (not the chrome-extension:// origin), so its inline pre-check fetch carries Origin:
+  // https://mail.google.com. Allowing an origin only lets the browser MAKE the call — every route
+  // is still auth-gated by the Bearer token/session, so this grants no data access on its own.
+  const allowedOrigins = [env.clientUrl, "https://mail.google.com", ...env.extensionOrigins];
   app.use(
     cors({
       origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin)),
