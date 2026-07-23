@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import { resolveUser, applyClerkEvent, ensureOrganization } from "./users.service.js";
 
 // Minimal in-memory-ish mock Prisma: records calls and returns plausible rows.
-const mockPrisma = () => {
+// `existingUser` lets a test seed what user.findUnique returns (personal-mode branch reads it).
+const mockPrisma = ({ existingUser = null } = {}) => {
   return {
     organization: {
       upsert: vi.fn(async ({ create, where }) => ({ id: 10, clerkOrgId: where.clerkOrgId, name: create?.name ?? "Acme" })),
@@ -17,6 +18,9 @@ const mockPrisma = () => {
         name: (update?.name ?? create?.name) ?? null,
         role: (update?.role ?? create?.role) ?? "individual",
       })),
+      findUnique: vi.fn(async () => existingUser),
+      update: vi.fn(async ({ where, data }) => ({ ...existingUser, clerkUserId: where.clerkUserId, ...data })),
+      create: vi.fn(async ({ data }) => ({ id: 2, ...data })),
       deleteMany: vi.fn(async () => ({ count: 1 })),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
@@ -24,13 +28,41 @@ const mockPrisma = () => {
 }
 
 describe("resolveUser", () => {
-  it("individual (no org) → role individual, orgId null", async () => {
-    const p = mockPrisma();
+  it("brand-new individual (no org, no existing row) → creates an individual", async () => {
+    const p = mockPrisma(); // findUnique returns null → no existing row
     const u = await resolveUser(p, { clerkUserId: "user_1", email: "a@b.com", name: "A" });
     expect(u.role).toBe("individual");
     expect(u.orgId).toBe(null);
     expect(p.organization.upsert).not.toHaveBeenCalled();
-    expect(p.user.upsert).toHaveBeenCalledOnce();
+    // Personal-mode path creates directly (not upsert) so it can't overwrite an existing role.
+    expect(p.user.create).toHaveBeenCalledOnce();
+    expect(p.user.upsert).not.toHaveBeenCalled();
+  });
+
+  it("analyst browsing PERSONALLY (no active org) does NOT lose their stored role/orgId", async () => {
+    // The bug: an analyst switches to their personal account (clerkOrgId null) → resolveUser used
+    // to upsert role=individual/orgId=null, permanently demoting them. Now the DB row is preserved
+    // and only the SESSION view is scoped to individual.
+    const existingUser = { id: 7, clerkUserId: "user_analyst", email: "priya@acme.com", name: "Priya", orgId: 10, role: "analyst" };
+    const p = mockPrisma({ existingUser });
+    const u = await resolveUser(p, { clerkUserId: "user_analyst" }); // personal mode: no clerkOrgId
+
+    // Session view is individual (so this request only sees personal data)…
+    expect(u.role).toBe("individual");
+    expect(u.orgId).toBe(null);
+    // …but the DB write NEVER demotes the stored role/orgId.
+    expect(p.user.upsert).not.toHaveBeenCalled();
+    const demotingUpdate = p.user.update.mock.calls.find(([arg]) =>
+      arg?.data && ("role" in arg.data || "orgId" in arg.data));
+    expect(demotingUpdate).toBeUndefined(); // no update ever wrote role/orgId
+  });
+
+  it("personal mode with a new email refreshes email/name but not role/orgId", async () => {
+    const existingUser = { id: 7, clerkUserId: "user_analyst", email: "old@acme.com", name: "Old", orgId: 10, role: "analyst" };
+    const p = mockPrisma({ existingUser });
+    await resolveUser(p, { clerkUserId: "user_analyst", email: "new@acme.com", name: "New" });
+    const updateArg = p.user.update.mock.calls[0]?.[0];
+    expect(updateArg.data).toEqual({ email: "new@acme.com", name: "New" }); // only email/name
   });
 
   it("org admin → ensures org + role analyst", async () => {
@@ -54,10 +86,10 @@ describe("resolveUser", () => {
     await expect(resolveUser(p, {})).rejects.toThrow(/clerkUserId/);
   });
 
-  it("supplies a fallback email when none given", async () => {
-    const p = mockPrisma();
+  it("supplies a fallback email when none given (new individual)", async () => {
+    const p = mockPrisma(); // no existing row → create path
     await resolveUser(p, { clerkUserId: "user_x" });
-    const createArg = p.user.upsert.mock.calls[0][0].create;
+    const createArg = p.user.create.mock.calls[0][0].data;
     expect(createArg.email).toContain("user_x");
   });
 });

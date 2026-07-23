@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate, useSearchParams } from "react-router-dom";
-import { UserButton, OrganizationSwitcher } from "@clerk/clerk-react";
-import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Orbit, PanelLeftClose, PanelLeft, Clock, MoreHorizontal, Pencil, Pin, Trash2, BarChart3, Menu } from "lucide-react";
+import { UserButton, OrganizationSwitcher, useOrganizationList, useAuth } from "@clerk/clerk-react";
+import { Plus, Search, LayoutGrid, FileText, Sparkles, Settings, Orbit, PanelLeftClose, PanelLeft, Clock, MoreHorizontal, Pencil, Pin, Trash2, BarChart3, Menu, User, Users, ShieldCheck } from "lucide-react";
 import { NotificationsProvider } from "../context/NotificationsContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
 import OrbisLogo from "./OrbisLogo.jsx";
@@ -11,7 +11,7 @@ import { useOrbisRole } from "../lib/useOrbisRole.js";
 import { useMediaQuery, MOBILE_QUERY } from "../lib/useMediaQuery.js";
 import { useResolvedTheme } from "../lib/useResolvedTheme.js";
 import { getClerkAppearance } from "../lib/clerkAppearance.js";
-import { listConversations, searchConversations, subscribe, deleteConversation, renameConversation, togglePin, groupConversations } from "../lib/conversations.js";
+import { listConversations, searchConversations, subscribe, deleteConversation, renameConversation, togglePin, groupConversations, setActiveUser } from "../lib/conversations.js";
 
 // NOTE: SHARED COMPONENT (app frame). Merged: David's wireframe styling + real Orbis logo +
 // lucide icons, layered with Michael's role-aware nav (useOrbisRole + NAV_BY_ROLE), collapsible
@@ -25,6 +25,30 @@ const NAV_ICON = {
   "/reports": FileText,
   "/insights": BarChart3,
 };
+
+// Small pill in the top bar showing the account's current role, so it's obvious at a glance
+// whether you're browsing as an individual, an org member, or an analyst (this used to be
+// invisible). Icon + word + color, never color alone (matches the verdict-badge accessibility rule).
+const ROLE_META = {
+  individual: { label: "Individual", Icon: User },
+  member:     { label: "Member",     Icon: Users },
+  analyst:    { label: "Analyst",    Icon: ShieldCheck },
+};
+
+const RolePill = ({ role, pushLeft = false }) => {
+  const meta = ROLE_META[role] ?? ROLE_META.individual;
+  const Icon = meta.Icon;
+  return (
+    <span
+      title={`You're signed in as ${meta.label.toLowerCase()}`}
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, marginRight: pushLeft ? "auto" : 0,
+        fontSize: "0.78em", fontWeight: 700, color: "var(--primary)", background: "var(--canvas)",
+        border: "1px solid var(--border)", borderRadius: 999, padding: "3px 10px" }}
+    >
+      <Icon size={13} /> {meta.label}
+    </span>
+  );
+}
 
 const AppShell = () => {
   // Clerk's appearance is a JS object (it can't read our CSS var() tokens from its portal), so we
@@ -41,6 +65,13 @@ const AppShell = () => {
   const activeId = params.get("c"); // which chat is open right now → highlight it
   const nav = NAV_BY_ROLE[role] ?? NAV_BY_ROLE.individual;
   const inOrg = role === "member" || role === "analyst";
+
+  // Does this account belong to ANY org (regardless of which one is active right now)? We need
+  // this so the OrganizationSwitcher stays visible even after an analyst/member switches to their
+  // PERSONAL account — otherwise `inOrg` goes false, the switcher unmounts, and they're stranded
+  // in personal with no way back. `userMemberships: true` loads the caller's memberships list.
+  const { userMemberships } = useOrganizationList({ userMemberships: true });
+  const hasOrgMembership = (userMemberships?.count ?? userMemberships?.data?.length ?? 0) > 0;
 
   // ── Responsive frame ──
   // Desktop: the sidebar is docked (a flex column that can collapse to a rail).
@@ -59,6 +90,12 @@ const AppShell = () => {
 
   // Keep Recents live: re-read when the conversation store changes (chat saved/deleted).
   useEffect(() => subscribe(() => setRecents(listConversations())), []);
+
+  // Scope Recents to the signed-in user so a shared computer shows each account only its own
+  // chats. Runs after the subscribe effect above, so the listener is registered when setActiveUser
+  // fires its re-render notification for the newly-active user.
+  const { userId } = useAuth();
+  useEffect(() => { setActiveUser(userId); }, [userId]);
   // While searching: a flat list of matches (no date headers). Otherwise: date-grouped.
   const searching = search.trim().length > 0;
   const searchResults = searching ? searchConversations(search) : [];
@@ -116,7 +153,9 @@ const AppShell = () => {
             </button>
           )}
 
-          {inOrg && !railCollapsed && (
+          {/* Gate on org MEMBERSHIP, not the active-org-derived `inOrg`: a member/analyst who
+              switched to Personal has inOrg=false but still needs the switcher to get back. */}
+          {(inOrg || hasOrgMembership) && !railCollapsed && (
             <div style={{ margin: "2px 0" }}>
               <OrganizationSwitcher hidePersonal={false} appearance={clerkAppearance} />
             </div>
@@ -201,6 +240,10 @@ const AppShell = () => {
               </button>
             )}
             {orgName && <span style={{ marginRight: isMobile ? 0 : "auto", color: "var(--text-dim)", fontSize: "0.9em" }}>{orgName}</span>}
+            {/* Show which role the account is currently on (individual/member/analyst) — it was
+                previously impossible to tell at a glance. If there's no org name to push it left,
+                this pill takes the auto-margin so it sits at the far left of the header. */}
+            <RolePill role={role} pushLeft={!orgName && !isMobile} />
             <NotificationBell />
             <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
           </header>

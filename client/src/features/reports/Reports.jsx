@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/clerk-react";
+import { ArrowUpDown } from "lucide-react";
 import { api } from "../../lib/api.js";
 import { useOrbisRole } from "../../lib/useOrbisRole.js";
 import ReportCard from "./ReportCard.jsx";
@@ -19,6 +20,19 @@ const FILTERS = [
   { value: "dangerous", label: "Dangerous" },
   { value: "email",     label: "Forwarded" }, // source === "email" (grouped forwarded emails)
 ];
+
+// Sort options for the Reports list. The server already returns newest-first, but users asked to
+// re-sort. `compare` runs on a COPY of the visible rows (never mutates fetched state). Scores can
+// be null on older/unscored rows, so those sort to the end regardless of direction.
+const SORTS = [
+  { value: "newest",     label: "Newest",       compare: (a, b) => when(b) - when(a) },
+  { value: "oldest",     label: "Oldest",       compare: (a, b) => when(a) - when(b) },
+  { value: "score-high", label: "Highest score", compare: (a, b) => score(b) - score(a) },
+  { value: "score-low",  label: "Lowest score",  compare: (a, b) => score(a) - score(b) },
+];
+// Helpers so a missing date/score can't produce NaN ordering (NaN sorts unpredictably).
+const when = (r) => (r.created_at ? new Date(r.created_at).getTime() : 0);
+const score = (r) => (typeof r.ai_score === "number" ? r.ai_score : -1);
 
 // My checks — adapts to the signed-in user's role (O2 + O3).
 //  • individual: my checks + verdict filter, NO analyst/closure status.
@@ -44,6 +58,7 @@ const MyChecks = ({ role }) => {
   const [teamReports, setTeamReports] = useState([]); // my whole org's reports (?org=1)
   const [scope, setScope] = useState("mine");       // which list is showing: "mine" | "team"
   const [filter, setFilter] = useState("all"); // which verdict is selected; "all" = show everything
+  const [sort, setSort] = useState("newest"); // how the visible list is ordered
   const [showArchived, setShowArchived] = useState(false); // My History sub-view: active vs archived
   const [selected, setSelected] = useState(null); // the report whose detail modal is open (null = closed)
   const [pendingDelete, setPendingDelete] = useState(null); // report awaiting the "are you sure?" confirm
@@ -134,10 +149,14 @@ const MyChecks = ({ role }) => {
   // selected filter on top of whichever is showing. "Forwarded" filters by report SOURCE (how it
   // arrived); the rest filter by verdict KIND.
   const activeReports = scope === "team" ? teamReports : showArchived ? archivedReports : reports;
-  const visibleReports =
+  const filteredReports =
     filter === "all" ? activeReports
       : filter === "email" ? activeReports.filter(isForwardedEmail)
       : activeReports.filter((r) => r.kind === filter);
+  // Sort a COPY so we never mutate the fetched arrays in state. Falls back to newest if the
+  // selected sort key somehow isn't found.
+  const sortCompare = (SORTS.find((s) => s.value === sort) ?? SORTS[0]).compare;
+  const visibleReports = [...filteredReports].sort(sortCompare);
   // Row actions only make sense on MY History (not Team History, which is other people's reports).
   const canManage = scope === "mine";
   // Only solo individuals may permanently delete: a member's report feeds the analyst queue, so the
@@ -180,8 +199,8 @@ const MyChecks = ({ role }) => {
         </div>
       )}
 
-      {/* Verdict filter pills */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+      {/* Verdict filter pills (left) + sort control (right). */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20, alignItems: "center" }}>
         {FILTERS.map((f) => {
           const isActive = filter === f.value;
           return (
@@ -204,6 +223,23 @@ const MyChecks = ({ role }) => {
             </button>
           );
         })}
+
+        {/* Sort dropdown — pushed to the right; sorts the already-fetched list client-side. */}
+        <label style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
+          fontSize: "0.82em", color: "var(--text-dim)" }}>
+          <ArrowUpDown size={14} />
+          <select
+            aria-label="Sort reports"
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            style={{ border: "1px solid var(--border)", borderRadius: 999, padding: "6px 10px",
+              background: "var(--surface)", color: "var(--text)", fontSize: "0.9em", cursor: "pointer" }}
+          >
+            {SORTS.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {/* The list. Three states: no reports at all, none match the filter, or show them.

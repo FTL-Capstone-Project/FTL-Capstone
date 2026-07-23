@@ -49,6 +49,34 @@ export const resolveUser = async (prisma, identity) => {
   const org = clerkOrgId ? await ensureOrganization(prisma, { clerkOrgId, name: orgName }) : null;
   const role = deriveRole({ orgId: clerkOrgId, orgRole, orgMetadata, userMetadata });
 
+  // PERSONAL MODE (no active Clerk org) — must NOT persist a demotion. resolveUser runs on EVERY
+  // authed request, and an analyst/member who switches to their personal account in the org
+  // switcher has clerkOrgId=null → role would derive to "individual". If we upserted that, we'd
+  // permanently overwrite their stored analyst/member role + orgId in the DB and they could never
+  // get it back (the reported bug). Instead: leave the stored row untouched (only refresh
+  // email/name), and return a SESSION VIEW scoped as individual so THIS request correctly sees
+  // only personal data — without corrupting the persisted role. When they switch back to the org,
+  // the in-org branch below re-syncs their real role.
+  if (!clerkOrgId) {
+    const existing = await prisma.user.findUnique({ where: { clerkUserId } });
+    if (existing) {
+      const updated = (email || name)
+        ? await prisma.user.update({
+            where: { clerkUserId },
+            data: { ...(email ? { email } : {}), ...(name ? { name } : {}) },
+          })
+        : existing;
+      // Session-scoped view: this request is personal, so present as individual/no-org even
+      // though the DB keeps their real role + orgId for when they switch back.
+      return { ...updated, role: "individual", orgId: null };
+    }
+    // No row yet → a genuine brand-new individual account. Create it as individual.
+    return prisma.user.create({
+      data: { clerkUserId, email: email ?? `${clerkUserId}@placeholder.orbis`, name, orgId: null, role: "individual" },
+    });
+  }
+
+  // IN-ORG MODE — sync role + orgId from the active Clerk org context (real membership changes).
   return prisma.user.upsert({
     where: { clerkUserId },
     update: { orgId: org?.id ?? null, role, ...(email ? { email } : {}), ...(name ? { name } : {}) },

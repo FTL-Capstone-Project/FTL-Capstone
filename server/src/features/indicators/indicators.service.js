@@ -281,6 +281,24 @@ const runEmailPipeline = async (indicatorId, { from, subject, body, html, header
       },
     });
 
+    // In-app "we finished checking your email" notification, so the bell flips from the intake
+    // "being checked" alert to a completed one on the next poll — the forwarded-email report
+    // updates without the user reloading. Its OWN inner try/catch is MANDATORY: a notification
+    // failure must NOT fall into the outer catch below, which would overwrite the just-saved
+    // "done" verdict with status:"error" (turning a successful analysis into a failure).
+    if (recipient?.id) {
+      try {
+        await createNotification(prisma, {
+          userId: recipient.id,
+          message: `We finished checking your forwarded email — ${report.ai_verdict ?? "your report is ready."}`,
+          type: "email_scored",
+          indicatorId,
+        });
+      } catch (e) {
+        console.warn("⚠ completion notification (email pipeline) failed (non-fatal):", e.message);
+      }
+    }
+
     // Feature 2 — email the forwarder their finished report (sibling to the in-app notification).
     // Best-effort + lazy import (breaks the reportEmail ↔ indicators circular import): a mail failure
     // must never turn a completed analysis into an error.

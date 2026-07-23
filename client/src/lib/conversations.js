@@ -9,16 +9,40 @@
 // Tiny pub/sub (subscribe) lets the sidebar re-render live as the active chat updates.
 // Owner: David.
 // ============================================================
-const KEY = "orbis.conversations.v1";
+// Recents are stored per SIGNED-IN USER, not globally. On a shared computer, account A's chats
+// must not show up for account B. We key localStorage by the Clerk user id ("<base>:<userId>");
+// AppShell calls setActiveUser() once Clerk resolves who's signed in. Before that (or when signed
+// out) we fall back to the unscoped base key.
+const BASE_KEY = "orbis.conversations.v1";
+let activeUserId = null;
+const storageKey = () => (activeUserId ? `${BASE_KEY}:${activeUserId}` : BASE_KEY);
 const listeners = new Set();
 
 const readAll = () => {
-  try { return JSON.parse(localStorage.getItem(KEY)) || []; }
+  try { return JSON.parse(localStorage.getItem(storageKey())) || []; }
   catch { return []; }
 }
 const writeAll = (list) => {
-  try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* quota/full — ignore */ }
+  try { localStorage.setItem(storageKey(), JSON.stringify(list)); } catch { /* quota/full — ignore */ }
   listeners.forEach((fn) => fn());
+}
+
+// Scope Recents to the signed-in user. Called by AppShell when Clerk resolves the user id (and on
+// sign-out with null). The FIRST time a real user is seen we migrate any legacy pre-scoping blob
+// into that user's bucket and delete the legacy key — so it's carried over once for the original
+// user, and a SECOND account on the same device can't inherit it.
+export const setActiveUser = (userId) => {
+  const next = userId || null;
+  if (next === activeUserId) return;
+  activeUserId = next;
+  if (activeUserId) {
+    const scoped = `${BASE_KEY}:${activeUserId}`;
+    const legacy = localStorage.getItem(BASE_KEY);
+    if (legacy != null && localStorage.getItem(scoped) == null) {
+      try { localStorage.setItem(scoped, legacy); localStorage.removeItem(BASE_KEY); } catch { /* quota — ignore */ }
+    }
+  }
+  listeners.forEach((fn) => fn()); // re-render Recents for the newly-active user
 }
 
 // Subscribe to changes (returns an unsubscribe fn). Use with useSyncExternalStore or an effect.
