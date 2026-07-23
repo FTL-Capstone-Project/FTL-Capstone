@@ -40,16 +40,21 @@ body {
 }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  /* Fixed brand navy in BOTH themes (not var(--navy), which flips to light on dark and would
-     make the white logo text vanish). The bar is always the dark brand strip. */
-  padding: 10px 14px; background: #0A2540; color: #fff;
+  /* Transparent header — no box. It sits on the popup surface (which follows the system theme),
+     and the wordmark itself carries the brand, just like the favicon. */
+  padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border);
 }
 .brand { display: flex; align-items: center; gap: 8px; }
-.brand-mark { display: block; flex-shrink: 0; }
-.brand-orbo { display: block; flex-shrink: 0; margin-left: 2px; }
-.logo { font-weight: 800; letter-spacing: 0.3px; }
+.brand-logo { display: block; width: auto; }
+.brand-orbo { display: block; flex-shrink: 0; }
+/* Show the wordmark variant that matches the SYSTEM theme; hide the other. Default = light. */
+.brand-logo--dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  .brand-logo--light { display: none; }
+  .brand-logo--dark { display: block; }
+}
 .settings-btn {
-  background: transparent; border: 1px solid rgba(255,255,255,0.4); color: #fff;
+  background: transparent; border: 1px solid var(--border); color: var(--text-dim);
   border-radius: 8px; padding: 4px 10px; font-size: 0.78em; cursor: pointer;
 }
 #content { padding: 14px; }
