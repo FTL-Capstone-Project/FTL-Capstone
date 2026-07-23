@@ -1,13 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
-  <!-- Orbis planet-"O" — LIGHT tab variant. Matches the real logo: a BIG bright-blue planet with
-       a THIN navy outline (not a heavy dark donut) + a thin navy orbit ring crossing it. Navy is
-       used sparingly as outlines so the mark stays airy/blue like the wordmark's "O". -->
-  <!-- Bright-blue planet (dominant) with a thin navy outline -->
-  <circle cx="250" cy="250" r="146" fill="#0f6bff" stroke="#0a2540" stroke-width="15" />
-  <!-- Orbit ring + satellite: thin navy, the accent that makes it a planet, not just a dot. Moon
-       inset so it never clips the canvas edge at tab size. -->
-  <g transform="rotate(-22 250 250)">
-    <ellipse cx="250" cy="250" rx="198" ry="80" fill="none" stroke="#0a2540" stroke-width="15" />
-    <circle cx="444" cy="250" r="25" fill="#0f6bff" stroke="#0a2540" stroke-width="11" />
+  <defs>
+    <!-- Front-half clip: the half-plane below the orbit's center line, in the orbit's tilted frame. -->
+    <clipPath id="frontHalf">
+      <rect x="-60" y="250" width="620" height="420" transform="rotate(-14 250 250)"/>
+    </clipPath>
+  </defs>
+
+  <!-- 1) Orbit BACK (full, white-cased navy). Flatter + gentler tilt to match the logo. -->
+  <g transform="rotate(-14 250 250)">
+    <ellipse cx="250" cy="250" rx="214" ry="74" fill="none" stroke="#ffffff" stroke-width="34"/>
+    <ellipse cx="250" cy="250" rx="214" ry="74" fill="none" stroke="#12305c" stroke-width="19"/>
   </g>
+
+  <!-- 2) Planet: navy rim → white separator → bright-blue core. -->
+  <circle cx="250" cy="250" r="158" fill="#12305c"/>
+  <circle cx="250" cy="250" r="135" fill="#ffffff"/>
+  <circle cx="250" cy="250" r="123" fill="#2f6bff"/>
+
+  <!-- 3) Orbit FRONT (same ellipse, clipped to the lower half → crosses in front of the core). -->
+  <g clip-path="url(#frontHalf)">
+    <g transform="rotate(-14 250 250)">
+      <ellipse cx="250" cy="250" rx="214" ry="74" fill="none" stroke="#ffffff" stroke-width="34"/>
+      <ellipse cx="250" cy="250" rx="214" ry="74" fill="none" stroke="#12305c" stroke-width="19"/>
+    </g>
+  </g>
+
+  <!-- 4) Satellite moon on the orbit at ~3 o'clock (right), navy with a white outline ring. -->
+  <circle cx="454" cy="212" r="33" fill="#ffffff"/>
+  <circle cx="454" cy="212" r="24" fill="#12305c"/>
 </svg>

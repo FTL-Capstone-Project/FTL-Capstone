@@ -1,15 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
-  <!-- Orbis planet-"O" — DARK tab variant (light-blue halo + gray accents read on a dark bar).
-       Composition pulled in from the edges so the orbiting moon doesn't clip at tab size. -->
-  <!-- Inner blue planet -->
-  <circle cx="250" cy="250" r="96" fill="#2d5ef7" />
-  <!-- Gray separator -->
-  <circle cx="250" cy="250" r="121" fill="none" stroke="#5a6065" stroke-width="9" />
-  <!-- Light-blue halo ring -->
-  <circle cx="250" cy="250" r="147" fill="none" stroke="#a1d6fd" stroke-width="46" />
-  <!-- Orbit + satellite (moon sits ON the orbit path, inset so it never touches the edge) -->
-  <g transform="rotate(-22 250 250)">
-    <ellipse cx="250" cy="250" rx="196" ry="78" fill="none" stroke="#5a6065" stroke-width="12" />
-    <circle cx="446" cy="250" r="21" fill="#a1d6fd" stroke="#5a6065" stroke-width="9" />
+  <!-- Same planet-O as the light favicon, but the rim/orbit/moon use a LIGHT color so the mark
+       stays visible on a DARK tab bar (navy-on-dark would vanish). Blue core kept. -->
+  <defs>
+    <clipPath id="frontHalfD">
+      <rect x="-60" y="250" width="620" height="420" transform="rotate(-14 250 250)"/>
+    </clipPath>
+  </defs>
+
+  <!-- Orbit BACK -->
+  <g transform="rotate(-14 250 250)">
+    <ellipse cx="250" cy="250" rx="214" ry="74" fill="none" stroke="#0b1a30" stroke-width="34"/>
+    <ellipse cx="250" cy="250" rx="214" ry="74" fill="none" stroke="#cfe0f5" stroke-width="19"/>
   </g>
+
+  <!-- Planet: light rim → dark separator → bright-blue core -->
+  <circle cx="250" cy="250" r="158" fill="#cfe0f5"/>
+  <circle cx="250" cy="250" r="135" fill="#0b1a30"/>
+  <circle cx="250" cy="250" r="123" fill="#3b82f6"/>
+
+  <!-- Orbit FRONT (clipped to lower half) -->
+  <g clip-path="url(#frontHalfD)">
+    <g transform="rotate(-14 250 250)">
+      <ellipse cx="250" cy="250" rx="214" ry="74" fill="none" stroke="#0b1a30" stroke-width="34"/>
+      <ellipse cx="250" cy="250" rx="214" ry="74" fill="none" stroke="#cfe0f5" stroke-width="19"/>
+    </g>
+  </g>
+
+  <!-- Moon -->
+  <circle cx="454" cy="212" r="33" fill="#0b1a30"/>
+  <circle cx="454" cy="212" r="24" fill="#cfe0f5"/>
 </svg>
