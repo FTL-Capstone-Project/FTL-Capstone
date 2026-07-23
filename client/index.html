@@ -13,14 +13,16 @@
     <script>
       (function () {
         try {
+          var osDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
           var pref = localStorage.getItem("orbis-theme"); // light | dark | system | null
-          var theme = (pref === "light" || pref === "dark")
-            ? pref
-            : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          // PAGE theme: explicit light/dark wins; otherwise follow the OS.
+          var theme = (pref === "light" || pref === "dark") ? pref : (osDark ? "dark" : "light");
           document.documentElement.setAttribute("data-theme", theme);
-          // Point the tab icon at the matching planet-"O" (navy-ring on light, white-ring on dark).
+          // FAVICON: always follow the OS (the browser TAB BAR), NOT the page theme — a light
+          // favicon on a dark tab bar vanishes. So pick the variant from prefers-color-scheme.
           var fav = document.getElementById("favicon");
-          if (fav) fav.href = (theme === "dark" ? "/favicon-dark.svg" : "/favicon-light.svg") + "?v=" + theme;
+          var favVariant = osDark ? "dark" : "light";
+          if (fav) fav.href = "/favicon-" + favVariant + ".svg?v=" + favVariant;
         } catch (e) {}
       })();
     </script>

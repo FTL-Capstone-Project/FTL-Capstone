@@ -26,15 +26,22 @@ export const getResolvedTheme = () => {
   return pref;
 };
 
-// Point the tab favicon at the planet-"O" variant matching the resolved theme (blue tuned per
-// theme). index.html sets it once before paint; this keeps it in sync when the theme changes
-// live (Settings toggle, or the OS flipping while "system" is selected).
-const applyFavicon = (resolved) => {
+// Point the tab favicon at the planet-"O" variant matching the OS THEME (the tab bar), not the
+// site's chosen theme. index.html sets it once before paint; this keeps it in sync when the OS
+// theme flips live. Takes no args — it reads prefers-color-scheme itself.
+const applyFavicon = () => {
   if (typeof document === "undefined") return;
-  const href = (resolved === "dark" ? "/favicon-dark.svg" : "/favicon-light.svg") + "?v=" + resolved;
+  // The favicon must match the BROWSER TAB BAR, which follows the OS theme — NOT the site's chosen
+  // theme. Someone on OS-dark who sets the site to light still has a DARK tab bar, so a light
+  // (navy) favicon would vanish there. So we pick the variant from prefers-color-scheme directly,
+  // independent of the in-app light/dark preference.
+  const osDark = typeof window !== "undefined" && window.matchMedia
+    && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const variant = osDark ? "dark" : "light";
+  const href = `/favicon-${variant}.svg?v=${variant}`;
   // Browsers cache the favicon and often IGNORE an href change on the existing <link>. To force a
   // re-fetch we REPLACE the node (and add a ?v= query so the URL actually differs). This is why the
-  // live light/dark swap wasn't switching before.
+  // live swap wasn't switching before.
   const old = document.getElementById("favicon");
   const link = document.createElement("link");
   link.id = "favicon";
@@ -45,11 +52,13 @@ const applyFavicon = (resolved) => {
   document.head.appendChild(link);
 };
 
-// Apply the resolved theme to <html data-theme> (and sync the favicon).
+// Apply the resolved theme to <html data-theme> (and sync the favicon). The page theme and the
+// favicon are decoupled on purpose: the page follows the user's in-app choice, the favicon follows
+// the OS (the tab bar), so applyFavicon reads prefers-color-scheme itself rather than the page theme.
 const applyResolved = () => {
   const resolved = getResolvedTheme();
   document.documentElement.setAttribute("data-theme", resolved);
-  applyFavicon(resolved);
+  applyFavicon();
 };
 
 // Set the preference (persist it) and repaint. Pass "light" | "dark" | "system".
@@ -60,12 +69,19 @@ export const setThemePreference = (pref) => {
   return next;
 };
 
-// While the preference is "system", re-resolve whenever the OS theme changes (live).
-// Call once at app start; returns an unsubscribe fn.
+// React to the OS theme flipping live. Call once at app start; returns an unsubscribe fn.
+// Two independent effects:
+//   • The PAGE theme only re-resolves when the preference is "system" (an explicit light/dark
+//     choice pins the page and shouldn't move with the OS).
+//   • The FAVICON ALWAYS follows the OS, because it must match the browser tab bar — even when the
+//     user has pinned the site to the opposite theme.
 export const watchSystemTheme = () => {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
-  const onChange = () => { if (getThemePreference() === "system") applyResolved(); };
+  const onChange = () => {
+    if (getThemePreference() === "system") applyResolved(); // repaints page + favicon
+    else applyFavicon();                                    // page stays pinned; favicon still tracks the OS
+  };
   mq.addEventListener?.("change", onChange);
   return () => mq.removeEventListener?.("change", onChange);
 };
