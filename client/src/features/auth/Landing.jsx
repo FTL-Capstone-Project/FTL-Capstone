@@ -1,7 +1,9 @@
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   ShieldCheck, Building2, ScatterChart, Zap, Link2, BarChart3,
   Twitter, Linkedin, Github, ArrowRight, Download, Send,
+  Mail, Globe, Users, AlertTriangle,
 } from "lucide-react";
 // Auth entry points: "Login" → sign-in; "Get Started" → the account-type chooser
 // (personal / organizational / analyst), which then routes to the right auth screen.
@@ -16,10 +18,38 @@ import OrboAvatar from "../../components/OrboAvatar.jsx";
 // LIGHT MODE = fully light. The logo is a DARK wordmark, so every surface that holds
 // it (nav, footer) is light and it sits bare with no background chip. Blue is used as
 // an ACCENT (buttons, the CTA band, chat-card highlights), never as a full-bleed
-// background slab, so nothing "sticks out" and the page flows. The navy/dark hero is
-// deferred to the real dark-mode theme (coming from Figma).
+// background slab, so nothing "sticks out" and the page flows.
+//
+// MOTION (Apple-like, but restrained): the hero assembles in a short staged load, and
+// sections glide in on scroll via one shared IntersectionObserver. All of it is gated
+// behind prefers-reduced-motion in global.css and is VISIBLE BY DEFAULT, so the page is
+// fully accessible and works even if the reveal script never runs.
 
 const SECTION_MAX = 1200; // content column width (matches app shell feel)
+
+// Reveal-on-scroll: attach `className="landing-reveal"` to anything that should glide in, then
+// call useReveal() once at the page root. It watches every .landing-reveal and adds .is-visible
+// as they enter the viewport (one observer for the whole page, so it stays cheap). Reduced-motion
+// users just see everything already in place (the CSS keeps .landing-reveal fully visible).
+const useReveal = () => {
+  useEffect(() => {
+    const nodes = document.querySelectorAll(".landing-reveal");
+    if (!nodes.length || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("is-visible");
+            io.unobserve(e.target); // reveal once, then stop watching
+          }
+        });
+      },
+      { threshold: 0.15, rootMargin: "0px 0px -8% 0px" }
+    );
+    nodes.forEach((n) => io.observe(n));
+    return () => io.disconnect();
+  }, []);
+}
 
 // Shared button styles (all tuned for LIGHT surfaces). Defined up top because arrow
 // consts are not hoisted, and the components below reference them.
@@ -48,11 +78,12 @@ const Eyebrow = ({ children }) => (
 
 // ── top navigation (light bar; dark logo sits bare, no chip) ──
 const Nav = () => {
-  const links = ["Features", "Solutions"];
+  const links = ["Features", "Solutions", "About"];
   return (
     <nav style={{
-      background: "var(--surface)", borderBottom: "1px solid var(--border)",
-      position: "sticky", top: 0, zIndex: 10,
+      background: "color-mix(in srgb, var(--surface) 82%, transparent)",
+      backdropFilter: "saturate(180%) blur(12px)", WebkitBackdropFilter: "saturate(180%) blur(12px)",
+      borderBottom: "1px solid var(--border)", position: "sticky", top: 0, zIndex: 10,
     }}>
       <div style={{
         maxWidth: SECTION_MAX, margin: "0 auto", padding: "14px 24px",
@@ -76,10 +107,11 @@ const Nav = () => {
 };
 
 // A compact preview of the Ask Orbo chat, fronted by the mascot. Illustrative of the
-// real feature (paste a link, Orbo gives a plain-English safety verdict).
+// real feature (paste a link, Orbo gives a plain-English safety verdict). The `landing-scanline`
+// runs a one-time "scanning" sweep on load, so the card demonstrates what Orbis does at a glance.
 const OrboChatCard = () => (
-  <div style={{
-    background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow)",
+  <div className="landing-float landing-scanline" style={{
+    position: "relative", background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow)",
     overflow: "hidden", border: "1px solid var(--border)",
   }}>
     <div style={{
@@ -121,7 +153,7 @@ const OrboChatCard = () => (
   </div>
 );
 
-// ── hero (light, with a soft blue glow for depth) ──
+// ── hero (light, with a soft blue glow for depth; staged load-in) ──
 const Hero = () => (
   <header style={{
     background: "radial-gradient(1100px 480px at 78% 15%, rgba(15,98,254,0.10), transparent 60%), var(--canvas)",
@@ -131,16 +163,16 @@ const Hero = () => (
       display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 48, alignItems: "center",
     }}>
       <div>
-        <Eyebrow>AI-Powered Phishing Defense</Eyebrow>
+        <div className="landing-load landing-load-1"><Eyebrow>AI-Powered Phishing Defense</Eyebrow></div>
 
-        <h1 style={{ fontSize: 60, lineHeight: 1.05, fontWeight: 800, letterSpacing: -1.5, color: "var(--navy)", margin: "24px 0 0" }}>
-          Stop Phishing Attacks Before They Strike
+        <h1 className="landing-load landing-load-1" style={{ fontSize: "clamp(38px, 6vw, 62px)", lineHeight: 1.03, fontWeight: 800, letterSpacing: -1.5, color: "var(--navy)", margin: "24px 0 0" }}>
+          Stop phishing<br />before it starts.
         </h1>
-        <p style={{ fontSize: 19, color: "var(--text-dim)", margin: "24px 0 32px", maxWidth: 520 }}>
-          Orbis detects, checks, and explains phishing threats across your inbox, in plain English and in seconds.
+        <p className="landing-load landing-load-2" style={{ fontSize: 19, color: "var(--text-dim)", margin: "24px 0 32px", maxWidth: 520, lineHeight: 1.6 }}>
+          Orbis is the personal security analyst for everyone who doesn't have one. Paste a link or forward an email, and get a plain-English safety verdict in seconds, so you never have to click and hope.
         </p>
 
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        <div className="landing-load landing-load-3" style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
           <Link to="/get-started" style={{ ...primaryBtnStyle, padding: "14px 30px", fontSize: 16 }}>Get Started</Link>
           <Link to="/signin?type=personal" style={{ ...ghostBtnStyle, padding: "14px 30px", fontSize: 16 }}>Login</Link>
           <Link to="/extension" style={{ ...outlineBtnStyle, padding: "14px 24px", fontSize: 16 }}><Download size={18} /> Download Extension</Link>
@@ -148,30 +180,85 @@ const Hero = () => (
       </div>
 
       {/* Orbo chat card: represents the real "Ask Orbo" chat feature. */}
-      <OrboChatCard />
+      <div className="landing-load landing-load-4"><OrboChatCard /></div>
     </div>
   </header>
+);
+
+// ── About: why Orbis exists + the scale of the problem (real, cited stats) ──
+// Copy is grounded in our own problem statement (planning/user_stories.md): the people most
+// targeted by phishing have the least protection. Stats are attributed inline so they're honest.
+const STATS = [
+  { icon: Mail, value: "3.4 billion", label: "phishing emails are sent every single day", source: "Industry estimate" },
+  { icon: AlertTriangle, value: "~90%", label: "of cyberattacks start with a phishing email", source: "Multiple industry reports" },
+  { icon: Users, value: "300,000+", label: "phishing complaints filed with the FBI in a single year", source: "FBI IC3, 2022" },
+  { icon: Globe, value: "1.4 million", label: "brand-new phishing sites appear every month", source: "Webroot" },
+];
+
+const About = () => (
+  <section id="about" className="landing-anchor" style={{ background: "var(--canvas)", padding: "96px 24px" }}>
+    <div style={{ maxWidth: SECTION_MAX, margin: "0 auto" }}>
+      {/* The inspiration story */}
+      <div className="landing-reveal" style={{ maxWidth: 760, margin: "0 auto 64px", textAlign: "center" }}>
+        <Eyebrow>About Orbis</Eyebrow>
+        <h2 style={{ fontSize: "clamp(30px, 4.5vw, 44px)", fontWeight: 800, color: "var(--navy)", letterSpacing: -1, margin: "20px 0 24px", lineHeight: 1.1 }}>
+          The people who need protection most have the least of it.
+        </h2>
+        <p style={{ fontSize: 19, color: "var(--text-dim)", lineHeight: 1.7 }}>
+          A suspicious link is a moment of both risk and uncertainty. If you have a security team, you can
+          report it and wait. If you don't, your only options are to click and hope, or ignore it and maybe
+          miss something real. Students, retirees, and small companies are targeted precisely because they
+          have looser defenses and no expert to ask.
+        </p>
+        <p style={{ fontSize: 19, color: "var(--text-dim)", lineHeight: 1.7, marginTop: 18 }}>
+          We built Orbis to be that expert, for anyone. It reads the signals a scammer hopes you'll miss and
+          explains, in plain language, whether something is safe, so the answer takes seconds instead of a
+          gamble.
+        </p>
+      </div>
+
+      {/* The scale of the problem, in numbers */}
+      <div className="landing-grid-4 landing-reveal" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
+        {STATS.map(({ icon: Icon, value, label, source }) => (
+          <div key={value} className="landing-lift" style={{
+            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16,
+            padding: 28, boxShadow: "var(--shadow)", display: "flex", flexDirection: "column", gap: 10,
+          }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 12, background: "rgba(15,98,254,0.1)",
+              display: "grid", placeItems: "center",
+            }}>
+              <Icon size={20} color="var(--primary)" />
+            </div>
+            <div style={{ fontSize: 34, fontWeight: 800, color: "var(--navy)", letterSpacing: -1, marginTop: 4 }}>{value}</div>
+            <div style={{ color: "var(--text)", lineHeight: 1.5 }}>{label}</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "auto", paddingTop: 8 }}>Source: {source}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
 );
 
 // ── "Built for every security role": 3 cards (white section) ──
 const Roles = () => {
   const cards = [
-    { icon: ShieldCheck, title: "For Yourself", body: "Protect your personal identity and sensitive emails from sophisticated phishing attempts.", cta: "Protect Myself" },
-    { icon: Building2, title: "For Your Organization", body: "Train your workforce with AI simulations and monitor threats across thousands of mailboxes.", cta: "Secure My Team" },
-    { icon: ScatterChart, title: "For Analysts", body: "Deep-dive into threat intelligence with advanced simulation tools and custom API access.", cta: "Start Analyzing" },
+    { icon: ShieldCheck, title: "For Yourself", body: "Vet a suspicious link, email, or webpage for yourself, even with no IT department or security team to ask.", cta: "Protect Myself" },
+    { icon: Building2, title: "For Your Organization", body: "Check links in seconds without derailing your work, and escalate anything unsure to your security team.", cta: "Secure My Team" },
+    { icon: ScatterChart, title: "For Analysts", body: "A lightweight triage workspace that auto-scores reports, groups related attacks, and answers questions in plain language.", cta: "Start Analyzing" },
   ];
   return (
-    <section id="solutions" style={{ background: "var(--surface)", padding: "80px 24px" }}>
+    <section id="solutions" className="landing-anchor" style={{ background: "var(--surface)", padding: "80px 24px" }}>
       <div style={{ maxWidth: SECTION_MAX, margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: 56 }}>
+        <div className="landing-reveal" style={{ textAlign: "center", marginBottom: 56 }}>
           <Eyebrow>Solutions</Eyebrow>
           <h2 style={{ fontSize: 42, fontWeight: 800, color: "var(--navy)", letterSpacing: -1, marginTop: 20 }}>
             Built for every security role
           </h2>
         </div>
-        <div className="landing-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
+        <div className="landing-grid-3 landing-reveal" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24 }}>
           {cards.map(({ icon: Icon, title, body, cta }) => (
-            <div key={title} style={{
+            <div key={title} className="landing-lift" style={{
               background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16,
               padding: 32, boxShadow: "var(--shadow)",
             }}>
@@ -197,18 +284,18 @@ const Roles = () => {
 // ── 3 alternating feature sections (canvas section) ──
 const Features = () => {
   const features = [
-    { eyebrow: "Detection", icon: Zap, title: "Real-Time Phishing Detection",
-      body: "Our AI engines scan every incoming signal, from header metadata to embedded link behavior, neutralizing threats in milliseconds." },
-    { eyebrow: "Simulation", icon: Link2, title: "Phishing Simulation Campaigns",
-      body: "Create hyper-realistic simulations to train your team. Identify vulnerabilities before attackers do with automated reporting." },
-    { eyebrow: "Intelligence", icon: BarChart3, title: "Analyst Intelligence Dashboard",
-      body: "Get a bird's eye view of your security posture. Track campaign metrics, threat trends, and response times in one place." },
+    { eyebrow: "Detection", icon: Zap, title: "Real-time phishing detection",
+      body: "Orbis detonates a link in an isolated sandbox and reads every signal, from header metadata to where the link truly lands, then scores it 1 to 100 so you never open it yourself." },
+    { eyebrow: "Forwarding", icon: Mail, title: "Just forward the email",
+      body: "Not sure about a message? Forward the whole thing to Orbis. It analyzes the sender, the wording, and every link inside, then sends back one clear verdict." },
+    { eyebrow: "Intelligence", icon: BarChart3, title: "Analyst intelligence dashboard",
+      body: "For security teams: reports arrive already scored, duplicate attacks group into one campaign, and you can ask about your threat history in plain language and see it visualized." },
   ];
   return (
-    <section id="features" style={{ background: "var(--canvas)", padding: "40px 24px" }}>
+    <section id="features" className="landing-anchor" style={{ background: "var(--canvas)", padding: "40px 24px" }}>
       <div style={{ maxWidth: SECTION_MAX, margin: "0 auto", display: "flex", flexDirection: "column", gap: 96, padding: "60px 0" }}>
         {features.map((f, i) => (
-          <div key={f.title} className="landing-feature" style={{
+          <div key={f.title} className="landing-feature landing-reveal" style={{
             display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center",
           }}>
             <div style={{ order: i % 2 === 1 ? 2 : 1 }}>
@@ -217,7 +304,7 @@ const Features = () => {
               <p style={{ fontSize: 18, color: "var(--text-dim)", lineHeight: 1.6, maxWidth: 520 }}>{f.body}</p>
             </div>
             {/* image placeholder: soft blue-tinted panel with the feature icon (real screenshots drop in later) */}
-            <div style={{
+            <div className="landing-lift" style={{
               order: i % 2 === 1 ? 1 : 2, aspectRatio: "16 / 11", borderRadius: 16,
               background: "linear-gradient(135deg, rgba(15,98,254,0.08), rgba(33,199,230,0.06))",
               border: "1px solid var(--border)",
@@ -235,20 +322,20 @@ const Features = () => {
 // ── "Get protected in minutes": 3 steps (white section) ──
 const Process = () => {
   const steps = [
-    { n: 1, title: "Connect", body: "Integrate with your email and infrastructure in one click." },
-    { n: 2, title: "Detect", body: "Orbo's AI scans every threat signal automatically." },
-    { n: 3, title: "Respond", body: "Receive instant alerts and actionable intelligence." },
+    { n: 1, title: "Submit", body: "Paste a link, forward an email, or right-click with the extension." },
+    { n: 2, title: "Detect", body: "Orbo detonates it safely and weighs every threat signal automatically." },
+    { n: 3, title: "Decide", body: "Get a plain-English verdict and a 1 to 100 safety score in seconds." },
   ];
   return (
     <section style={{ background: "var(--surface)", padding: "80px 24px" }}>
       <div style={{ maxWidth: SECTION_MAX, margin: "0 auto" }}>
-        <div style={{ textAlign: "center", marginBottom: 56 }}>
+        <div className="landing-reveal" style={{ textAlign: "center", marginBottom: 56 }}>
           <Eyebrow>Process</Eyebrow>
           <h2 style={{ fontSize: 42, fontWeight: 800, color: "var(--navy)", letterSpacing: -1, marginTop: 20 }}>
             Get protected in minutes
           </h2>
         </div>
-        <div className="landing-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 40, textAlign: "center" }}>
+        <div className="landing-grid-3 landing-reveal" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 40, textAlign: "center" }}>
           {steps.map((s) => (
             <div key={s.n}>
               <div style={{
@@ -269,7 +356,7 @@ const Process = () => {
 // ── final CTA (blue gradient: the one deliberate accent band) ──
 const FinalCta = () => (
   <section style={{ background: "linear-gradient(120deg, var(--primary), var(--primary-dark))", color: "#fff", padding: "88px 24px", textAlign: "center" }}>
-    <div style={{ maxWidth: 720, margin: "0 auto" }}>
+    <div className="landing-reveal" style={{ maxWidth: 720, margin: "0 auto" }}>
       <h2 style={{ fontSize: 48, fontWeight: 800, letterSpacing: -1.5, marginBottom: 16 }}>Ready to outsmart phishing?</h2>
       <p style={{ fontSize: 19, color: "rgba(255,255,255,0.85)", marginBottom: 32 }}>
         Check any link or email for scams in seconds, with Orbo by your side.
@@ -322,7 +409,7 @@ const Footer = () => {
               <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "var(--navy)", marginBottom: 16 }}>{c.head}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {c.items.map((i) => (
-                  <a key={i} href="#" style={{ color: "var(--text-dim)" }}>{i}</a>
+                  <a key={i} href={i === "About" ? "#about" : "#"} style={{ color: "var(--text-dim)" }}>{i}</a>
                 ))}
               </div>
             </div>
@@ -338,16 +425,20 @@ const Footer = () => {
   );
 };
 
-const Landing = () => (
-  <div style={{ background: "var(--surface)", color: "var(--text)" }}>
-    <Nav />
-    <Hero />
-    <Roles />
-    <Features />
-    <Process />
-    <FinalCta />
-    <Footer />
-  </div>
-);
+const Landing = () => {
+  useReveal(); // wire up the scroll-reveal observer for the whole page
+  return (
+    <div style={{ background: "var(--surface)", color: "var(--text)" }}>
+      <Nav />
+      <Hero />
+      <About />
+      <Roles />
+      <Features />
+      <Process />
+      <FinalCta />
+      <Footer />
+    </div>
+  );
+}
 
 export default Landing;
