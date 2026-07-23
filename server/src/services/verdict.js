@@ -122,7 +122,11 @@ export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_
       // model omitted them so the card is never blank.
       title: cleanTitle(ai.title) || fallbackTitle(raw, blacklist_source, score),
       description: cleanText(ai.description) || firstSentence(ai.verdict),
-      tags: cleanTags(ai.tags, raw),
+      // Pass the bucket so a tag can't CONTRADICT the score. The model sometimes emits a
+      // "Dangerous"/"Suspicious" chip on a link the rubric scored safe (it reasons about a
+      // redirect while the number stays high) — that showed up as "Safe 70" next to a
+      // "Dangerous" tag. cleanTags now drops severity-word tags that disagree with the bucket.
+      tags: cleanTags(ai.tags, raw, scoreBucket(score), blacklist_source),
       // Always exactly 3 "why Orbo flagged this" reasons (Claude's, padded from evidence if needed).
       evidence_summary: buildReasons(ai.reasons, evidence, score),
     };
@@ -255,7 +259,16 @@ export const scoreBucket = (score) => {
 // reasons is enough. For a suspicious/dangerous link, keep MORE (up to 6) so the user sees the
 // full case against clicking. Prefer the model's reasons, fall back to scan evidence, then pad.
 const buildReasons = (modelReasons, evidence, score) => {
-  const sev = (s) => (["safe", "review", "dangerous"].includes(s) ? s : "review");
+  const bucket = scoreBucket(score);
+  // A reason can't be scarier than the overall verdict: on a SAFE link, a "dangerous" red-dot
+  // reason contradicts the badge. Clamp each reason's severity to the bucket's ceiling.
+  const ceiling = bucket === "safe" ? 0 : bucket === "review" ? 1 : 2;
+  const sevRankOf = (s) => (s === "dangerous" ? 2 : s === "review" ? 1 : 0);
+  const rankToSev = ["safe", "review", "dangerous"];
+  const sev = (s) => {
+    const raw = ["safe", "review", "dangerous"].includes(s) ? s : "review";
+    return rankToSev[Math.min(sevRankOf(raw), ceiling)];
+  };
   const isSafe = score >= 70;
   const cap = isSafe ? 3 : 6; // safe = concise; risky = show them all
   let rows = [];
@@ -304,16 +317,39 @@ const fallbackTitle = (raw = {}, blacklist_source, score) => {
   if (score < 70) return brand ? `Suspicious ${brand} lookalike` : "Suspicious link";
   return "Looks safe";
 }
-// Normalize tags: use the model's if valid, else derive from evidence/brand/bucket.
+// Severity-word tags that assert a verdict. We only allow the one matching the actual score
+// bucket, so the model can't stamp "Dangerous" on a link the rubric scored safe (and vice-versa).
+// Descriptive chips (e.g. "Shopping", "Credential phishing") are always allowed through.
+const VERDICT_TAG_FOR_BUCKET = { safe: "Safe", review: "Suspicious", dangerous: "Dangerous" };
+const CONTRADICTORY_TAGS = {
+  safe: ["dangerous", "suspicious", "malicious", "phishing", "scam", "unsafe", "impersonation"],
+  review: ["dangerous", "malicious", "safe"],
+  dangerous: ["safe"],
+};
+
+// Normalize tags: use the model's if valid, else derive from evidence/brand/bucket. When a bucket
+// is given, drop any tag whose WORD contradicts it (a "Dangerous" chip on a safe score reads as a
+// bug), so the chips always agree with the badge the score produces.
 const cleanTags = (modelTags, raw = {}, bucket, blacklist_source) => {
   if (Array.isArray(modelTags)) {
-    const t = modelTags.map((x) => String(x).trim()).filter(Boolean).slice(0, 3);
-    if (t.length) return t;
+    const banned = bucket ? (CONTRADICTORY_TAGS[bucket] ?? []) : [];
+    const t = modelTags
+      .map((x) => String(x).trim())
+      .filter(Boolean)
+      .filter((tag) => !banned.some((w) => tag.toLowerCase().includes(w)))
+      .slice(0, 3);
+    // Guarantee the chips still carry a verdict word matching the bucket (if we filtered it out).
+    if (bucket && !t.some((tag) => tag.toLowerCase().includes(VERDICT_TAG_FOR_BUCKET[bucket].toLowerCase()))) {
+      t.unshift(VERDICT_TAG_FOR_BUCKET[bucket]);
+    }
+    if (t.length) return [...new Set(t)].slice(0, 3);
   }
   const tags = [];
   if (blacklist_source) tags.push("Known threat");
   if ((raw.categories ?? []).length) tags.push(...raw.categories.slice(0, 2));
-  if ((raw.brands ?? []).length) tags.push("Impersonation");
+  // Only call it "Impersonation" when the score actually agrees it's risky — a brand name in the
+  // scan on a safe-scored link (e.g. a real marketing email that redirects to a brand) isn't fraud.
+  if ((raw.brands ?? []).length && bucket !== "safe") tags.push("Impersonation");
   if (!tags.length) tags.push(bucket === "safe" ? "Safe" : bucket === "dangerous" ? "Dangerous" : "Review");
   return [...new Set(tags)].slice(0, 3);
 }

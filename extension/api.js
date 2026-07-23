@@ -34,6 +34,34 @@ const request = async (method, path, body) => {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Is the target an email ADDRESS (not a URL)? Right-clicking a sender like "team@m.ngrok.com"
+// should get a sender report, not go to the URL scanner (which rejects bare emails). A mailto:
+// link's href is "mailto:x@y.com", so strip that too. Kept loose but URL-aware: a value with a
+// scheme or a slash is treated as a URL, not an email.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const asEmail = (raw) => {
+  const t = String(raw || "").trim().replace(/^mailto:/i, "").split("?")[0].trim();
+  return EMAIL_RE.test(t) && !/\s|\//.test(t) ? t.toLowerCase() : null;
+};
+
+// Check a SENDER email address → synchronous sender report (no polling; the server computes it in
+// one shot). Returns the same {indicator} shape checkUrl does so the popup renders it identically.
+// The response is a verdict object ({ ai_score, ai_verdict, title, tags, evidence, indicator_id }).
+const checkSender = async (email) => {
+  const report = await request("POST", "/api/ask-orbo/sender-report", { email });
+  return {
+    indicatorId: report.indicator_id ?? null,
+    indicator: {
+      status: "done",
+      ai_score: report.ai_score,
+      ai_verdict: report.ai_verdict,
+      description: report.description ?? null,
+      evidence: report.evidence ?? [],
+      tags: report.tags ?? [],
+    },
+  };
+};
+
 // Submit a URL and poll the indicator until the scan finishes. Same flow the web app uses:
 // POST /api/submissions → { indicatorId } → poll GET /api/indicators/:id until status "done"/"error".
 // onProgress(attempt) lets the caller show a "still scanning…" hint. Times out ~90s (scans are 20-40s).
@@ -55,5 +83,12 @@ const checkUrl = async (url, onProgress) => {
   throw Object.assign(new Error("timeout"), { status: 0, body: { error: "The scan is taking too long — try again in a moment." } });
 };
 
+// Route a right-clicked target to the right check: an email address → sender report (instant),
+// anything else → the URL scanner (polls). This is what lets "Check with Orbis" work on a sender.
+const checkTarget = async (target, onProgress) => {
+  const email = asEmail(target);
+  return email ? checkSender(email) : checkUrl(target, onProgress);
+};
+
 // Attach to the worker/page global (no ES module in MV3 classic service workers).
-self.OrbisApi = { getConfig, checkUrl };
+self.OrbisApi = { getConfig, checkUrl, checkSender, checkTarget, asEmail };

@@ -76,6 +76,44 @@ describe("generateVerdict — deterministic rubric", () => {
   });
 });
 
+// The badge, tags, and reasons must AGREE with the score bucket. Regression for the "Safe 70 next
+// to a Dangerous tag + off-domain-redirect red flags" screenshot: the model reasoned about a
+// redirect and emitted scary tags/reasons while the rubric kept the number high.
+describe("generateVerdict — verdict/tag/reason consistency", () => {
+  beforeEach(() => llm.chatJSON.mockClear());
+
+  it("a SAFE-scored link drops model tags that contradict the score", async () => {
+    // Model returns dangerous-flavored tags on a link the rubric scores safe (clean base + a
+    // single off-domain redirect = 100-15 = 85, model nudges within ±15 → still ≥70 = safe).
+    llm.chatJSON.mockResolvedValueOnce({
+      score: 70, title: "Marketing redirect", description: "Redirects to a brand store.",
+      verdict: "This is a marketing link that redirects to a brand store.",
+      tags: ["Impersonation", "Suspicious", "Dangerous"],
+      reasons: [{ text: "Redirects to a different domain", severity: "dangerous" }],
+      confidence: "medium",
+    });
+    const v = await generateVerdict({ ...base, raw: { redirected_to_different_host: true, final_host: "shop.tiktok.com", submitted_host: "ctrk.klclick.com" } });
+
+    expect(scoreBucket(v.ai_score)).toBe("safe");
+    // No tag may assert danger/suspicion on a safe verdict.
+    const tagsLower = v.tags.map((t) => t.toLowerCase());
+    expect(tagsLower.some((t) => /danger|suspicious|malicious|phishing|impersonation/.test(t))).toBe(false);
+    // And no reason may show a "dangerous" severity dot on a safe verdict.
+    expect(v.evidence_summary.every((r) => r.severity !== "dangerous")).toBe(true);
+  });
+
+  it("a DANGEROUS-scored link keeps its danger tag, drops any 'Safe' tag", async () => {
+    llm.chatJSON.mockResolvedValueOnce({
+      score: 5, title: "Fake bank", description: "Phishing.", verdict: "Known scam.",
+      tags: ["Safe", "Credential phishing"], reasons: [{ text: "on a blacklist", severity: "dangerous" }],
+      confidence: "high",
+    });
+    const v = await generateVerdict({ ...base, blacklist_hit: true, blacklist_source: "google_safe_browsing:SOCIAL_ENGINEERING" });
+    expect(scoreBucket(v.ai_score)).toBe("dangerous");
+    expect(v.tags.map((t) => t.toLowerCase())).not.toContain("safe");
+  });
+});
+
 // SEC-MED: prompt-injection via contextText can't poison the global verdict. Even with the
 // mocked model "complying" (returning score 95), the deterministic rubric owns the number.
 describe("generateVerdict — injection resistance", () => {

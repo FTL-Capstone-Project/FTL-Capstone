@@ -72,14 +72,28 @@ const ExtensionInstall = () => {
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--navy)", display: "flex", alignItems: "center", gap: 8, marginTop: 0 }}>
             <MousePointerClick size={18} /> Install the developer build
           </h2>
-          <Step n={1}>Get the <span style={code}>extension/</span> folder from the Orbis repo (or your team's shared build).</Step>
-          <Step n={2}>Open Chrome and go to <span style={code}>chrome://extensions</span>.</Step>
+          <p style={{ color: "var(--text-dim)", lineHeight: 1.6, margin: "0 0 6px" }}>
+            Works in <b>Chrome, Brave, or Edge</b> (any Chromium browser). Tip: if your Chrome is
+            managed by your workplace, it may block extensions — <b>Brave</b> is the easiest to use.
+          </p>
+          <Step n={1}>Download <span style={code}>orbis-extension.zip</span> below and unzip it.</Step>
+          <Step n={2}>
+            Go to your browser's extensions page: <span style={code}>chrome://extensions</span>,{" "}
+            <span style={code}>brave://extensions</span>, or <span style={code}>edge://extensions</span>.
+          </Step>
           <Step n={3}>Turn on <b>Developer mode</b> (toggle, top-right).</Step>
-          <Step n={4}>Click <b>Load unpacked</b> and select the <span style={code}>extension/</span> folder. Orbo appears in your toolbar.</Step>
+          <Step n={4}>Click <b>Load unpacked</b> and select the unzipped folder. Orbo appears in your toolbar (pin it from the puzzle-piece menu).</Step>
           <div style={{ ...step, borderBottom: "none" }}>
             <span style={num}>5</span>
-            <div style={{ lineHeight: 1.6 }}>Open Gmail and click a link inside an email — Orbo shows a safety read before it opens.</div>
+            <div style={{ lineHeight: 1.6 }}>Right-click any link or sender email and choose <b>“Check with Orbis”</b>, or click a link in Gmail for an instant safety read.</div>
           </div>
+          {/* The packed build lives in the client's /public so it ships with the site as a real
+              download. Rebuild it with scripts/pack-extension.sh when the extension changes. */}
+          <a href="/orbis-extension.zip" download style={{ display: "inline-block", marginTop: 16,
+            background: "var(--primary)", color: "#fff", fontWeight: 700, padding: "11px 20px",
+            borderRadius: 10, textDecoration: "none" }}>
+            Download orbis-extension.zip
+          </a>
         </section>
 
         <section style={card}>
@@ -87,11 +101,20 @@ const ExtensionInstall = () => {
             <KeyRound size={18} /> Connect it to your account
           </h2>
           <p style={{ color: "var(--text-dim)", lineHeight: 1.6, marginTop: 0 }}>
-            So the extension checks links as you, generate a key in{" "}
-            <Link to="/settings" style={{ color: "var(--primary)", fontWeight: 700 }}>Settings → Browser extension</Link>,
-            then paste it into the extension's own Settings. Treat the key like a password — you can
-            regenerate it anytime to instantly revoke the old one.
+            Right-click the Orbo icon → <b>Options</b>, then set two things:
           </p>
+          <Step n={1}>
+            <b>API URL</b> — <span style={code}>https://orbis-api-z4vx.onrender.com</span> (or{" "}
+            <span style={code}>http://localhost:3001</span> if you're running Orbis locally).
+          </Step>
+          <div style={{ ...step, borderBottom: "none" }}>
+            <span style={num}>2</span>
+            <div style={{ lineHeight: 1.6 }}>
+              <b>Token</b> — generate a key in{" "}
+              <Link to="/settings" style={{ color: "var(--primary)", fontWeight: 700 }}>Settings → Browser extension</Link>,
+              copy it (shown once), and paste it in. Treat it like a password; regenerate anytime to revoke the old one.
+            </div>
+          </div>
         </section>
       </main>
     </div>

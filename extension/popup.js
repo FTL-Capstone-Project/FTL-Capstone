@@ -65,12 +65,15 @@ const run = async () => {
   const target = pendingTarget || "";
 
   if (!target) {
-    return render(`<p class="msg">Right-click any link or selected text and choose <b>“Check with Orbis”</b> to scan it.</p>`);
+    return render(`<p class="msg">Right-click any link, sender email, or selected text and choose <b>“Check with Orbis”</b> to scan it.</p>`);
   }
 
-  render(`<div class="spinner"></div><p class="msg" style="text-align:center">Checking this link safely in a sandbox…</p><p class="target">${esc(target)}</p>`);
+  // An email address gets an instant sender report; a link gets the full sandbox scan.
+  const isEmail = Boolean(OrbisApi.asEmail(target));
+  const checking = isEmail ? "Checking this sender…" : "Checking this link safely in a sandbox…";
+  render(`<div class="spinner"></div><p class="msg" style="text-align:center">${checking}</p><p class="target">${esc(target)}</p>`);
   try {
-    const { indicator } = await OrbisApi.checkUrl(target, (n) => {
+    const { indicator } = await OrbisApi.checkTarget(target, (n) => {
       if (n === 3) content.querySelector(".msg").textContent = "Still scanning — this can take 20–40 seconds…";
     });
     // one-shot: clear so reopening the popup doesn't re-run a stale target
