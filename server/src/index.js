@@ -35,6 +35,12 @@ warnMissingEnv();
 export function createApp() {
   const app = express();
 
+  // Trust the first proxy hop (Render/most PaaS terminate TLS at a proxy). Without this, req.ip is
+  // the proxy's address, so IP-keyed rate limiting on PUBLIC routes (e.g. the landing demo) would
+  // lump every visitor into one bucket. Trusting exactly ONE hop keeps a client from spoofing its
+  // IP via a forged X-Forwarded-For (we only believe the hop our own proxy adds).
+  app.set("trust proxy", 1);
+
   // 1) RAW body for the Clerk webhook (svix signature verification needs it).
   app.use("/api/webhooks/clerk", express.raw({ type: "*/*" }));
 

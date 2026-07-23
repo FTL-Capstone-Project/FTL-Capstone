@@ -69,17 +69,19 @@ a:hover { text-decoration: underline; }
    start hidden and glide in as they scroll into view. All easing uses one soft curve so the whole
    page feels like it moves as a single system, not scattered effects. */
 
-/* Reveal-on-scroll: elements get .landing-reveal; the IntersectionObserver in Landing.jsx adds
-   .is-visible when they enter the viewport. Default (and reduced-motion) = fully shown. */
+/* Reveal-on-scroll: elements get .landing-reveal; the IntersectionObserver in Landing.jsx toggles
+   .is-visible as they enter/leave the viewport, so the reveal REPLAYS every time you scroll a
+   section back into view (not just once). Default (and reduced-motion) = fully shown. */
 .landing-reveal { opacity: 1; }
 
 @media (prefers-reduced-motion: no-preference) {
   .landing-reveal {
     opacity: 0;
     transform: translateY(26px);
-    transition: opacity 0.7s cubic-bezier(0.22, 0.7, 0.2, 1),
-                transform 0.7s cubic-bezier(0.22, 0.7, 0.2, 1);
-    will-change: opacity, transform;
+    transition: opacity 0.6s cubic-bezier(0.22, 0.7, 0.2, 1),
+                transform 0.6s cubic-bezier(0.22, 0.7, 0.2, 1);
+    /* No persistent will-change: keeping it on every reveal element permanently forces GPU layers
+       and can HURT scroll perf. The transition alone is enough for these one-off moves. */
   }
   .landing-reveal.is-visible { opacity: 1; transform: none; }
 
@@ -122,6 +124,11 @@ a:hover { text-decoration: underline; }
   .landing-lift { transition: transform 0.35s cubic-bezier(0.22, 0.7, 0.2, 1), box-shadow 0.35s ease, border-color 0.35s ease; }
   .landing-lift:hover { transform: translateY(-6px); }
 }
+
+/* Spinner for the live hero demo's "Checking…" state. Always allowed (a loading indicator that
+   froze under reduced-motion would read as a hang), but it's a cheap transform-only rotate. */
+.landing-spin { animation: landingSpin 0.8s linear infinite; }
+@keyframes landingSpin { to { transform: rotate(360deg); } }
 
 /* Smooth in-page anchor scrolling (Features / Solutions / About nav links). */
 @media (prefers-reduced-motion: no-preference) {

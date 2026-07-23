@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ShieldCheck, Building2, ScatterChart, Zap, Link2, BarChart3,
+  ShieldCheck, Building2, ScatterChart, Zap, BarChart3,
   Twitter, Linkedin, Github, ArrowRight, Download, Send,
-  Mail, Globe, Users, AlertTriangle,
+  Mail, Globe, Users, AlertTriangle, Loader2, Search,
 } from "lucide-react";
+import { api } from "../../lib/api.js";
 // Auth entry points: "Login" → sign-in; "Get Started" → the account-type chooser
 // (personal / organizational / analyst), which then routes to the right auth screen.
 import OrbisLogo from "../../components/OrbisLogo.jsx";
@@ -28,27 +29,49 @@ import OrboAvatar from "../../components/OrboAvatar.jsx";
 const SECTION_MAX = 1200; // content column width (matches app shell feel)
 
 // Reveal-on-scroll: attach `className="landing-reveal"` to anything that should glide in, then
-// call useReveal() once at the page root. It watches every .landing-reveal and adds .is-visible
-// as they enter the viewport (one observer for the whole page, so it stays cheap). Reduced-motion
-// users just see everything already in place (the CSS keeps .landing-reveal fully visible).
+// call useReveal() once at the page root. ONE IntersectionObserver watches every .landing-reveal
+// (cheap — the browser does the scroll math off the main thread; no scroll listener). We TOGGLE
+// .is-visible on enter/leave rather than unobserving, so the animation replays each time a section
+// scrolls back into view. Reduced-motion users just see everything already in place (the CSS keeps
+// .landing-reveal fully visible and skips the transition entirely).
 const useReveal = () => {
   useEffect(() => {
-    const nodes = document.querySelectorAll(".landing-reveal");
-    if (!nodes.length || typeof IntersectionObserver === "undefined") return;
+    if (typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver(
       (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add("is-visible");
-            io.unobserve(e.target); // reveal once, then stop watching
-          }
-        });
+        entries.forEach((e) => e.target.classList.toggle("is-visible", e.isIntersecting));
       },
-      { threshold: 0.15, rootMargin: "0px 0px -8% 0px" }
+      { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
     );
-    nodes.forEach((n) => io.observe(n));
+    document.querySelectorAll(".landing-reveal").forEach((n) => io.observe(n));
     return () => io.disconnect();
   }, []);
+}
+
+// Count-up: animate a number from 0 → target when `run` flips true, then hold. Used by the About
+// stats so the figures tick up as they scroll into view (and re-run when scrolled back to). Uses
+// requestAnimationFrame (not setInterval) so it's smooth and pauses when the tab is hidden. Returns
+// a formatted string via the caller's `format`. Reduced-motion: we skip straight to the target.
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+const useCountUp = (target, run, { duration = 1100, format = (n) => String(n) } = {}) => {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!run) { setValue(0); return; } // reset when it leaves view, so it replays on return
+    if (prefersReducedMotion()) { setValue(target); return; }
+    let raf, start;
+    const tick = (t) => {
+      if (start == null) start = t;
+      const p = Math.min(1, (t - start) / duration);
+      // easeOutCubic for a snappy-then-settle feel.
+      setValue(Math.round(target * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, run, duration]);
+  return format(value);
 }
 
 // Shared button styles (all tuned for LIGHT surfaces). Defined up top because arrow
@@ -106,52 +129,139 @@ const Nav = () => {
   );
 };
 
-// A compact preview of the Ask Orbo chat, fronted by the mascot. Illustrative of the
-// real feature (paste a link, Orbo gives a plain-English safety verdict). The `landing-scanline`
-// runs a one-time "scanning" sweep on load, so the card demonstrates what Orbis does at a glance.
-const OrboChatCard = () => (
-  <div className="landing-float landing-scanline" style={{
-    position: "relative", background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow)",
-    overflow: "hidden", border: "1px solid var(--border)",
-  }}>
-    <div style={{
-      display: "flex", alignItems: "center", gap: 12, padding: "16px 20px",
-      borderBottom: "1px solid var(--border)",
+// Verdict → theme token + label. Mirrors the app's 3-level badge (safe / warning / dangerous).
+const DEMO_VERDICT = {
+  safe:      { token: "safe",   label: "Looks safe",  pose: "happy" },
+  warning:   { token: "review", label: "Be careful",  pose: "caution" },
+  dangerous: { token: "danger", label: "Dangerous",   pose: "danger" },
+};
+
+// A couple of one-tap examples so a visitor who has nothing to paste can still see it work. The
+// lookalike is a deterministic DANGEROUS catch (great demo); the plain one returns safe.
+const DEMO_EXAMPLES = [
+  { label: "A lookalike link", url: "https://paypa1-secure-login.com/verify" },
+  { label: "A normal link", url: "https://github.com/login" },
+];
+
+// LIVE hero demo — the product IS the hero. A visitor pastes a link and gets a REAL deterministic
+// verdict from POST /api/prescreen/demo (no login, no cost — same instant layer the extension uses).
+// It's honest that this is the quick pre-check; the full sandbox scan lives behind "Get Started".
+const HeroDemo = () => {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null); // { level, score, reasons[] } | null
+  const [error, setError] = useState("");
+
+  const check = async (value) => {
+    const link = (value ?? url).trim();
+    if (!link || busy) return;
+    setBusy(true); setError(""); setResult(null);
+    try {
+      // Public endpoint → no getToken passed (the api wrapper simply omits the auth header).
+      const data = await api.post("/api/prescreen/demo", { url: link });
+      setResult(data);
+    } catch (err) {
+      setError(err.status === 429
+        ? "You're checking a lot — give it a few seconds and try again."
+        : "Couldn't check that link just now. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const onSubmit = (e) => { e.preventDefault(); check(); };
+  const runExample = (ex) => { setUrl(ex.url); check(ex.url); };
+
+  const verdict = result ? (DEMO_VERDICT[result.level] ?? DEMO_VERDICT.warning) : null;
+
+  return (
+    <div className="landing-float" style={{
+      position: "relative", background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow)",
+      overflow: "hidden", border: "1px solid var(--border)",
     }}>
-      <OrboAvatar pose="wave" size={40} />
-      <div>
-        <div style={{ fontWeight: 700, color: "var(--navy)" }}>Ask Orbo</div>
-        <div style={{ fontSize: 13, color: "var(--safe)", display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--safe)" }} /> Online
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+        <OrboAvatar pose={verdict?.pose ?? "wave"} size={40} />
+        <div>
+          <div style={{ fontWeight: 700, color: "var(--navy)" }}>Ask Orbo</div>
+          <div style={{ fontSize: 13, color: "var(--safe)", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--safe)" }} /> Try it live
+          </div>
         </div>
       </div>
-    </div>
 
-    <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12, background: "var(--canvas)" }}>
-      {/* user bubble (right) */}
-      <div style={{ alignSelf: "flex-end", maxWidth: "80%", background: "var(--primary)", color: "#fff",
-        padding: "10px 14px", borderRadius: "14px 14px 4px 14px", fontSize: 14 }}>
-        Is this link safe to open?
-      </div>
-      {/* Orbo reply (left) */}
-      <div style={{ alignSelf: "flex-start", maxWidth: "85%", background: "var(--surface)", color: "var(--text)",
-        padding: "10px 14px", borderRadius: "14px 14px 14px 4px", fontSize: 14, border: "1px solid var(--border)" }}>
-        Good news, that link looks safe. I checked it in a sandbox and found no signs of a scam.
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, color: "var(--safe)", fontWeight: 700, fontSize: 13 }}>
-          <ShieldCheck size={15} /> Safe
+      {/* body: prompt + (result | examples) */}
+      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12, background: "var(--canvas)", minHeight: 168 }}>
+        <div style={{ alignSelf: "flex-start", maxWidth: "85%", background: "var(--surface)", color: "var(--text)",
+          padding: "10px 14px", borderRadius: "14px 14px 14px 4px", fontSize: 14, border: "1px solid var(--border)" }}>
+          Paste any link and I'll check it for scam signals, instantly.
         </div>
-      </div>
-    </div>
 
-    {/* input row (decorative) */}
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 20px", borderTop: "1px solid var(--border)" }}>
-      <span style={{ flex: 1, color: "var(--text-dim)", fontSize: 14 }}>Paste a link or email address...</span>
-      <span style={{ width: 34, height: 34, borderRadius: 8, background: "var(--primary)", display: "grid", placeItems: "center" }}>
-        <Send size={16} color="#fff" />
-      </span>
+        {busy && (
+          <div style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 8,
+            color: "var(--text-dim)", fontSize: 14, padding: "4px 2px" }}>
+            <Loader2 size={16} className="landing-spin" /> Checking…
+          </div>
+        )}
+
+        {error && <div style={{ alignSelf: "flex-start", color: "var(--danger)", fontSize: 14 }}>{error}</div>}
+
+        {verdict && !busy && (
+          <div className="verdict-frame" data-kind={verdict.token} style={{
+            alignSelf: "stretch", borderRadius: 14, background: "var(--surface)", padding: 14,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 800, color: `var(--${verdict.token})` }}>
+                <ShieldCheck size={16} /> {verdict.label}
+              </span>
+              <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Safety {result.score}/100</span>
+            </div>
+            {result.reasons?.[0] && (
+              <p style={{ margin: "8px 0 0", fontSize: 13.5, color: "var(--text)", lineHeight: 1.5 }}>
+                {result.reasons[0].text}
+              </p>
+            )}
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-dim)" }}>
+              This is Orbo's instant pre-check. <Link to="/get-started" style={{ fontWeight: 700 }}>Get the full sandbox scan →</Link>
+            </p>
+          </div>
+        )}
+
+        {!result && !busy && !error && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {DEMO_EXAMPLES.map((ex) => (
+              <button key={ex.url} type="button" onClick={() => runExample(ex)} style={{
+                fontSize: 12.5, fontWeight: 600, color: "var(--text-dim)", background: "var(--surface)",
+                border: "1px solid var(--border)", borderRadius: 999, padding: "5px 12px", cursor: "pointer",
+              }}>
+                {ex.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* input row (real) */}
+      <form onSubmit={onSubmit} style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 20px", borderTop: "1px solid var(--border)" }}>
+        <Search size={16} color="var(--text-dim)" style={{ flexShrink: 0 }} />
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="Paste a link to check..."
+          aria-label="Paste a link to check"
+          style={{ flex: 1, border: "none", outline: "none", background: "transparent",
+            fontSize: 14, color: "var(--text)" }}
+        />
+        <button type="submit" aria-label="Check this link" disabled={busy || !url.trim()} style={{
+          width: 34, height: 34, borderRadius: 8, border: "none",
+          background: url.trim() ? "var(--primary)" : "var(--border)",
+          display: "grid", placeItems: "center", cursor: url.trim() && !busy ? "pointer" : "default" }}>
+          <Send size={16} color="#fff" />
+        </button>
+      </form>
     </div>
-  </div>
-);
+  );
+};
 
 // ── hero (light, with a soft blue glow for depth; staged load-in) ──
 const Hero = () => (
@@ -179,8 +289,8 @@ const Hero = () => (
         </div>
       </div>
 
-      {/* Orbo chat card: represents the real "Ask Orbo" chat feature. */}
-      <div className="landing-load landing-load-4"><OrboChatCard /></div>
+      {/* Live demo: paste a link, get a real instant verdict (the product IS the hero). */}
+      <div className="landing-load landing-load-4"><HeroDemo /></div>
     </div>
   </header>
 );
@@ -188,12 +298,49 @@ const Hero = () => (
 // ── About: why Orbis exists + the scale of the problem (real, cited stats) ──
 // Copy is grounded in our own problem statement (planning/user_stories.md): the people most
 // targeted by phishing have the least protection. Stats are attributed inline so they're honest.
+// `n` is the number the counter ticks up to; prefix/suffix wrap it (e.g. "~" + 90 + "%").
 const STATS = [
-  { icon: Mail, value: "3.4 billion", label: "phishing emails are sent every single day", source: "Industry estimate" },
-  { icon: AlertTriangle, value: "~90%", label: "of cyberattacks start with a phishing email", source: "Multiple industry reports" },
-  { icon: Users, value: "300,000+", label: "phishing complaints filed with the FBI in a single year", source: "FBI IC3, 2022" },
-  { icon: Globe, value: "1.4 million", label: "brand-new phishing sites appear every month", source: "Webroot" },
+  { icon: Mail,          n: 3.4, decimals: 1, prefix: "", suffix: "B", label: "phishing emails are sent every single day", source: "Industry estimate" },
+  { icon: AlertTriangle, n: 90,  decimals: 0, prefix: "~", suffix: "%", label: "of cyberattacks start with a phishing email", source: "Multiple industry reports" },
+  { icon: Users,         n: 300, decimals: 0, prefix: "", suffix: "K+", label: "phishing complaints filed with the FBI in a single year", source: "FBI IC3, 2022" },
+  { icon: Globe,         n: 1.4, decimals: 1, prefix: "", suffix: "M", label: "brand-new phishing sites appear every month", source: "Webroot" },
 ];
+
+// One stat card. Watches ITSELF for entering the viewport and runs the count-up while in view (and
+// resets when it leaves, so it replays on scroll-back — matching the reveal behavior). One tiny
+// observer per card is fine; there are only four.
+const StatCard = ({ icon: Icon, n, decimals, prefix, suffix, label, source }) => {
+  const ref = useRef(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") { setInView(true); return; }
+    const io = new IntersectionObserver(
+      ([e]) => setInView(e.isIntersecting),
+      { threshold: 0.4 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const scale = Math.pow(10, decimals);
+  const shown = useCountUp(Math.round(n * scale), inView, {
+    format: (v) => `${prefix}${(v / scale).toFixed(decimals)}${suffix}`,
+  });
+
+  return (
+    <div ref={ref} className="landing-lift" style={{
+      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16,
+      padding: 28, boxShadow: "var(--shadow)", display: "flex", flexDirection: "column", gap: 10,
+    }}>
+      <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(15,98,254,0.1)", display: "grid", placeItems: "center" }}>
+        <Icon size={20} color="var(--primary)" />
+      </div>
+      <div style={{ fontSize: 34, fontWeight: 800, color: "var(--navy)", letterSpacing: -1, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{shown}</div>
+      <div style={{ color: "var(--text)", lineHeight: 1.5 }}>{label}</div>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "auto", paddingTop: 8 }}>Source: {source}</div>
+    </div>
+  );
+};
 
 const About = () => (
   <section id="about" className="landing-anchor" style={{ background: "var(--canvas)", padding: "96px 24px" }}>
@@ -217,24 +364,9 @@ const About = () => (
         </p>
       </div>
 
-      {/* The scale of the problem, in numbers */}
+      {/* The scale of the problem, in numbers (each ticks up as it scrolls into view) */}
       <div className="landing-grid-4 landing-reveal" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
-        {STATS.map(({ icon: Icon, value, label, source }) => (
-          <div key={value} className="landing-lift" style={{
-            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16,
-            padding: 28, boxShadow: "var(--shadow)", display: "flex", flexDirection: "column", gap: 10,
-          }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: 12, background: "rgba(15,98,254,0.1)",
-              display: "grid", placeItems: "center",
-            }}>
-              <Icon size={20} color="var(--primary)" />
-            </div>
-            <div style={{ fontSize: 34, fontWeight: 800, color: "var(--navy)", letterSpacing: -1, marginTop: 4 }}>{value}</div>
-            <div style={{ color: "var(--text)", lineHeight: 1.5 }}>{label}</div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: "auto", paddingTop: 8 }}>Source: {source}</div>
-          </div>
-        ))}
+        {STATS.map((s) => <StatCard key={s.label} {...s} />)}
       </div>
     </div>
   </section>

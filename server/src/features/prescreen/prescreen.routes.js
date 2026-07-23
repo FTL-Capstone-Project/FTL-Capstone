@@ -42,3 +42,28 @@ prescreenRouter.post("/", requireAuth, limit, async (req, res) => {
     return res.status(500).json({ error: "Couldn't pre-check that just now." });
   }
 });
+
+// POST /api/prescreen/demo — the PUBLIC "try it" widget on the marketing landing page. No auth
+// (a logged-out visitor uses it), so it's locked down hard:
+//   • URL ONLY — no `sender`, so it never does the DNS lookup assessSender would (keeps it purely
+//     in-memory + instant, and can't be turned into a DNS-probe / SSRF-ish tool for arbitrary hosts).
+//   • Exactly ONE url per call, so it's a taste of the product, not a bulk scanner.
+//   • IP-keyed rate limit (the limiter falls back to req.ip when there's no req.user; index.js sets
+//     `trust proxy` so that IP is the real client behind Render's proxy). Deterministic-only means
+//     no per-call cost — this cap guards against abuse/spam, not denial-of-wallet.
+const demoLimit = rateLimit({ windowMs: 60_000, max: 15 });
+
+prescreenRouter.post("/demo", demoLimit, async (req, res) => {
+  const url = req.body?.url;
+  if (typeof url !== "string" || !url.trim()) {
+    return res.status(400).json({ error: "Paste a link to check." });
+  }
+  try {
+    // Deliberately pass ONLY the url (no sender) so this stays in-memory + instant.
+    const result = await prescreen({ urls: [url.trim()] });
+    return res.json(result);
+  } catch (e) {
+    console.error("[prescreen:demo] failed:", e.message);
+    return res.status(500).json({ error: "Couldn't check that just now." });
+  }
+});
