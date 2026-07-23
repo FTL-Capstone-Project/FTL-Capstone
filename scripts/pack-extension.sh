@@ -16,6 +16,7 @@ OUT="$ROOT/client/public/orbis-extension.zip"
 cd "$SRC"
 rm -f "$OUT"
 zip -r -X "$OUT" . \
-  -x "*.DS_Store" -x "__MACOSX/*" -x "*/.*" -x "README.md" >/dev/null
+  -x "*.DS_Store" -x "__MACOSX/*" -x "*/.*" -x "README.md" \
+  -x "*.svg" -x "STORE_SUBMISSION.md" >/dev/null
 
 echo "Packed $(cd "$SRC" && find . -type f | wc -l | tr -d ' ') files → client/public/orbis-extension.zip"

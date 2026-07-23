@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+  <!-- Toolbar action icon, scaled up to fill more of the canvas so it reads larger in the toolbar
+       slot (the old version left a lot of empty vertical padding). Reads on light AND dark toolbars
+       (white-cased ring), transparent background. -->
+  <defs>
+    <clipPath id="fh"><rect x="-60" y="250" width="620" height="460" transform="rotate(-14 250 250)"/></clipPath>
+  </defs>
+  <!-- Orbit BACK -->
+  <g transform="rotate(-14 250 250)">
+    <ellipse cx="250" cy="250" rx="222" ry="86" fill="none" stroke="#ffffff" stroke-width="32"/>
+    <ellipse cx="250" cy="250" rx="222" ry="86" fill="none" stroke="#12305c" stroke-width="19"/>
+  </g>
+  <!-- Planet: navy rim → white separator → bright-blue core (bigger than before) -->
+  <circle cx="250" cy="250" r="182" fill="#12305c"/>
+  <circle cx="250" cy="250" r="158" fill="#ffffff"/>
+  <circle cx="250" cy="250" r="145" fill="#2f6bff"/>
+  <!-- Orbit FRONT (clipped to lower half) -->
+  <g clip-path="url(#fh)">
+    <g transform="rotate(-14 250 250)">
+      <ellipse cx="250" cy="250" rx="222" ry="86" fill="none" stroke="#ffffff" stroke-width="32"/>
+      <ellipse cx="250" cy="250" rx="222" ry="86" fill="none" stroke="#12305c" stroke-width="19"/>
+    </g>
+  </g>
+  <!-- Moon (inset so it never touches the canvas edge at tab size) -->
+  <circle cx="458" cy="214" r="29" fill="#ffffff"/>
+  <circle cx="458" cy="214" r="20" fill="#12305c"/>
+</svg>
