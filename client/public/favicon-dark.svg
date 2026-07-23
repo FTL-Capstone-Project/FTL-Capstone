@@ -1,7 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- Orbis planet-"O", SIMPLIFIED for favicon legibility (reads at 16px). DARK variant: a LIGHT
-       ring so it doesn't vanish navy-on-dark against a dark tab bar; planet stays brand blue. -->
-  <circle cx="16" cy="16" r="9.5" fill="#3B82F6"/>
-  <ellipse cx="16" cy="16" rx="14.5" ry="6.2" fill="none" stroke="#E6ECF5" stroke-width="3.2"
-           transform="rotate(-20 16 16)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <!-- Orbis planet-"O" — DARK tab variant (light-blue halo + gray accents read on a dark bar).
+       Composition pulled in from the edges so the orbiting moon doesn't clip at tab size. -->
+  <!-- Inner blue planet -->
+  <circle cx="250" cy="250" r="96" fill="#2d5ef7" />
+  <!-- Gray separator -->
+  <circle cx="250" cy="250" r="121" fill="none" stroke="#5a6065" stroke-width="9" />
+  <!-- Light-blue halo ring -->
+  <circle cx="250" cy="250" r="147" fill="none" stroke="#a1d6fd" stroke-width="46" />
+  <!-- Orbit + satellite (moon sits ON the orbit path, inset so it never touches the edge) -->
+  <g transform="rotate(-22 250 250)">
+    <ellipse cx="250" cy="250" rx="196" ry="78" fill="none" stroke="#5a6065" stroke-width="12" />
+    <circle cx="446" cy="250" r="21" fill="#a1d6fd" stroke="#5a6065" stroke-width="9" />
+  </g>
 </svg>
