@@ -105,20 +105,28 @@ const showEmailBadge = (verdict) => {
 };
 
 // Pull the sender address + link URLs out of the currently-open email. Gmail's DOM is volatile, so
-// we lean on the STABLE bits: the sender sits in an [email="..."] attribute; links are <a href> in
-// the message body ([role=listitem] wraps an open message). Returns null if no message is open.
+// we lean on the STABLE bits: the message body is `.a3s` (Gmail's long-standing body class), and
+// the sender sits in an [email="..."] attribute. Returns null if no message is open. Set
+// localStorage["orbis-debug"]="1" in Gmail to log what it finds (helps when Gmail's DOM shifts).
+const DEBUG = () => { try { return localStorage.getItem("orbis-debug") === "1"; } catch { return false; } };
+const log = (...a) => { if (DEBUG()) console.log("[Orbis]", ...a); };
+
 const readOpenEmail = () => {
-  // The open message container. Gmail marks message bodies with these roles/classes; try a few.
-  const container = document.querySelector('[role="listitem"] .a3s, .a3s.aiL, [role="listitem"]');
-  if (!container) return null;
-  // Sender: the [email] attribute on the from line is the most stable signal Gmail exposes.
-  const senderEl = document.querySelector('[role="listitem"] [email], .gD[email], span[email]');
+  // The open message body. `.a3s` is the most stable marker Gmail uses for a rendered message body.
+  // A conversation can have several; the LAST visible one is the currently-expanded message.
+  const bodies = [...document.querySelectorAll(".a3s")].filter((el) => el.offsetParent !== null);
+  const body = bodies[bodies.length - 1] || null;
+  if (!body) { log("no open message body (.a3s) found"); return null; }
+
+  // Sender: the [email] attribute is the most stable signal. Prefer one inside the open message's
+  // header area; fall back to any [email] on the page (single-message view).
+  const senderEl = document.querySelector('.gD[email], [role="listitem"] [email], span[email], [email]');
   const sender = senderEl?.getAttribute("email") || null;
-  // Links in the visible body only (skip Gmail chrome links elsewhere on the page).
-  const bodyScope = container.querySelector(".a3s") || container;
-  const urls = [...bodyScope.querySelectorAll("a[href]")]
-    .filter(shouldScreen)
-    .map((a) => a.href);
+
+  // Links in the message body only.
+  const urls = [...body.querySelectorAll("a[href]")].filter(shouldScreen).map((a) => a.href);
+
+  log("scan → sender:", sender, "| links:", urls.length, urls.slice(0, 5));
   if (!sender && urls.length === 0) return null;
   return { sender, urls: [...new Set(urls)].slice(0, 20) };
 };
@@ -133,11 +141,12 @@ const scanOpenEmail = async () => {
   lastScanKey = key;
   try {
     const verdict = await prescreen(found);
-    // Only surface the passive badge for warning/dangerous OR a clean scan that actually had
-    // something to check — a "safe" with no signals still reassures the user it was looked at.
-    showEmailBadge(verdict);
-  } catch {
+    log("verdict:", verdict.level, verdict.score);
+    showEmailBadge(verdict); // shown for every result (safe reassures; warning/danger warns)
+  } catch (err) {
     // Auto-scan is best-effort + silent on failure: a passive feature must never nag with errors.
+    // (Turn on debug to see WHY — most often: no token set, or CORS/API not reachable.)
+    log("prescreen failed:", err.status || "", err.message);
     removeEmailBadge();
     lastScanKey = "";
   }
@@ -152,6 +161,7 @@ const scheduleScan = () => {
 };
 const observer = new MutationObserver(scheduleScan);
 observer.observe(document.body, { childList: true, subtree: true });
+log("content script loaded — watching for opened emails");
 scheduleScan(); // initial
 
 // ── Layer 2: click guard (unchanged behavior — block a risky link at click time) ───────────────
