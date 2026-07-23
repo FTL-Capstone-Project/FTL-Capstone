@@ -4,7 +4,11 @@
   "version": "0.1.0",
   "description": "Right-click any link and check it for phishing with Orbis. Reuses the Orbis check-link API.",
   "permissions": ["contextMenus", "storage"],
-  "host_permissions": ["http://localhost:3001/*", "https://mail.google.com/*"],
+  "host_permissions": [
+    "http://localhost:3001/*",
+    "https://orbis-api-z4vx.onrender.com/*",
+    "https://mail.google.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
