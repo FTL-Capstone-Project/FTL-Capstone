@@ -1,15 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
-  <!-- Orbis planet-"O" — LIGHT tab variant (navy ring + white separator read on a light bar).
-       Composition pulled in from the edges so the orbiting moon doesn't clip at tab size. -->
-  <!-- Inner electric-blue planet -->
-  <circle cx="250" cy="250" r="98" fill="#0066ff" />
-  <!-- White separator ring -->
-  <circle cx="250" cy="250" r="112" fill="none" stroke="#ffffff" stroke-width="13" />
-  <!-- Dark navy halo ring -->
-  <circle cx="250" cy="250" r="147" fill="none" stroke="#001c3d" stroke-width="48" />
-  <!-- Orbit + satellite (moon sits ON the orbit path, inset so it never touches the edge) -->
+  <!-- Orbis planet-"O" — LIGHT tab variant. Matches the real logo: a BIG bright-blue planet with
+       a THIN navy outline (not a heavy dark donut) + a thin navy orbit ring crossing it. Navy is
+       used sparingly as outlines so the mark stays airy/blue like the wordmark's "O". -->
+  <!-- Bright-blue planet (dominant) with a thin navy outline -->
+  <circle cx="250" cy="250" r="146" fill="#0f6bff" stroke="#0a2540" stroke-width="15" />
+  <!-- Orbit ring + satellite: thin navy, the accent that makes it a planet, not just a dot. Moon
+       inset so it never clips the canvas edge at tab size. -->
   <g transform="rotate(-22 250 250)">
-    <ellipse cx="250" cy="250" rx="196" ry="78" fill="none" stroke="#001c3d" stroke-width="14" />
-    <circle cx="446" cy="250" r="23" fill="#001c3d" stroke="#ffffff" stroke-width="8" />
+    <ellipse cx="250" cy="250" rx="198" ry="80" fill="none" stroke="#0a2540" stroke-width="15" />
+    <circle cx="444" cy="250" r="25" fill="#0f6bff" stroke="#0a2540" stroke-width="11" />
   </g>
 </svg>
