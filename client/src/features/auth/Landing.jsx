@@ -129,23 +129,33 @@ const Nav = () => {
   );
 };
 
-// Verdict → theme token + label. Mirrors the app's 3-level badge (safe / warning / dangerous).
+// How the demo PRESENTS each pre-check result. The important honesty rule: the landing demo runs
+// ONLY the deterministic layer (no sandbox, no LLM), so it can be CERTAIN when it spots a forgery
+// (a lookalike / homoglyph / RLO host) but it can NEVER confirm a link is actually safe from a
+// quick look. So a "clean" pre-check is deliberately framed as "nothing obvious, but not verified"
+// and hands off to a real account — we never show a fake confident "Safe 90".
+//   dangerous / warning → a genuine catch: show it, it's the impressive real part.
+//   clean → inconclusive-by-design: tell the truth and route to the full scan.
 const DEMO_VERDICT = {
-  safe:      { token: "safe",   label: "Looks safe",  pose: "happy" },
-  warning:   { token: "review", label: "Be careful",  pose: "caution" },
-  dangerous: { token: "danger", label: "Dangerous",   pose: "danger" },
+  dangerous: { token: "danger", label: "Dangerous", pose: "danger",
+    lead: "I caught a scam signal in this link, no full scan needed." },
+  warning: { token: "review", label: "Be careful", pose: "caution",
+    lead: "This link has a warning sign worth a closer look." },
 };
 
-// A couple of one-tap examples so a visitor who has nothing to paste can still see it work. The
-// lookalike is a deterministic DANGEROUS catch (great demo); the plain one returns safe.
+// A couple of one-tap examples so a visitor who has nothing to paste can still see it work. Both
+// are deterministic CATCHES (a lookalike + a homoglyph), because those are what the instant layer
+// can prove — a "normal" link would only ever come back inconclusive, which is a weaker demo.
 const DEMO_EXAMPLES = [
   { label: "A lookalike link", url: "https://paypa1-secure-login.com/verify" },
-  { label: "A normal link", url: "https://github.com/login" },
+  { label: "A tricky domain", url: "https://аpple.com/id" },
 ];
 
-// LIVE hero demo — the product IS the hero. A visitor pastes a link and gets a REAL deterministic
-// verdict from POST /api/prescreen/demo (no login, no cost — same instant layer the extension uses).
-// It's honest that this is the quick pre-check; the full sandbox scan lives behind "Get Started".
+// LIVE hero demo — the product IS the hero. A visitor pastes a link and gets a REAL instant result
+// from POST /api/prescreen/demo (no login, no cost — the same deterministic layer the extension
+// uses). It is HONEST about being a quick pre-check: it confidently flags forgeries it can prove,
+// and for anything it can't prove clean, Orbo says so and points to creating an account for the
+// full sandbox scan (never a fabricated "safe" score).
 const HeroDemo = () => {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -172,7 +182,9 @@ const HeroDemo = () => {
   const onSubmit = (e) => { e.preventDefault(); check(); };
   const runExample = (ex) => { setUrl(ex.url); check(ex.url); };
 
-  const verdict = result ? (DEMO_VERDICT[result.level] ?? DEMO_VERDICT.warning) : null;
+  // A "catch" is a result the instant layer can PROVE (dangerous/warning). A clean result is
+  // inconclusive-by-design (we can't verify safe without the full scan) → its own honest state.
+  const caught = result ? DEMO_VERDICT[result.level] : null; // undefined when result.level === "safe"
 
   return (
     <div className="landing-float" style={{
@@ -181,7 +193,7 @@ const HeroDemo = () => {
     }}>
       {/* header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
-        <OrboAvatar pose={verdict?.pose ?? "wave"} size={40} />
+        <OrboAvatar pose={caught?.pose ?? (result ? "thinking" : "wave")} size={40} />
         <div>
           <div style={{ fontWeight: 700, color: "var(--navy)" }}>Ask Orbo</div>
           <div style={{ fontSize: 13, color: "var(--safe)", display: "flex", alignItems: "center", gap: 6 }}>
@@ -192,9 +204,9 @@ const HeroDemo = () => {
 
       {/* body: prompt + (result | examples) */}
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12, background: "var(--canvas)", minHeight: 168 }}>
-        <div style={{ alignSelf: "flex-start", maxWidth: "85%", background: "var(--surface)", color: "var(--text)",
+        <div style={{ alignSelf: "flex-start", maxWidth: "88%", background: "var(--surface)", color: "var(--text)",
           padding: "10px 14px", borderRadius: "14px 14px 14px 4px", fontSize: 14, border: "1px solid var(--border)" }}>
-          Paste any link and I'll check it for scam signals, instantly.
+          Hi, I'm Orbo. Paste a link below and I'll instantly check it for scam signals, free, no sign-up.
         </div>
 
         {busy && (
@@ -206,24 +218,39 @@ const HeroDemo = () => {
 
         {error && <div style={{ alignSelf: "flex-start", color: "var(--danger)", fontSize: 14 }}>{error}</div>}
 
-        {verdict && !busy && (
-          <div className="verdict-frame" data-kind={verdict.token} style={{
+        {/* A CATCH the instant layer can prove (dangerous / warning) — show it confidently. */}
+        {result && caught && !busy && (
+          <div className="verdict-frame" data-kind={caught.token} style={{
             alignSelf: "stretch", borderRadius: 14, background: "var(--surface)", padding: 14,
           }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 800, color: `var(--${verdict.token})` }}>
-                <ShieldCheck size={16} /> {verdict.label}
-              </span>
-              <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Safety {result.score}/100</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: `var(--${caught.token})` }}>
+              <AlertTriangle size={16} /> {caught.label}
             </div>
-            {result.reasons?.[0] && (
-              <p style={{ margin: "8px 0 0", fontSize: 13.5, color: "var(--text)", lineHeight: 1.5 }}>
-                {result.reasons[0].text}
-              </p>
-            )}
-            <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-dim)" }}>
-              This is Orbo's instant pre-check. <Link to="/get-started" style={{ fontWeight: 700 }}>Get the full sandbox scan →</Link>
+            <p style={{ margin: "8px 0 0", fontSize: 13.5, color: "var(--text)", lineHeight: 1.5 }}>
+              {result.reasons?.[0]?.text ?? caught.lead}
             </p>
+            <Link to="/get-started" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, fontWeight: 700, fontSize: 13 }}>
+              Get the full report <ArrowRight size={14} />
+            </Link>
+          </div>
+        )}
+
+        {/* CLEAN → inconclusive by design. Orbo is honest that a quick look can't confirm safety,
+            and routes to a real account for the full sandbox scan. NO fabricated "safe" score. */}
+        {result && !caught && !busy && (
+          <div style={{ alignSelf: "stretch", border: "1px solid var(--border)", borderRadius: 14,
+            background: "var(--surface)", padding: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, color: "var(--navy)" }}>
+              <Search size={16} color="var(--primary)" /> Nothing obvious, but not verified
+            </div>
+            <p style={{ margin: "8px 0 0", fontSize: 13.5, color: "var(--text)", lineHeight: 1.5 }}>
+              My instant check didn't spot a forgery in that link — but I can't confirm it's safe
+              without opening it in a sandbox and reading the page. Create a free account and I'll run
+              the full scan and give you a real safety score.
+            </p>
+            <Link to="/get-started" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, fontWeight: 700, fontSize: 13 }}>
+              Create an account to run the full check <ArrowRight size={14} />
+            </Link>
           </div>
         )}
 
