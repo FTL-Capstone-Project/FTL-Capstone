@@ -130,9 +130,13 @@ const readOpenEmail = () => {
   const body = bodies[bodies.length - 1] || null;
   if (!body) { log("no open message body (.a3s) found"); return null; }
 
-  // Sender: the [email] attribute is the most stable signal. Prefer one inside the open message's
-  // header area; fall back to any [email] on the page (single-message view).
-  const senderEl = document.querySelector('.gD[email], [role="listitem"] [email], span[email], [email]');
+  // Sender: `.gD` is Gmail's FROM-name element and carries the sender's [email]. We must NOT fall
+  // back to a bare [email] — recipient chips ("to me" = your own address) also carry [email], and
+  // if we grabbed yours, a personal @gmail account would make EVERY email warn "free webmail" (60).
+  // So scope strictly to the from-line: the sender .gD nearest the open message body, else the
+  // first .gD on the page (single-message view). No generic [email] fallback.
+  const scope = body.closest('[role="listitem"]') || document;
+  const senderEl = scope.querySelector(".gD[email]") || document.querySelector(".gD[email]");
   const sender = senderEl?.getAttribute("email") || null;
 
   // Links in the message body only.
