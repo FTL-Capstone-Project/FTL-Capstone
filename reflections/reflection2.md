@@ -1,25 +1,41 @@
-# Reflection #2
+# Reflection #2: Week 8 Capstone Sprint 2
 
-Pod Members: **Add Pod Members Names**
+Pod Members: **Michael Jissa, David Gonzalez-Cesar, Ozias Tumimana**
 
 ## Reflection Questions
 
-* Name at least one successful thing this week.
+* **Name at least one thing that went well this sprint.**
 
- Add response here
+The biggest win this sprint was the scope of what we shipped while still keeping the codebase stable. David built a browser extension that auto-scans Gmail messages and shows an inline verdict badge, a live "try it" hero demo on the landing page, and several scoring fixes including SPF/DKIM/DMARC signals, a reputation trust floor, and a typosquat hardening pass. Ozias finished the full email-forwarding pipeline — real inbound email analysis using a Gmail relay, outbound report emails, batch intake, archived reports, and a threaded-reply system. I built the analyst dashboard with Recharts charts and an MCP-powered Ask Orbo panel, the analyst stats API, multi-account auth for personal and org users, deploy scaffolding on Render, and switched the LLM from the Salesforce gateway to OpenAI. Our server test suite grew from 96 to over 360 tests. The app went from a working MVP to a product that is actually deployed and running end-to-end at a live URL.
 
-* What were some challenges you and/or your group faced this week?
+* **What were some challenges you and/or your group faced this week?**
 
- Add response here
+The browser extension took longer to get working than expected. Loading an unpacked extension was blocked or sandboxed on several browsers we tried, and getting it to make cross-origin requests to the API required CORS adjustments on the server. It finally worked on Brave, which gave us enough to demo and build on. Authentication was the hardest part and cost the most time. We built a custom Clerk sign-in flow to match our wireframes, and that introduced a redirect race condition where logging in would bounce the user back to the landing page instead of the app. It took multiple debugging sessions to trace it to Clerk's session context not propagating before our `navigate()` call fired. The fix was to drive the redirect off Clerk's real `isSignedIn` state rather than calling `navigate()` imperatively, but we went through several broken intermediate versions. On the deployment side, we hit a Prisma migration failure on Render where a column that had been added to Neon by hand before the migration was recorded caused `migrate deploy` to fail with "column already exists." The API was silently stuck on old code for days because auto-deploy kept the previous green build live. David diagnosed and fixed it, but it was a reminder that deploy failures need to surface loudly, not silently.
 
-* Did you finish all of your tasks in your sprint plan for this week? If you did not finish all of the planned tasks, how would you prioritize the remaining tasks on your list?  (i.e over planned, did not know how to implement certain features, miscommunication from the team, had to pivot from original plans, etc.)
+* **Did you finish all of your tasks in your sprint plan for this week? If you did not finish all of the planned tasks, how would you prioritize the remaining tasks on your list?**
 
- Add response here
+Most planned tasks shipped. The items that slipped were the organizational member dashboard variant (members still see the personal dashboard instead of an org-specific one), the `GET /api/search` endpoint, and full campaign detail pages. These were intentional tradeoffs: the analyst triage queue, email pipeline, and extension were higher-visibility and higher-complexity, so we deprioritized the member dashboard and search in favor of shipping those. If I had to prioritize what is left, I would do the member dashboard first because it is the most visible gap for a demo, then search because analysts asked about it, and campaign detail last since the grouped triage queue already covers most of that use case.
 
-* Did the resources provided to you help prepare you in planning and executing your capstone project sprint this week? Be specific, what resources did you find particularly helpful or which tasks did you need more support on?
+* **Did the resources provided to you help prepare you in planning and executing your capstone project sprint this week? Be specific, what resources did you find particularly helpful or which tasks did you need more support on?**
 
- Add response here
+The most useful resource was the project plan itself — having a shared spec with a Decisions Log meant that when something changed (like switching from the Salesforce LLM gateway to OpenAI, or adding the reputation trust floor), we had a place to record why and what the tradeoff was, so no one had to re-derive the reasoning later. The wireframes were also still actively useful for the analyst dashboard and reports pages even though we are in Sprint 2. Where I needed more support was on the Clerk custom authentication flow. The Clerk Core 2 SDK docs for `useSignIn` and `useSignUp` with the ticket strategy were not always clear about the race conditions between `setActive` and React Router navigation, and the error modes for invitation-ticket flows. I ended up needing to test edge cases manually rather than relying on documentation.
 
-* Which features and user stories would you consider “at risk”? How will you change your plan if those items remain “at risk”?
+* **Did your team perform a spec audit this sprint? What did you find — were there gaps between the documented and actual behavior? Is the Spec Reconciliation — Sprint 2 Midpoint section committed to your repo?**
 
- Add response here
+We did not do a formal spec audit as a structured team exercise, but the plan was informally reviewed as part of building. The main gap we found: the spec described a member-specific org dashboard but we shipped the personal variant for all non-analyst users. We also found that the personal `Reports` wireframe in the spec showed teammate names and campaign tags that do not belong to a personal account — we confirmed with the team that the personal view is the lightest, no team data, and updated `DESIGN_SPEC.md` accordingly. A formal Spec Reconciliation — Sprint 2 Midpoint section is not yet committed to the repo; that is an outstanding item.
+
+* **Which spec sections were most useful during development? Which were too vague to be actionable, and how did you address that?**
+
+The most useful sections were the API contracts (Section 6) and the data model (Section 5). Having the exact endpoint shapes and the two-layer global/per-org data model written down made it easy to coordinate across three people without constantly asking each other how a response was shaped. The role derivation rules — individual has no org, org:admin is analyst, everything else is member — were also precise enough to implement directly without interpretation.
+
+The vaguest section was the auth flow for organizational accounts. The spec described members joining by invite but did not specify what the user experience was for someone accepting an invite through our custom auth pages instead of Clerk's hosted UI, what happens when an invited user already has a personal account, or what the redirect chain looks like. We addressed it by building the ticket-based flow incrementally and testing each edge case manually.
+
+* **Were there features you cut for MVP? Did you update the spec to reflect those decisions — and record them in the Decisions Log?**
+
+Yes. We cut: the standalone campaign detail page (the grouped triage queue covers the same use case), the `GET /api/search` endpoint, the member-specific org dashboard tiles, and full `CreateTeam` functionality (it was UI-only most of the sprint — David and I got it functional near the end). Some of these are recorded in the spec's Decisions Log; others, particularly the member dashboard cut, are in `DESIGN_SPEC.md` but not yet in the main `project_plan.md` Decisions Log. That is a catch-up item for Sprint 3.
+
+* **Which features and user stories are "at risk"? How will you adjust your plan for Sprint 3?**
+
+At risk: (1) The member org dashboard — members see the personal dashboard, which is functional but not tailored to org context. (2) Search across the org's threat history — the analyst triage queue and Insights page cover most of the need, but `GET /api/search` is not built. (3) The organizational sign-in flow for new members — the `CreateTeam` invite flow works, but the experience for an invited member who has never used Orbis before still has rough edges around what they see first after accepting. (4) The `CreateTeam` functional invite sending is new and has only been lightly tested end-to-end.
+
+For Sprint 3, I will focus on: polishing the auth flows so the org member onboarding is smooth enough for a demo, finishing the member dashboard variant so it shows org-relevant stats, and hardening the deployed version so we can demo from the live URL with confidence. The analyst features are in good shape and the email pipeline is working, so the main risk area is the member experience, which is less developed than the analyst side.
