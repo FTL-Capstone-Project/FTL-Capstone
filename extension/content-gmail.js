@@ -1,19 +1,22 @@
 // ── extension: Gmail content script · owner: David ──
-// Two layers of protection inside Gmail, both using the INSTANT deterministic pre-check
-// (POST /api/prescreen — no slow sandbox, ~80ms), so nothing here waits on a scan:
+// Two layers of protection inside Gmail:
 //
-//   1. AUTO-SCAN ON OPEN (passive): when you open an email, Orbo reads the sender + every link in
-//      the message and shows a fixed safe / warning / danger badge in the TOP-RIGHT — with zero
-//      interaction. This is the guard against "just clicking" phishing: you see the danger before
-//      you touch anything. Click the badge to expand the reasons.
-//   2. CLICK GUARD (active): if you click a link, we re-check that exact link and block navigation
-//      behind a warning if it's risky. This is the moment-of-action backstop.
+//   1. AUTO-SCAN ON OPEN (passive, CONTENT-AWARE): when you open an email, Orbo reads the sender +
+//      subject + body and runs the real content analysis (POST /api/prescreen/email — the same LLM
+//      + deterministic analysis the forwarded-email pipeline uses), then shows a fixed safe /
+//      warning / danger badge in the TOP-RIGHT with zero interaction. This is the guard against
+//      "just clicking" phishing AND content scams: a scam whose danger is in the WORDS ("verify
+//      your account now") now scores correctly, because Orbo actually reads the message. If the
+//      server has no LLM key, it falls back to the instant structural check.
+//   2. CLICK GUARD (active): if you click a link, we re-check that exact link with the INSTANT
+//      deterministic pre-check (POST /api/prescreen, ~80ms) and block navigation behind a warning
+//      if it's risky. Fast matters here (you're mid-click), so this stays structural-only.
 //
-// PRIVACY: the auto-scan sends the SENDER ADDRESS + the LINK URLs in the open email to
-// /api/prescreen. It never sends the email BODY text — only the sender and the links, which is what
-// the deterministic detectors (lookalike sender / homoglyph / URL shape) need. The pre-check is
-// honest: it flags what it can PROVE instantly and says "no obvious red flags" otherwise (it's not
-// the full sandbox scan — that's one right-click away via "Check with Orbis").
+// PRIVACY: the auto-scan now sends the SENDER + SUBJECT + BODY TEXT of the open email to
+// /api/prescreen/email so Orbo can read it for scam signals. The body is capped in length and is
+// NOT stored server-side — it's read to produce the verdict and discarded. (This is a deliberate
+// change from the old link-only pre-check: reading content is what makes it catch real scams.)
+// The full sandbox scan of a specific link is still one right-click away via "Check with Orbis".
 
 const SKIP_HOSTS = new Set(["mail.google.com", "accounts.google.com"]);
 // Google/Gmail INFRASTRUCTURE hosts that appear in nearly every email but aren't user-facing
@@ -46,16 +49,32 @@ const shouldScreen = (a) => {
   } catch { return false; }
 };
 
-// Call the instant pre-check with a sender and/or a batch of urls → { level, score, reasons }.
-const prescreen = async ({ sender, urls }) => {
+// POST helper to a prescreen endpoint with auth → { level, score, reasons }.
+const post = async (path, payload) => {
   const { apiUrl, token } = await getConfig();
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${apiUrl}/api/prescreen`, {
-    method: "POST", headers, body: JSON.stringify({ sender, urls }),
-  });
+  const res = await fetch(`${apiUrl}${path}`, { method: "POST", headers, body: JSON.stringify(payload) });
   if (!res.ok) throw Object.assign(new Error("prescreen failed"), { status: res.status });
   return res.json();
+};
+
+// INSTANT structural pre-check (deterministic; used by the click-guard) → { level, score, reasons }.
+const prescreen = ({ sender, urls }) => post("/api/prescreen", { sender, urls });
+
+// CONTENT-AWARE email check (reads sender + subject + body via the LLM) for the auto-scan badge.
+// If the server has no LLM key (503) or can't analyze (422), fall back to the instant structural
+// check so the badge still shows something rather than nothing.
+const analyzeEmail = async ({ sender, subject, body, urls }) => {
+  try {
+    return await post("/api/prescreen/email", { sender, subject, body });
+  } catch (err) {
+    if (err.status === 503 || err.status === 422) {
+      log("content analysis unavailable (", err.status, ") → falling back to instant check");
+      return prescreen({ sender, urls });
+    }
+    throw err;
+  }
 };
 
 const LEVELS = {
@@ -70,6 +89,26 @@ const asset = (name) => chrome.runtime.getURL(`assets/${name}`);
 // ── Layer 1: the fixed top-right "email verdict" badge (auto-scan on open) ─────────────────────
 let emailBadge = null;
 const removeEmailBadge = () => { emailBadge?.remove(); emailBadge = null; };
+
+// A brief "Orbo is reading this email" state while the content analysis runs (it's an LLM call,
+// ~1-3s). Uses the thinking pose. Replaced by showEmailBadge when the verdict lands.
+const showEmailChecking = () => {
+  removeEmailBadge();
+  const el = document.createElement("div");
+  el.setAttribute("data-orbis-email-badge", "1");
+  Object.assign(el.style, {
+    position: "fixed", top: "72px", right: "20px", zIndex: "2147483646",
+    display: "flex", alignItems: "center", gap: "10px",
+    background: "#fff", color: "#1A2233", border: "1.5px solid #E2E6EC", borderRadius: "16px",
+    boxShadow: "0 10px 30px rgba(10,37,64,0.18)", padding: "11px 14px",
+    font: "13px -apple-system,Segoe UI,Roboto,sans-serif",
+  });
+  el.innerHTML = `
+    <img src="${asset("orbo-thinking.png")}" alt="" width="30" height="30" style="flex-shrink:0" />
+    <div style="font-weight:700">Orbo is checking this email…</div>`;
+  document.body.appendChild(el);
+  emailBadge = el;
+};
 
 // Render (or replace) the fixed top-right badge. Collapsed = a pill (Orbo + level); clicking it
 // expands the reasons. Sits in the empty top-right space above the message, never over content.
@@ -142,9 +181,15 @@ const readOpenEmail = () => {
   // Links in the message body only.
   const urls = [...body.querySelectorAll("a[href]")].filter(shouldScreen).map((a) => a.href);
 
-  log("scan → sender:", sender, "| links:", urls.length, urls.slice(0, 5));
-  if (!sender && urls.length === 0) return null;
-  return { sender, urls: [...new Set(urls)].slice(0, 20) };
+  // Subject (the open thread's heading) + the body's visible TEXT — this is what lets the server
+  // READ the email for content scams (urgency, credential requests) instead of only structure.
+  // Cap the body so we don't ship a huge newsletter; the server caps again.
+  const subject = document.querySelector("h2.hP")?.textContent?.trim() || "";
+  const text = (body.innerText || body.textContent || "").trim().slice(0, 4000);
+
+  log("scan → sender:", sender, "| links:", urls.length, "| subject:", subject.slice(0, 40), "| body chars:", text.length);
+  if (!sender && urls.length === 0 && !text) return null;
+  return { sender, subject, body: text, urls: [...new Set(urls)].slice(0, 20) };
 };
 
 // A stable signature of "which email is open" so we don't re-scan the same one on every DOM tick.
@@ -152,17 +197,21 @@ let lastScanKey = "";
 const scanOpenEmail = async () => {
   const found = readOpenEmail();
   if (!found) { removeEmailBadge(); lastScanKey = ""; return; }
-  const key = `${found.sender || ""}|${found.urls.join(",")}`;
+  // Key on sender + subject + link set (not the whole body) — enough to tell emails apart cheaply.
+  const key = `${found.sender || ""}|${found.subject || ""}|${found.urls.join(",")}`;
   if (key === lastScanKey) return; // same email already scanned
   lastScanKey = key;
+  // Content analysis calls the LLM (~1-3s), so show a "checking" badge first so the user knows it's
+  // working — this is Orbo actually READING the email, not the instant structural glance.
+  showEmailChecking();
   try {
-    const verdict = await prescreen(found);
+    const verdict = await analyzeEmail(found);
     log("verdict:", verdict.level, verdict.score);
     showEmailBadge(verdict); // shown for every result (safe reassures; warning/danger warns)
   } catch (err) {
     // Auto-scan is best-effort + silent on failure: a passive feature must never nag with errors.
     // (Turn on debug to see WHY — most often: no token set, or CORS/API not reachable.)
-    log("prescreen failed:", err.status || "", err.message);
+    log("email analysis failed:", err.status || "", err.message);
     removeEmailBadge();
     lastScanKey = "";
   }

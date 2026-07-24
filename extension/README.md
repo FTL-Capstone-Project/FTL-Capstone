@@ -16,11 +16,15 @@ sandbox); the right-click popup uses `/api/submissions` (links) or `/api/ask-orb
 
 ## Privacy
 
-The Gmail auto-scan sends the **sender address + the link URLs** in the open email to
-`/api/prescreen`. It **never sends the email body text** — only the sender and the links, which is
-all the deterministic detectors (lookalike sender / homoglyph / URL shape) need. The pre-check is
-honest: it flags what it can prove instantly and says "no obvious red flags" otherwise — it is NOT
-the full sandbox scan (that's the right-click "Check with Orbis" on a specific link).
+The Gmail **auto-scan** sends the **sender + subject + body text** of the open email to
+`/api/prescreen/email` so Orbo can actually READ it for scam signals (the earlier link-only check
+couldn't judge a scam whose danger was in the words, so it under-rated them). The body is capped in
+length and **not stored** server-side — it's read to produce the verdict and discarded. If the
+server has no LLM key, the badge falls back to the instant structural check (sender + links only).
+
+The **click-guard** (when you click a link) still uses the instant structural check
+(`/api/prescreen`, sender + link URL only — no body). The full sandbox scan of a specific link is
+the right-click **"Check with Orbis."**
 
 ## Auth model
 

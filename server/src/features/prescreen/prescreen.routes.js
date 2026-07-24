@@ -1,14 +1,22 @@
 // ── feature: prescreen · owner: David ──
-// POST /api/prescreen — the extension's INSTANT inline verdict. Deterministic-only (no urlscan,
-// no LLM), so it returns in well under a second and can show a badge "before you interact".
-// Body: { sender?, urls?: string[] } → { level: safe|warning|dangerous, score, reasons[] }.
-//
-// PRIVACY: this endpoint takes ONLY a sender address + link URLs — never the email body. The
-// extension must send just those, so we never receive message content for the inline pre-check.
+// Extension check endpoints:
+//   POST /api/prescreen       — INSTANT structural pre-check. Deterministic-only (no urlscan, no
+//                               LLM), sub-second. Body: { sender?, urls?[] }. Takes only a sender
+//                               address + link URLs, never the body — used for the click-guard.
+//   POST /api/prescreen/demo  — public landing "try it" (URL only, no auth).
+//   POST /api/prescreen/email — CONTENT-AWARE. Reads sender + subject + BODY via the LLM (same
+//                               analysis as the forwarded-email pipeline) so a scam whose danger is
+//                               in the words scores correctly. Slower + costs tokens; receives body
+//                               text (capped, not stored). Powers the Gmail auto-scan badge.
+// All return { level: safe|warning|dangerous, score, reasons[] }.
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { rateLimit } from "../../middleware/rateLimit.js";
 import { prescreen } from "../../services/prescreen.js";
+import { analyzeEmailBody, combineEmailReports } from "../webhooks/emailAnalysis.js";
+import { generateSenderReport } from "../askOrbo/senderReport.js";
+import { scoreBucket } from "../../services/verdict.js";
+import { env } from "../../config/env.js";
 
 export const prescreenRouter = Router();
 
@@ -65,5 +73,64 @@ prescreenRouter.post("/demo", demoLimit, async (req, res) => {
   } catch (e) {
     console.error("[prescreen:demo] failed:", e.message);
     return res.status(500).json({ error: "Couldn't check that just now." });
+  }
+});
+
+// POST /api/prescreen/email — CONTENT-AWARE email check for the Gmail extension's auto-scan badge.
+// Unlike /api/prescreen (instant, structural-only), this actually READS the message: it runs the
+// same analysis the forwarded-email pipeline uses — the LLM reads the sender + subject + body for
+// scam red flags, combined worst-of with the deterministic sender-trust report. That's what makes
+// "open a known scam → it goes RED" work (the instant layer can't judge content, so it under-rated
+// scams whose danger is in the words).
+//
+// Body: { sender?, subject?, body? } → { level, score, reasons[], title? }. Returns the SAME shape
+// the badge already renders. Slower than the instant check (an LLM call, ~1-3s) and it costs model
+// tokens, so it's rate-limited tighter. PRIVACY: this DOES receive the email's body text (that's
+// the point — to read it); we cap the length and never store it here.
+const emailLimit = rateLimit({ windowMs: 60_000, max: 30 });
+// Map a 0-100 SAFETY score to the badge's 3 levels (mirror scoreBucket: >=70 safe, >=35 review).
+const levelForScore = (score) => {
+  const bucket = scoreBucket(score);
+  return bucket === "safe" ? "safe" : bucket === "review" ? "warning" : "dangerous";
+};
+
+prescreenRouter.post("/email", requireAuth, emailLimit, async (req, res) => {
+  const { sender, subject, body } = req.body ?? {};
+  if ([sender, subject, body].every((v) => v == null || String(v).trim() === "")) {
+    return res.status(400).json({ error: "Provide an email to check (sender, subject, and/or body)." });
+  }
+  // Without an LLM key we can't read content — tell the client so it can fall back to the instant
+  // structural check rather than showing a broken/empty verdict.
+  if (!env.llmApiKey) return res.status(503).json({ error: "Content analysis not configured" });
+
+  try {
+    // Two legs, same as the forwarded-email pipeline: sender trust + body red-flags, combined
+    // worst-of. Each is best-effort (a failed leg is simply absent). No link-scan leg here — that's
+    // the slow sandbox path; the click-guard + right-click handle links.
+    const senderAddr = typeof sender === "string" ? sender.trim() : "";
+    const [senderReport, bodyReport] = await Promise.all([
+      senderAddr
+        ? generateSenderReport({ email: senderAddr, context: subject || "" }).catch(() => null)
+        : Promise.resolve(null),
+      analyzeEmailBody({ from: senderAddr, subject: subject || "", body: body || "" }).catch(() => null),
+    ]);
+
+    // Nothing scorable (no key already handled; here means both legs returned null) → let the client
+    // fall back to the instant check.
+    if (!senderReport && !bodyReport) {
+      return res.status(422).json({ error: "Couldn't analyze this email's content." });
+    }
+
+    const combined = combineEmailReports({ sender: senderReport, body: bodyReport, link: null });
+    const score = combined.ai_score;
+    return res.json({
+      level: levelForScore(score),
+      score,
+      title: combined.title,
+      reasons: Array.isArray(combined.evidence) ? combined.evidence.slice(0, 6) : [],
+    });
+  } catch (e) {
+    console.error("[prescreen:email] failed:", e.message);
+    return res.status(500).json({ error: "Couldn't check this email just now." });
   }
 });
