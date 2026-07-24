@@ -1,7 +1,10 @@
 /**
  * Orbis INBOUND email relay — Google Apps Script (paste into script.google.com on the
  * orbischecks@gmail.com account). Runs on a ~1-minute time trigger, finds newly-forwarded emails,
- * and POSTs each to the Orbis API's POST /api/webhooks/inbound-email endpoint.
+ * and POSTs them — as ONE BATCH per run — to the Orbis API's POST /api/webhooks/inbound-email/batch
+ * endpoint (one HTTP request per poll instead of one per email; the server analyzes them with
+ * bounded concurrency). The single-email POST /api/webhooks/inbound-email still exists for a
+ * one-off "simulate a forward" curl.
  *
  * WHY this exists: Orbis runs no mail infrastructure. A free Gmail inbox + this script are the whole
  * "mail server." The server side that consumes this payload is:
@@ -40,41 +43,53 @@ const PROCESSED_LABEL = "orbis-sent";                   // threads we've already
 // -label exclusion applies to both. Shared by relayForwards + baselineExistingInbox so they can't drift.
 const RELAY_QUERY = "(in:inbox OR in:spam) -label:" + PROCESSED_LABEL;
 
+// How many forwards to send in ONE batch POST per run. Keep at/below the server's MAX_BATCH_EMAILS
+// (webhooks.routes.js) so nothing is capped server-side; a backlog just drains over successive runs.
+const BATCH_SIZE = 25;
+
 function relayForwards() {
   const label = getOrCreateLabel_(PROCESSED_LABEL);
-  // Cap the batch so a backlog can't time out one run.
-  const threads = GmailApp.search(RELAY_QUERY, 0, 10);
+  const threads = GmailApp.search(RELAY_QUERY, 0, BATCH_SIZE);
+  if (threads.length === 0) return;
 
+  // Build ONE batch payload for all new forwards this run — a single HTTP request instead of one per
+  // email (Somal's scale note: "you're sending one request per email… a bottleneck when you scale").
+  // The server analyzes them with bounded concurrency and returns per-email results IN ORDER.
+  const emails = threads.map((thread) => {
+    const msg = thread.getMessages()[0]; // the forwarded message is the first in its thread
+    return {
+      from: msg.getFrom(),
+      to: msg.getTo(),
+      subject: msg.getSubject(),
+      body: msg.getPlainBody(),        // plain-text body (always present)
+      html: msg.getBody(),             // HTML body → anchor-vs-href link_mismatch
+      headers: rawHeaderBlock_(msg),   // top header block → SPF/DKIM/DMARC
+      replyTo: msg.getReplyTo(),       // Reply-To (may be "") → reply-to mismatch
+      threadId: thread.getId(),        // so the report replies into this thread
+    };
+  });
+
+  try {
+    const res = UrlFetchApp.fetch(ORBIS_API_URL + "/api/webhooks/inbound-email/batch", {
+      method: "post",
+      contentType: "application/json",
+      headers: { "x-orbis-token": ORBIS_TOKEN },
+      payload: JSON.stringify({ emails }),
+      muteHttpExceptions: true, // don't throw on non-2xx; we log + still mark processed below
+    });
+    Logger.log("Orbis batch relay: %s emails → %s %s", emails.length, res.getResponseCode(), res.getContentText().slice(0, 200));
+  } catch (err) {
+    Logger.log("Orbis batch relay error: " + err);
+  }
+
+  // Housekeeping (always runs, even if the POST failed, so a poison message can't loop forever):
+  //   • label → excluded from RELAY_QUERY next time (never re-sent)
+  //   • read  → so forwards don't keep the unread look
+  //   • inbox → pull out of spam so every forward is consistently visible
+  // NOTE: we mark every thread in this run processed. A transient server error means those forwards
+  // aren't retried — the same tradeoff the single-email version had (it marked processed on any
+  // response). The report email is best-effort anyway; a user who gets no report can re-forward.
   for (const thread of threads) {
-    try {
-      const msg = thread.getMessages()[0]; // the forwarded message is the first in its thread
-      const payload = {
-        from: msg.getFrom(),
-        to: msg.getTo(),
-        subject: msg.getSubject(),
-        body: msg.getPlainBody(),        // plain-text body (always present)
-        html: msg.getBody(),             // HTML body → anchor-vs-href link_mismatch
-        headers: rawHeaderBlock_(msg),   // top header block → SPF/DKIM/DMARC
-        replyTo: msg.getReplyTo(),       // Reply-To (may be "") → reply-to mismatch
-        threadId: thread.getId(),        // so the report replies into this thread
-      };
-
-      const res = UrlFetchApp.fetch(ORBIS_API_URL + "/api/webhooks/inbound-email", {
-        method: "post",
-        contentType: "application/json",
-        headers: { "x-orbis-token": ORBIS_TOKEN },
-        payload: JSON.stringify(payload),
-        muteHttpExceptions: true, // don't throw on non-2xx; we just log + still mark processed
-      });
-
-      Logger.log("Orbis relay: %s → %s", msg.getSubject(), res.getResponseCode());
-    } catch (err) {
-      Logger.log("Orbis relay error: " + err);
-    }
-    // Housekeeping (always runs, even on error, so a poison message can't loop forever):
-    //   • label → excluded from RELAY_QUERY next time (never re-sent)
-    //   • read  → so forwards don't keep the unread look
-    //   • inbox → pull out of spam so every forward is consistently visible
     thread.addLabel(label);
     thread.markRead();
     thread.moveToInbox();

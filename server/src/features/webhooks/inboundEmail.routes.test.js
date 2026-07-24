@@ -164,3 +164,90 @@ describe("POST /api/webhooks/inbound-email", () => {
     expect(submitEmail).toHaveBeenCalledWith(expect.objectContaining({ user: orgMember }));
   });
 });
+
+// ── the SCALE path: POST /api/webhooks/inbound-email/batch ──
+// Many forwarded emails in one request, analyzed with bounded concurrency, per-email results in order.
+const postBatch = (body, token = "devsecret") =>
+  request(app()).post("/api/webhooks/inbound-email/batch").set("x-orbis-token", token).send(body);
+
+describe("POST /api/webhooks/inbound-email/batch", () => {
+  beforeEach(() => {
+    findUserByEmail.mockReset();
+    findUserByToken.mockReset();
+    submitEmail.mockReset();
+    createNotification.mockReset();
+    env.inboundEmail.token = "devsecret";
+    env.inboundEmail.tokens = {};
+    submitEmail.mockResolvedValue({ submissionId: 1, indicatorId: 2, escalated: false });
+    createNotification.mockResolvedValue({});
+    findUserByToken.mockResolvedValue(null);
+    findUserByEmail.mockResolvedValue(null);
+  });
+
+  it("503 / 401 gate the batch route just like the single one", async () => {
+    env.inboundEmail.token = "";
+    expect((await postBatch({ emails: [] })).status).toBe(503);
+    env.inboundEmail.token = "devsecret";
+    expect((await postBatch({ emails: [] }, "wrong")).status).toBe(401);
+  });
+
+  it("400 when the payload isn't { emails: [...] }", async () => {
+    const res = await postBatch({ notEmails: 1 });
+    expect(res.status).toBe(400);
+    expect(submitEmail).not.toHaveBeenCalled();
+  });
+
+  it("empty batch → 200 with zero counts (no work, not an error)", async () => {
+    const res = await postBatch({ emails: [] });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ accepted: 0, ignored: 0, errored: 0, results: [] });
+  });
+
+  it("processes many emails in ONE request, results IN ORDER (accepted / ignored / errored)", async () => {
+    // 1st: known user → accepted. 2nd: unknown → ignored. 3rd: submitEmail throws → errored (isolated).
+    findUserByEmail
+      .mockResolvedValueOnce(orgMember)   // email 0 → known
+      .mockResolvedValueOnce(null)        // email 1 → unknown
+      .mockResolvedValueOnce(individual); // email 2 → known (but submitEmail rejects)
+    submitEmail
+      .mockResolvedValueOnce({ submissionId: 5, indicatorId: 6, escalated: true })
+      .mockRejectedValueOnce(new Error("pipeline boom"));
+
+    const res = await postBatch({ emails: [
+      { from: "david@acme.com", body: "https://a.com" },
+      { from: "nobody@nowhere.com", body: "hi" },
+      { from: "sofia@example.com", body: "https://b.com" },
+    ] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.received).toBe(3);
+    expect(res.body.processed).toBe(3);
+    expect(res.body).toMatchObject({ accepted: 1, ignored: 1, errored: 1 });
+    expect(res.body.results[0]).toMatchObject({ status: "ok", indicatorId: 6, escalated: true });
+    expect(res.body.results[1]).toMatchObject({ status: "ignored" });
+    expect(res.body.results[2]).toMatchObject({ status: "error" });
+    // One bad email did NOT prevent the others from being processed.
+    expect(submitEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps at MAX_BATCH_EMAILS and reports the overflow (no silent truncation)", async () => {
+    findUserByEmail.mockResolvedValue(orgMember);
+    const emails = Array.from({ length: 55 }, (_, i) => ({ from: "david@acme.com", body: `https://x${i}.com` }));
+    const res = await postBatch({ emails });
+    expect(res.status).toBe(200);
+    expect(res.body.received).toBe(55);
+    expect(res.body.processed).toBe(50);      // capped at MAX_BATCH_EMAILS
+    expect(res.body.results).toHaveLength(50);
+  });
+
+  it("a bad-request email in the batch is counted (ignored), never crashes the batch", async () => {
+    findUserByEmail.mockResolvedValue(orgMember);
+    const res = await postBatch({ emails: [
+      { subject: "no from or to" }, // → bad_request
+      { from: "david@acme.com", body: "https://a.com" }, // → ok
+    ] });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ accepted: 1, ignored: 1 });
+    expect(res.body.results[0].status).toBe("bad_request");
+  });
+});

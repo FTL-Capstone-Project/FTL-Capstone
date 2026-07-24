@@ -53,6 +53,10 @@ export function createApp() {
   // 256kb default — give this ONE route modest headroom (still far below vision's 12mb). Mounted
   // before the global parser so it wins for this path; the per-field slices in inboundEmail.js bound
   // the actual regex work regardless.
+  // The batch endpoint carries up to MAX_BATCH_EMAILS forwarded emails (each with HTML + headers) in
+  // one request, so it needs more headroom than the single-email route. Mount it FIRST (most specific
+  // path wins) — otherwise the 1mb single-email matcher below would cap the batch. Still bounded.
+  app.use("/api/webhooks/inbound-email/batch", express.json({ limit: "12mb" }));
   app.use("/api/webhooks/inbound-email", express.json({ limit: "1mb" }));
   app.use(express.json({ limit: "256kb" }));
 
