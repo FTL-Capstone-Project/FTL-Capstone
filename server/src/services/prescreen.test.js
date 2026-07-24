@@ -64,4 +64,16 @@ describe("prescreen — instant deterministic verdict", () => {
     expect(r.level).toBe("warning");
     expect(r.reasons[0].text).toMatch(/doesn't resolve/i);
   });
+
+  it("a recognized reputable sender/URL is SAFE with an 'established' reason (parity with full verdict)", async () => {
+    const r = await prescreen({ sender: "noreply@scholarship.com", urls: ["https://survey.fitnesssf.com/x"] });
+    expect(r.level).toBe("safe");
+    expect(r.reasons.some((x) => /recognized, established/i.test(x.text))).toBe(true);
+  });
+
+  it("reputation NEVER overrides a homoglyph / raw-IP flag on the same check", async () => {
+    // A reputable sender paired with a homoglyph URL is still DANGEROUS — the hard URL flag wins.
+    const r = await prescreen({ sender: "noreply@scholarship.com", urls: ["https://аpple.com/login"] });
+    expect(r.level).toBe("dangerous");
+  });
 });

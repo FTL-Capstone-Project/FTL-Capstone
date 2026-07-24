@@ -92,6 +92,34 @@ describe("generateSenderReport — deterministic domain backstop", () => {
     expect(r.ai_confidence).toBe("medium");
   });
 
+  it("a recognized reputable (non-brand) domain is floored to the safe band, not left as UNKNOWN", async () => {
+    // The exact fix: scholarship.com / a gym / a school isn't a major consumer brand, so it fell to
+    // UNKNOWN and the model's cautious number could veto the whole forwarded email via worst-of. Now
+    // recognized as reputable (services/reputation.js curated allowlist) → floored >= 70, high confidence.
+    const r = await generateSenderReport({ email: "noreply@scholarship.com" });
+    expect(r.ai_score).toBeGreaterThanOrEqual(70);
+    expect(r.ai_confidence).toBe("high");
+    expect(r.evidence[0].severity).toBe("safe");
+    expect(r.evidence[0].text).toMatch(/recognized, established domain/i);
+    expect(checkSenderDns).not.toHaveBeenCalled(); // reputable path skips DNS, like a brand
+  });
+
+  it("a reputable sender floor lifts a cautious model number UP (never below 70)", async () => {
+    // Model, unfamiliar with the niche domain, wants to score it 40. The reputable floor forbids that.
+    const { chatJSON } = await import("../../services/llm.js");
+    chatJSON.mockResolvedValueOnce({ score: 40, title: "Unfamiliar", verdict: "Not sure.", tags: [], reasons: [], confidence: "low" });
+    const r = await generateSenderReport({ email: "billing@simplebills.com" });
+    expect(r.ai_score).toBeGreaterThanOrEqual(70);
+  });
+
+  it("a lookalike whose base domain is coincidentally in the reputable list is STILL forced dangerous", async () => {
+    // Impersonation must win over reputation: assessSenderDomain checks lookalike BEFORE reputable.
+    // (paypa1-verify.net is a lookalike; it is not reputable, but this proves ordering regardless.)
+    const r = await generateSenderReport({ email: "security@paypa1-verify.net" });
+    expect(r.ai_score).toBeLessThanOrEqual(20);
+    expect(r.tags).toContain("Impersonation");
+  });
+
   it("a known-brand / lookalike domain skips the DNS lookup entirely (fast + decided)", async () => {
     await generateSenderReport({ email: "editors-noreply@linkedin.com" });   // brand
     await generateSenderReport({ email: "security@paypa1-verify.net" });     // lookalike

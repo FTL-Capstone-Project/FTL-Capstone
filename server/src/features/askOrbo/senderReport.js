@@ -9,8 +9,19 @@
 import { chatJSON } from "../../services/llm.js";
 import { detectLookalike, registeredDomain, knownBrandDomain, isFreeWebmail } from "../../services/typosquat.js";
 import { checkSenderDns } from "../../services/senderDns.js";
+import { isReputableDomain } from "../../services/reputation.js";
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
+
+// A recognized, established sender domain (reputation.js: curated allowlist or Tranco top-50k, minus
+// shared-hosting/shortener domains) that is NOT a brand lookalike and NOT free webmail is floored here.
+// WHY 70 (the "safe" line): the whole point is to stop a legit-but-unfamiliar sender (a niche company,
+// a school, a gym) from VETOING the forwarded-email verdict via worst-of. reconcileLegScores only lets
+// clean legs decide when the marginal leg is >=65, so a lower floor wouldn't clear the veto. Flooring
+// the sender IDENTITY leg is safe because scam CONTENT is still caught independently by the body + link
+// legs (combined worst-of). A lookalike/webmail sender never reaches this tier (handled above), and a
+// scammer's throwaway domain isn't reputable, so this can't rescue impersonation or BEC.
+const REPUTABLE_SENDER_FLOOR = 70;
 
 // Deterministically classify a sender's domain (no LLM). This is the backstop that makes
 // the safe/dangerous call in CODE:
@@ -33,6 +44,10 @@ const assessSenderDomain = (email) => {
   if (brand) return { kind: "brand", domain, brand };
   const look = detectLookalike(host); // {brand, domains} | null — fires only on lookalikes
   if (look) return { kind: "lookalike", domain, brand: look.brand };
+  // Not a brand and not a lookalike, but a recognized ESTABLISHED domain (curated/popularity) →
+  // trust its identity. Checked AFTER lookalike so a lookalike whose base is coincidentally reputable
+  // still resolves to "lookalike" (dangerous), never here.
+  if (isReputableDomain(host)) return { kind: "reputable", domain, brand: null };
   return { kind: "unknown", domain, brand: null };
 };
 
@@ -93,7 +108,8 @@ export const generateSenderReport = async ({ email, context = "" }) => {
       dom.kind === "lookalike" ? `LOOKALIKE of ${cap(dom.brand)} — the domain "${dom.domain}" is NOT a real ${cap(dom.brand)} domain (impersonation).`
       : dom.kind === "webmail" ? `"${dom.domain}" is a FREE / consumer webmail provider (Gmail, Outlook, iCloud, etc.). This is NOT a company domain — anyone can create such an address. A message claiming to be official business, legal, corporate, HR, or from a well-known brand while using free webmail is a classic red flag. Judge the CLAIM against the free address; do not treat the provider as trustworthy just because Gmail/Microsoft is well known.`
       : dom.kind === "brand" ? `the domain "${dom.domain}" IS a real ${cap(dom.brand)} domain (but display addresses can still be spoofed).`
-      : `"${dom.domain}" is not a known brand domain; judge from the address + context.`
+      : dom.kind === "reputable" ? `"${dom.domain}" is a RECOGNIZED, established domain (it's a real, long-standing site, not a throwaway) — being unfamiliar to you personally is NOT a red flag. Treat the sender's identity as legitimate and judge the MESSAGE on its content + context (a genuine domain can still send a scammy request, and display addresses can be spoofed).`
+      : `"${dom.domain}" is not one of the major consumer brands we keep on file, which is NORMAL for the many legitimate niche, regional, and small-business domains that exist — being unfamiliar is NOT itself a red flag. Judge from the address + context.`
     }${dnsLine}\n\nGive the sender report as JSON.`;
 
   const out = await chatJSON({ system, user, maxTokens: 500, temperature: 0 });
@@ -129,6 +145,13 @@ export const generateSenderReport = async ({ email, context = "" }) => {
     // it into "review" at worst (still not a blanket "safe" — headers can be spoofed).
     score = Math.max(score, 55);
     reasons = [{ text: `"${dom.domain}" is a genuine ${cap(dom.brand)} domain (verify full headers to rule out spoofing)`, severity: "safe" }, ...reasons];
+  } else if (dom.kind === "reputable") {
+    // A recognized, established (non-brand) domain: trust its IDENTITY so an unfamiliar-but-legit
+    // sender (a niche company, a school, a gym) doesn't get dinged to "review" and then veto the
+    // whole forwarded email via worst-of. Floor to the safe line; the model can still go HIGHER but
+    // not lower. Scam CONTENT is caught independently by the body + link legs, so this is safe.
+    score = Math.max(score, REPUTABLE_SENDER_FLOOR);
+    reasons = [{ text: `"${dom.domain}" is a recognized, established domain — a real, long-standing site, not a throwaway (a From address can still be spoofed, so verify headers for anything important)`, severity: "safe" }, ...reasons];
   } else if (dns.checked) {
     // UNKNOWN domain: the model owns the number here, but the FREE DNS signals adjust it
     // deterministically. Negatives (no-resolve / missing MX/SPF/DMARC) shave off a capped
@@ -148,11 +171,11 @@ export const generateSenderReport = async ({ email, context = "" }) => {
     status: "done",
     ai_score: score,
     ai_verdict: out.verdict.trim(),
-    // Confidence is high when a deterministic signal DECIDED the verdict — a known brand or a
-    // lookalike, OR a hard DNS fact (the domain doesn't even resolve). "webmail" is a certain
-    // classification but NOT a decided verdict (a personal Gmail may be fine or a scam depending
-    // on the claim), so it defers to the model's confidence like the unknown case.
-    ai_confidence: dom.kind === "brand" || dom.kind === "lookalike" || (dns.checked && !dns.resolves)
+    // Confidence is high when a deterministic signal DECIDED the verdict — a known brand, a
+    // recognized reputable domain, or a lookalike, OR a hard DNS fact (the domain doesn't even
+    // resolve). "webmail" is a certain classification but NOT a decided verdict (a personal Gmail may
+    // be fine or a scam depending on the claim), so it defers to the model's confidence like unknown.
+    ai_confidence: dom.kind === "brand" || dom.kind === "reputable" || dom.kind === "lookalike" || (dns.checked && !dns.resolves)
       ? "high" : (out.confidence ?? "medium"),
     title: (out.title || "").trim() || "Sender report",
     tags: [...new Set(tags)].slice(0, 3),

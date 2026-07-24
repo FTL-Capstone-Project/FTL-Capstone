@@ -16,8 +16,19 @@
 import { chatJSON } from "./llm.js";
 import { assessTyposquat } from "./typosquat.js";
 import { assessUrlShape } from "./urlShape.js";
+import { isReputableDomain } from "./reputation.js";
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
+
+// A recognized, ESTABLISHED site (services/reputation.js: curated allowlist or Tranco top-50k, minus
+// shared-hosting/shortener domains) is floored to this SAFETY score so that SOFT-only penalties — an
+// ESP click-tracker's off-domain redirect, plain HTTP, an unusual port — can't drag it below the
+// "safe" band (>=70). This is the one POSITIVE signal in an otherwise all-subtractive rubric: a legit
+// niche site (a local gym's survey, scholarship.com) can finally EARN trust instead of only losing it.
+// Set above 70 so the LLM's ±15 nudge still leaves it safe. NEVER applied over a hard danger signal /
+// blacklist / urlscan-malicious verdict — a compromised or impersonating reputable domain still scores
+// bad (see generateVerdict's gate).
+const REPUTABLE_URL_FLOOR = 75;
 
 // ============================================================
 // DETERMINISTIC SCORING RUBRIC — the safety NUMBER is computed from the signals we
@@ -102,16 +113,34 @@ export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_
 
   // ── Deterministic rubric: the NUMBER comes from the signals, not the LLM. ──
   const rubric = computeSafetyScore({ blacklist_hit, domain_age_days, raw, evidence, typo });
-  const anchoredScore = hardSignal ? Math.min(rubric.score, 20) : rubric.score;
+
+  // ── Reputation trust floor (the one POSITIVE signal) ──
+  // Judge the domain the link ACTUALLY lands on (final_host), not the submitted shell — so an
+  // open-redirect off a reputable domain (reputable.com/?url=evil.com → evil.com) is judged on the
+  // real destination. Only floor a scan that genuinely RENDERED (final_host is populated only by a
+  // successful urlscan distill) — never an unscanned/errored URL. And NEVER floor over a hard signal,
+  // a blacklist hit, or a urlscan-malicious verdict: a compromised or impersonating reputable domain
+  // must still score bad. When all those hold, a recognized established site can't be dragged under
+  // "safe" by soft-only penalties (off-domain redirect / insecure http / unusual port).
+  const landingHost = raw.final_host ?? null;
+  const reputableBenign =
+    !hardSignal && !blacklist_hit && !raw.malicious &&
+    landingHost != null && isReputableDomain(landingHost);
+  const anchoredScore = hardSignal
+    ? Math.min(rubric.score, 20)
+    : (reputableBenign ? Math.max(rubric.score, REPUTABLE_URL_FLOOR) : rubric.score);
 
   // ── Try Claude first (for the WORDS); fall back to rules on any failure ──
   try {
     const ai = await claudeVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, contextText, typo });
     // The rubric owns the number. Claude may nudge it ±15 (so its narrative and score
-    // don't visibly disagree), but never past the hard-signal ceiling.
+    // don't visibly disagree), but never past the hard-signal ceiling — and never BELOW the
+    // reputation floor (else the model's habitual downward nudge on an unfamiliar-looking domain
+    // would undo the trust floor we just applied to a recognized established site).
     let score = anchoredScore;
     if (typeof ai.score === "number" && !hardSignal) {
-      score = clamp(Math.max(anchoredScore - 15, Math.min(anchoredScore + 15, ai.score)));
+      const lowerBound = reputableBenign ? anchoredScore : anchoredScore - 15;
+      score = clamp(Math.max(lowerBound, Math.min(anchoredScore + 15, ai.score)));
     }
     return {
       ai_score: score,

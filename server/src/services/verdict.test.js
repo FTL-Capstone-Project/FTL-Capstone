@@ -114,6 +114,88 @@ describe("generateVerdict — verdict/tag/reason consistency", () => {
   });
 });
 
+// Reputation trust floor: a recognized ESTABLISHED site (services/reputation.js) can't be dragged
+// below "safe" by SOFT-only penalties (off-domain redirect / insecure http / unusual port) — the one
+// positive signal in an all-subtractive rubric. But the floor NEVER overrides a hard danger signal,
+// a blacklist hit, a urlscan-malicious verdict, an unrendered scan, or an open-redirect to a
+// non-reputable final host. scholarship.com is in the curated allowlist (see reputation-allowlist.js).
+describe("generateVerdict — reputation trust floor", () => {
+  beforeEach(() => llm.chatJSON.mockClear());
+
+  it("floors a reputable landing host stacked with SOFT penalties up to 'safe'", async () => {
+    // Off-domain redirect (15) + insecure http (10) + unusual port (8) = 33 → rubric 67 (review).
+    // The reputable landing host floors it to >= 75.
+    const v = await generateVerdict({
+      ...base,
+      evidence: [{ text: "Page served over insecure http (no encryption)", severity: "review" }, { text: "unusual network port", severity: "review" }],
+      raw: { final_host: "scholarship.com", submitted_host: "click.tracker.example", redirected_to_different_host: true },
+      rawUrl: "http://scholarship.com:8080/survey",
+    });
+    expect(v.ai_score).toBeGreaterThanOrEqual(75);
+    expect(scoreBucket(v.ai_score)).toBe("safe");
+  });
+
+  it("holds the floor even when the model nudges DOWN", async () => {
+    // Model tries to pull an established-clean site down to 40; the floor forbids going below it.
+    llm.chatJSON.mockResolvedValueOnce({
+      score: 40, title: "Unfamiliar site", description: "Not sure about this one.",
+      verdict: "I'm not familiar with this site.", tags: ["Review"],
+      reasons: [{ text: "unfamiliar domain", severity: "review" }], confidence: "low",
+    });
+    const v = await generateVerdict({
+      ...base,
+      evidence: [{ text: "Page served over insecure http (no encryption)", severity: "review" }],
+      raw: { final_host: "collegeave.com", submitted_host: "collegeave.com" },
+    });
+    expect(v.ai_score).toBeGreaterThanOrEqual(75);
+  });
+
+  it("does NOT floor a reputable domain flagged malicious by urlscan (possible compromise)", async () => {
+    const v = await generateVerdict({ ...base, raw: { malicious: true, final_host: "scholarship.com", submitted_host: "scholarship.com" } });
+    expect(scoreBucket(v.ai_score)).not.toBe("safe"); // malicious anchor (45) + no floor
+  });
+
+  it("does NOT floor a reputable domain on a blacklist hit (hard signal wins)", async () => {
+    const v = await generateVerdict({ ...base, blacklist_hit: true, blacklist_source: "google_safe_browsing:SOCIAL_ENGINEERING", raw: { final_host: "scholarship.com", submitted_host: "scholarship.com" } });
+    expect(v.ai_score).toBeLessThanOrEqual(20);
+    expect(scoreBucket(v.ai_score)).toBe("dangerous");
+  });
+
+  it("does NOT floor an open-redirect from a reputable shell to a NON-reputable final host", async () => {
+    // Submitted host is reputable, but it lands on evil — judged on the FINAL host, so no floor.
+    // Stack raw-IP(12)+http(10)+port(8) = 30 → 70 WOULD be safe-ish, but the point is the floor
+    // isn't what's holding it: swap to a genuinely low case to prove the floor didn't fire.
+    llm.chatJSON.mockResolvedValueOnce({
+      score: 30, title: "Redirects away", description: "Lands on an unknown site.",
+      verdict: "Redirects to an unfamiliar domain.", tags: ["Review"],
+      reasons: [{ text: "off-domain redirect", severity: "review" }], confidence: "low",
+    });
+    const v = await generateVerdict({
+      ...base,
+      evidence: [{ text: "Page served over insecure http (no encryption)", severity: "review" }],
+      raw: { final_host: "totally-evil-xyz999.com", submitted_host: "scholarship.com", redirected_to_different_host: true },
+    });
+    // rubric = 100-15(redirect)-10(http) = 75; reputable NOT applied (final host not reputable), so the
+    // model's downward nudge to 30 is allowed → clamps to anchor-15 = 60, i.e. NOT floored to >=75.
+    expect(v.ai_score).toBeLessThan(75);
+  });
+
+  it("does NOT floor an unrendered scan (no final_host) even for a reputable submitted host", async () => {
+    llm.chatJSON.mockResolvedValueOnce({
+      score: 30, title: "Unclear", description: "Couldn't render.", verdict: "Couldn't load it.",
+      tags: ["Review"], reasons: [{ text: "no render", severity: "review" }], confidence: "low",
+    });
+    const v = await generateVerdict({
+      ...base,
+      evidence: [{ text: "Page served over insecure http (no encryption)", severity: "review" }],
+      // Off-domain redirect (15) + insecure http (10) = 25 → rubric 75. No final_host → scan didn't
+      // render → floor NOT applied → the model's downward nudge is allowed (75-15 = 60 < 75).
+      raw: { submitted_host: "scholarship.com", redirected_to_different_host: true },
+    });
+    expect(v.ai_score).toBeLessThan(75); // floor requires a rendered final_host
+  });
+});
+
 // SEC-MED: prompt-injection via contextText can't poison the global verdict. Even with the
 // mocked model "complying" (returning score 95), the deterministic rubric owns the number.
 describe("generateVerdict — injection resistance", () => {

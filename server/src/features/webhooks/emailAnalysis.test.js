@@ -405,3 +405,53 @@ describe("combineEmailReports — FP fix end-to-end (SAFE mail no longer flagged
     expect(JSON.stringify(r)).not.toMatch(/image|closer look/i);
   });
 });
+
+// ── REPUTATION-FLOOR false-negative matrix ──
+// The reputation floor lands upstream: a recognized sender arrives at the combine as a leg(70) (the
+// REPUTABLE_SENDER_FLOOR), a reputable link as a floored leg. These lock in that the floor FIXES the
+// niche-site FP WITHOUT opening a false-negative: a floored reputable sender must not rescue a scam
+// whose body or link is dangerous, and must not disarm the crown-jewel ceiling for a NON-reputable
+// (unfloored) BEC sender.
+describe("combineEmailReports — reputation floor keeps 0 false-negatives", () => {
+  it("FIX: reputable sender (floored 70) + lone 'credentials' body + safe link → SAFE (the FP we fix)", () => {
+    // A legit 'log in to your account' from a niche-but-recognized sender with a safe link. The
+    // floored sender (70) clears the crown-jewel corroboration gate (>=55) AND the worst-of veto.
+    const r = combineEmailReports({
+      sender: leg(70), body: bodyLeg(65, { crownCount: 1, hardOtherCount: 0, count: 1 }), link: leg(90),
+    });
+    expect(r.ai_score).toBeGreaterThanOrEqual(70);
+  });
+
+  it("PRESERVED: a NON-reputable BEC sender (unfloored ~45) + payment body → DANGER", () => {
+    // The classic hole the DKIM-floor approach opened: 'update our bank details' from a scammer's own
+    // aged domain. It's NOT reputable, so it never gets floored — sender stays ~45 (< 55), which arms
+    // the crown-jewel ceiling on the payment body → DANGER. This is why we floor reputation, not auth.
+    const r = combineEmailReports({
+      sender: leg(45), body: bodyLeg(67, { crownCount: 1, hardOtherCount: 0, count: 1 }), link: null,
+    });
+    expect(r.ai_score).toBeLessThan(35);
+  });
+
+  it("PRESERVED: reputable sender (70) but TWO crown-jewels self-corroborate → DANGER", () => {
+    // Even a recognized sender can't launder a body asking for BOTH a password AND payment/SSN.
+    const r = combineEmailReports({
+      sender: leg(70), body: bodyLeg(32, { crownCount: 2, hardOtherCount: 0, count: 2 }), link: null,
+    });
+    expect(r.ai_score).toBeLessThanOrEqual(20);
+  });
+
+  it("PRESERVED: reputable sender (70) but a DANGEROUS link (< 35) still dominates worst-of", () => {
+    const r = combineEmailReports({
+      sender: leg(70), body: bodyLeg(100, { crownCount: 0, hardOtherCount: 0, count: 0 }), link: leg(8),
+    });
+    expect(r.ai_score).toBeLessThan(35);
+  });
+
+  it("PRESERVED: reputable sender (70) but crown-jewel body + dangerous link → ceiling fires → DANGER", () => {
+    // worstLink < 50 corroborates the lone crown-jewel even though the sender is floored.
+    const r = combineEmailReports({
+      sender: leg(70), body: bodyLeg(65, { crownCount: 1, hardOtherCount: 0, count: 1 }), link: leg(40),
+    });
+    expect(r.ai_score).toBeLessThan(35);
+  });
+});

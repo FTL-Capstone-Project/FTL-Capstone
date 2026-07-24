@@ -13,6 +13,7 @@
 import { assessTyposquat, detectConfusableScript, detectLookalike, isFreeWebmail, knownBrandDomain, registeredDomain } from "./typosquat.js";
 import { assessUrlShape } from "./urlShape.js";
 import { checkSenderDns } from "./senderDns.js";
+import { isReputableDomain } from "./reputation.js";
 
 // Map the highest severity we saw to a badge level. "dangerous" beats "warning" beats "safe".
 const rank = { safe: 0, warning: 1, dangerous: 2 };
@@ -64,6 +65,14 @@ const assessOneUrl = (url) => {
     reasons.push(...shape.evidence);
   }
 
+  // Recognized, established site → add a reassuring reason so the instant badge agrees with the full
+  // verdict's reputation floor. Only when NOTHING flagged (level still "safe"): a homoglyph, lookalike,
+  // raw-IP, or odd-port flag must always win over reputation (reputation is about the registered
+  // domain, not this specific URL's shape).
+  if (level === "safe" && isReputableDomain(host)) {
+    reasons.push({ text: `${registeredDomain(host) ?? host} is a recognized, established site.`, severity: "safe" });
+  }
+
   return { level, reasons };
 };
 
@@ -86,6 +95,11 @@ const assessSender = async (email) => {
   const look = detectLookalike(host);
   if (look) {
     return { level: "dangerous", reasons: [{ text: `The sender domain "${domain}" is a lookalike of ${look.brand}, not a real ${look.brand} address — this is impersonation.`, severity: "dangerous" }] };
+  }
+  // Recognized, established (non-brand) domain → safe with a reason, so the instant badge agrees with
+  // the full sender report's reputation floor (checked AFTER lookalike, so a lookalike still wins).
+  if (isReputableDomain(host)) {
+    return { level: "safe", reasons: [{ text: `"${domain}" is a recognized, established domain (a From address can still be spoofed — verify headers for anything important).`, severity: "safe" }] };
   }
   // Unknown domain → free DNS signals only (never fabricates "dangerous").
   const dns = await checkSenderDns(domain);
