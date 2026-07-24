@@ -17,7 +17,14 @@ const {
   detectLinkMismatch,
   assessAuthResults,
   detectReplyToMismatch,
+  crownCeilingApplies,
+  reconcileLegScores,
 } = await import("./emailAnalysis.js");
+
+// Helper: a body leg the way analyzeEmailBody produces it — raw score + signalMeta (drives the
+// corroboration-gated crown-jewel ceiling in combineEmailReports).
+const bodyLeg = (aiScore, meta, extra = {}) => ({ ai_score: aiScore, ai_verdict: "b", ai_confidence: "medium", title: "b", tags: [], evidence: [], signalMeta: meta, ...extra });
+const leg = (aiScore, extra = {}) => ({ ai_score: aiScore, ai_verdict: "x", ai_confidence: "medium", title: "x", tags: [], evidence: [], ...extra });
 
 beforeEach(() => {
   chatJSON.mockReset();
@@ -71,10 +78,16 @@ describe("analyzeEmailBody", () => {
     expect(chatJSON).not.toHaveBeenCalled();
   });
 
-  it("scores observed red flags deterministically (crown-jewel → dangerous ceiling)", async () => {
+  it("scores observed red flags as a RAW weighted body score + carries signalMeta (no unilateral ceiling)", async () => {
+    // NEW contract: the body leg no longer hard-ceilings itself to <=20 on a crown-jewel. It returns the
+    // raw weighted score (100 - 35[credentials] - 18[urgency] = 47) and hands the escalation decision to
+    // combineEmailReports, which applies the crown-jewel danger ceiling ONLY when corroborated by a
+    // suspicious sender/link or a second hard signal. This is the fix for the credential-phishing
+    // false-positive on legit "log into your account" mail.
     chatJSON.mockResolvedValue({ signals: ["credentials", "urgency"], verdict: "Looks like phishing.", title: "Fake login" });
     const report = await analyzeEmailBody({ from: "x@y.com", subject: "locked", body: "confirm your password now" });
-    expect(report.ai_score).toBeLessThanOrEqual(20); // crown-jewel ceiling
+    expect(report.ai_score).toBe(47);                       // raw weighted, not the old hard-20
+    expect(report.signalMeta).toMatchObject({ crownCount: 1, count: 2 }); // metadata for the gated combine
     expect(report.ai_verdict).toBe("Looks like phishing.");
     expect(report.evidence.length).toBeGreaterThan(0);
   });
@@ -289,5 +302,106 @@ describe("combineEmailReports — confidence bump from corroboration", () => {
     const body = { ai_score: 90, ai_verdict: "Body fine.", ai_confidence: "low", evidence: [] };
     const r = combineEmailReports({ sender, body, link: null });
     expect(r.ai_confidence).toBe("low");
+  });
+});
+
+// ── FALSE-POSITIVE FIX regression suite ──
+// Locks the recalibration that killed the "safe email flagged dangerous" skew (44 verified FPs,
+// 0 FNs in the scoring audit). These guard against a future change re-introducing the old behavior
+// (crown-jewel unconditional hard-ceiling, NO_SIGNAL_CEILING dragging clean bodies down, a single
+// review-band leg vetoing two clean legs) — while keeping every real-phishing shape at DANGER.
+
+describe("crownCeilingApplies (corroboration gate on the body crown-jewel ceiling)", () => {
+  it("does NOT escalate a LONE crown-jewel with a clean sender + safe link (legit 'log in')", () => {
+    expect(crownCeilingApplies({ crownCount: 1, hardOtherCount: 0 }, { senderScore: 85, worstLink: 90 })).toBe(false);
+  });
+  it("escalates when a SECOND crown-jewel is present", () => {
+    expect(crownCeilingApplies({ crownCount: 2, hardOtherCount: 0 }, { senderScore: 85, worstLink: 90 })).toBe(true);
+  });
+  it("escalates when a HARD non-soft signal corroborates (impersonation/attachment/grammar)", () => {
+    expect(crownCeilingApplies({ crownCount: 1, hardOtherCount: 1 }, { senderScore: 85, worstLink: 90 })).toBe(true);
+  });
+  it("escalates when the SENDER leg is suspicious (< 55)", () => {
+    expect(crownCeilingApplies({ crownCount: 1, hardOtherCount: 0 }, { senderScore: 40, worstLink: 90 })).toBe(true);
+  });
+  it("escalates when a LINK leg is dangerous (< 50)", () => {
+    expect(crownCeilingApplies({ crownCount: 1, hardOtherCount: 0 }, { senderScore: 85, worstLink: 12 })).toBe(true);
+  });
+  it("never escalates when there is no crown-jewel at all", () => {
+    expect(crownCeilingApplies({ crownCount: 0, hardOtherCount: 3 }, { senderScore: 10, worstLink: 10 })).toBe(false);
+  });
+});
+
+describe("reconcileLegScores (worst-of, but a lone marginal leg can't veto clean ones)", () => {
+  it("a DANGEROUS leg (< 35) still dominates (strict worst-of preserved)", () => {
+    expect(reconcileLegScores([90, 10, 88])).toBe(10);
+  });
+  it("two clean legs round a single marginal (65-69) leg up to safe", () => {
+    expect(reconcileLegScores([74, 68, 92])).toBe(70); // benign ESP tracking link @68 no longer vetoes
+  });
+  it("a DEEP review leg (< 65) is NOT rounded up — stays worst-of", () => {
+    expect(reconcileLegScores([80, 50, 90])).toBe(50);
+  });
+  it("more than one non-safe leg keeps strict worst-of", () => {
+    expect(reconcileLegScores([66, 68, 90])).toBe(66);
+  });
+  it("ignores nulls; returns null when nothing scorable", () => {
+    expect(reconcileLegScores([null, 80, undefined])).toBe(80);
+    expect(reconcileLegScores([null])).toBeNull();
+  });
+});
+
+describe("combineEmailReports — FP fix end-to-end (SAFE mail no longer flagged)", () => {
+  it("SAFE: brand sender + lone 'credentials' body ('log in to view') + safe link → SAFE band", () => {
+    // Bank statement: credentials-only body raw = 65, brand sender 85, safe link 90. No corroboration
+    // → no ceiling. Old code hard-ceiled body to 20 → DANGER; now it stays SAFE.
+    const r = combineEmailReports({
+      sender: leg(85), body: bodyLeg(65, { crownCount: 1, hardOtherCount: 0, count: 1 }), link: leg(90),
+    });
+    expect(r.ai_score).toBeGreaterThanOrEqual(70);
+  });
+  it("SAFE: a CLEAN body (0 signals) is neutral, not a 65 cap — brand sender + safe link decide", () => {
+    const r = combineEmailReports({
+      sender: leg(90), body: bodyLeg(65, { crownCount: 0, hardOtherCount: 0, count: 0 }), link: leg(92),
+    });
+    expect(r.ai_score).toBeGreaterThanOrEqual(70); // clean body excluded → min(90,92) = 90
+  });
+  it("SAFE: a single benign tracking link @68 with two clean legs rounds up", () => {
+    const r = combineEmailReports({
+      sender: leg(74), body: bodyLeg(100, { crownCount: 0, hardOtherCount: 0, count: 0 }), link: leg(68),
+    });
+    expect(r.ai_score).toBeGreaterThanOrEqual(70);
+  });
+  it("DANGER preserved: lone 'credentials' body but SUSPICIOUS sender → ceiling fires → DANGER", () => {
+    const r = combineEmailReports({
+      sender: leg(40), body: bodyLeg(65, { crownCount: 1, hardOtherCount: 0, count: 1 }), link: leg(45),
+    });
+    expect(r.ai_score).toBeLessThan(35);
+  });
+  it("DANGER preserved: credentials + a dangerous link → ceiling fires → DANGER", () => {
+    const r = combineEmailReports({
+      sender: leg(80), body: bodyLeg(65, { crownCount: 1, hardOtherCount: 0, count: 1 }), link: leg(8),
+    });
+    expect(r.ai_score).toBeLessThan(35);
+  });
+  it("DANGER preserved: two crown-jewels (SSN + payment) self-corroborate → DANGER even with clean-ish legs", () => {
+    const r = combineEmailReports({
+      sender: leg(60), body: bodyLeg(32, { crownCount: 2, hardOtherCount: 0, count: 2 }), link: null,
+    });
+    expect(r.ai_score).toBeLessThanOrEqual(20);
+  });
+  it("DANGER preserved: a lookalike sender (< 35) dominates regardless of a clean body", () => {
+    const r = combineEmailReports({
+      sender: leg(15), body: bodyLeg(100, { crownCount: 0, hardOtherCount: 0, count: 0 }), link: leg(12),
+    });
+    expect(r.ai_score).toBeLessThan(35);
+  });
+  it("does NOT leak image-path wording into the headline (no 'image'/'closer look')", () => {
+    const r = combineEmailReports({
+      sender: leg(90, { ai_verdict: "Genuine brand domain.", title: "Legit sender" }),
+      body: bodyLeg(100, { crownCount: 0, hardOtherCount: 0, count: 0 }, { ai_verdict: "No red flags in the wording.", title: "Content looks clean" }),
+      link: leg(92, { ai_verdict: "Safe link.", title: "Safe link" }),
+    });
+    expect(JSON.stringify(r)).not.toMatch(/image|closer look/i);
   });
 });

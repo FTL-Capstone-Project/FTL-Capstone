@@ -12,7 +12,7 @@
 //     SAME deterministic scorer (code owns the number; prompt-injection can't move it).
 import { chatJSON } from "../../services/llm.js";
 import { env } from "../../config/env.js";
-import { SIGNAL_CATALOG, buildImageReport } from "../vision/phishingSignals.js";
+import { SIGNAL_CATALOG, scoreEmailBodySignals } from "../vision/phishingSignals.js";
 import { knownBrandDomain, detectLookalike, registeredDomain } from "../../services/typosquat.js";
 import { extractEmailAddress } from "./inboundEmail.js";
 
@@ -41,10 +41,48 @@ const SIGNAL_GUIDE = Object.entries(SIGNAL_CATALOG)
 
 // Combine 0-100 SAFETY scores by WORST-OF (min): a dangerous sender OR body OR link makes the whole
 // email dangerous (defense-in-depth). Ignores nulls (a component we couldn't score); returns null
-// only when nothing was scorable.
+// only when nothing was scorable. Kept as the pure primitive; the richer reconciliation below builds
+// on the same worst-of instinct but stops a single MARGINAL leg from vetoing clean ones.
 export const combineEmailScore = (scores) => {
   const present = scores.filter((s) => typeof s === "number");
   return present.length ? Math.min(...present) : null;
+};
+
+// Should the body's crown-jewel ask (credentials / sensitive_info / payment) escalate the body leg to
+// the DANGER ceiling (<=20)? A crown-jewel is phishing-shaped ON ITS OWN in a screenshot (where we
+// can't verify anything else), but in a forwarded EMAIL the sender and links are scored separately —
+// so "log into your account" / "your statement is ready" / "your subscription renews" from a real
+// brand with a safe link is NOT phishing. We only escalate when the ask is CORROBORATED:
+//   - the body self-corroborates (a 2nd crown-jewel, or a HARD non-soft signal like impersonation /
+//     attachment / grammar — soft urgency+greeting alone are the normal texture of legit mail), OR
+//   - the sender leg is suspicious (< 55, i.e. below the brand/webmail floor), OR
+//   - a link leg is outright dangerous (< 50).
+// A lone crown-jewel with a clean sender AND a safe link stays at its raw weighted score. Pure.
+export const crownCeilingApplies = ({ crownCount = 0, hardOtherCount = 0 } = {}, { senderScore = null, worstLink = null } = {}) => {
+  if (!crownCount) return false;
+  if (crownCount >= 2 || hardOtherCount >= 1) return true;   // body self-corroborates
+  if (senderScore != null && senderScore < 55) return true;  // sender leg suspicious
+  if (worstLink != null && worstLink < 50) return true;      // a link leg dangerous
+  return false;                                              // lone crown + clean sender & link
+};
+
+// Reconcile the sender / body / link leg scores into ONE email score. Worst-of is preserved where it
+// matters — any DANGEROUS leg (< 35: a lookalike sender, a known-bad link, a corroborated crown-jewel
+// body) still dominates, so a real scam can never read safer than its worst leg. What changes: when NO
+// leg is dangerous, a SINGLE marginal review-band leg (65-69 — a benign ESP tracking link, an
+// unknown-but-resolving sender) no longer vetoes two clearly-safe legs. Two clean (>= 70) legs
+// corroborate safety and round that lone marginal leg up to the safe threshold (70). A deeper review
+// leg (< 65), or more than one non-safe leg, keeps the strict worst-of. Ignores nulls. Pure.
+export const reconcileLegScores = (legScores) => {
+  const present = legScores.filter((s) => typeof s === "number");
+  if (!present.length) return null;
+  const minLeg = Math.min(...present);
+  if (minLeg < 35) return minLeg;                            // a dangerous leg dominates (strict worst-of)
+  const reviewLegs = present.filter((s) => s >= 35 && s < 70);
+  const cleanLegs = present.filter((s) => s >= 70);
+  // Exactly one marginal (65-69) leg, and at least one clean leg backing it → let the clean legs decide.
+  if (reviewLegs.length === 1 && cleanLegs.length >= 1 && minLeg >= 65) return 70;
+  return minLeg;
 };
 
 // DETERMINISTIC sender_mismatch (no LLM, no network): does the forwarded email's display name CLAIM
@@ -152,6 +190,49 @@ const collectDeterministicSignals = ({ senderIdentity, htmlLinks, auth, replyTo 
   return { signals, evidence };
 }
 
+// Bucket a 0-100 SAFETY score (verdict.js scoreBucket) — used for the body leg's own title/verdict.
+const bodyBucket = (score) => (score >= 70 ? "safe" : score >= 35 ? "review" : "dangerous");
+
+// Build the EMAIL body leg's VerdictCard-shaped report from a signal set + optional model words.
+// This REPLACES the old reuse of buildImageReport (the vision/screenshot builder), which was leaking
+// image-only language into forwarded-email reports ("I read your image", "Message worth a closer
+// look", "can't verify from an image alone") — an email is text we CAN parse, not a picture. It also
+// carries `signalMeta` so combineEmailReports can apply the corroboration-gated crown-jewel ceiling
+// with cross-leg context. The number here is the RAW weighted body score (no ceilings) — the combine
+// owns escalation. rawScore is only a leg input; the email's final title/verdict come from the combine.
+const buildEmailBodyReport = ({ signals = [], modelVerdict = "", modelTitle = "", summary = "" }) => {
+  const scored = scoreEmailBodySignals(signals);
+  const bucket = bodyBucket(scored.rawScore);
+  const cleanTitle = typeof modelTitle === "string" ? modelTitle.trim().replace(/^["']|["']$/g, "") : "";
+  const title = (cleanTitle && cleanTitle.length <= 60 ? cleanTitle : "") || emailFallbackTitle(bucket, scored.count);
+  const cleanVerdict = typeof modelVerdict === "string" ? modelVerdict.trim() : "";
+  const verdict = cleanVerdict || emailFallbackVerdict(bucket, scored.count, summary);
+  return {
+    status: "done",
+    ai_score: scored.rawScore,
+    ai_verdict: verdict,
+    ai_confidence: scored.crownCount || scored.hardOtherCount >= 2 ? "high" : scored.count ? "medium" : "low",
+    title,
+    tags: emailBodyTags(bucket, scored.count),
+    evidence: scored.evidence,
+    // Metadata for the corroboration-gated combine (never rendered). count===0 → clean body = neutral.
+    signalMeta: { crownCount: scored.crownCount, hardOtherCount: scored.hardOtherCount, count: scored.count },
+  };
+};
+
+// Honest, EMAIL-specific fallbacks (no "image" language). A clean body isn't "safe" on its own here
+// either — but it stays quiet and lets the sender/link legs speak, so its wording is neutral, not alarmed.
+const emailFallbackTitle = (bucket, count) =>
+  bucket === "dangerous" ? "Likely phishing email" : bucket === "review" && count ? "Email worth a closer look" : "Email content looks clean";
+const emailFallbackVerdict = (bucket, count, summary) => {
+  const what = summary ? ` ${summary}.` : "";
+  if (bucket === "dangerous") return `This email's wording has the hallmarks of a scam${count ? ` (${count} red flag${count > 1 ? "s" : ""})` : ""}.${what}`;
+  if (bucket === "review" && count) return `This email's wording has a few warning signs worth a closer look.${what}`;
+  return `I found no scam red flags in the wording of this email.${what}`;
+};
+const emailBodyTags = (bucket, count) =>
+  bucket === "dangerous" ? ["Likely phishing"] : bucket === "review" && count ? ["Suspicious wording"] : ["Content looks clean"];
+
 // Analyze the message BODY (+ subject + sender) for phishing red flags. Returns a VerdictCard-shaped
 // report (same shape as the image path / sender report) — or null ONLY when there's nothing to score
 // (no LLM key AND no deterministic signal). Never throws, so a body failure can't sink the intake.
@@ -172,7 +253,7 @@ export const analyzeEmailBody = async ({ from = "", subject = "", body = "", sen
   // stripped). The shared scorer owns the number; extra evidence rows carry the precise wording.
   const build = ({ modelSignals = [], modelVerdict = "", modelTitle = "", summary = "" }) => {
     const signals = [...modelSignals, ...proven.signals];
-    const report = buildImageReport({ signals, modelVerdict, modelTitle, summary });
+    const report = buildEmailBodyReport({ signals, modelVerdict, modelTitle, summary });
     if (proven.evidence.length) report.evidence = [...proven.evidence, ...report.evidence].slice(0, 6);
     return report;
   };
@@ -268,33 +349,60 @@ export const combineLinkReports = (linkScans = []) => {
 // Merge the sender + body + (optional) link VerdictCard-shaped reports into ONE combined report,
 // ready for runEmailPipeline to store on the email Indicator.
 //
-// SCORE = worst-of (min) across the legs — a dangerous sender OR body OR any link makes the whole
-// email dangerous (defense-in-depth). Corroboration between legs raises CONFIDENCE, never the safety
-// score: three independent legs agreeing something is off is stronger evidence, but it must never let
-// a dangerous email read as safer than its worst leg.
+// SCORE = a RECONCILED worst-of across the legs (see reconcileLegScores): a dangerous leg (< 35: a
+// lookalike sender, a known-bad link, a corroborated crown-jewel body) still dominates — a dangerous
+// email can never read safer than its worst leg. But two clean legs are no longer vetoed by a single
+// marginal review-band leg, and a clean-worded body doesn't drag a safe email down (it's neutral, since
+// the sender + link legs carry their own verdicts). The body's crown-jewel ask only escalates to the
+// DANGER ceiling when CORROBORATED by a suspicious sender/link or a second hard signal (crownCeilingApplies).
+// This is the fix for the false-positive skew: legit "log into your account" / billing / OTP mail from a
+// verified sender with safe links now reaches the SAFE/REVIEW band instead of being forced to DANGER.
+// Corroboration between legs still raises CONFIDENCE, never lifts the safety score above its worst leg.
 // @param {{ sender, body, link }} reports  each is a VerdictCard-shaped object or null
 export const combineEmailReports = ({ sender = null, body = null, link = null }) => {
-  const score = combineEmailScore([sender?.ai_score, body?.ai_score, link?.ai_score]);
+  const senderScore = sender?.ai_score ?? null;
+  const worstLink = link?.ai_score ?? null;
+
+  // EFFECTIVE body score: apply the corroboration-gated crown-jewel ceiling, and treat a CLEAN body
+  // (no observed signals) as NEUTRAL (null → excluded from the combine) so it can't cap a safe email
+  // at 65 the way the image path does. Reports without signalMeta (e.g. a plain sender/link report, or
+  // an older shape) fall back to their raw ai_score — so worst-of behavior is unchanged for them.
+  let bodyEffective = body?.ai_score ?? null;
+  if (body?.signalMeta) {
+    if (body.signalMeta.count === 0) bodyEffective = null;
+    else if (crownCeilingApplies(body.signalMeta, { senderScore, worstLink })) bodyEffective = Math.min(body.ai_score, 20);
+  }
+
+  const score = reconcileLegScores([senderScore, bodyEffective, worstLink]);
+
+  // Pair each present leg with its EFFECTIVE score (a neutralized clean body counts as "least alarming"),
+  // so the headline + confidence reflect the reconciled verdict, not the raw body number.
+  const scoredLegs = [
+    sender != null ? { report: sender, eff: senderScore } : null,
+    body != null ? { report: body, eff: bodyEffective } : null,
+    link != null ? { report: link, eff: worstLink } : null,
+  ].filter(Boolean);
+
   const evidence = [
     ...(Array.isArray(sender?.evidence) ? sender.evidence : []),
     ...(Array.isArray(body?.evidence) ? body.evidence : []),
     ...(Array.isArray(link?.evidence) ? link.evidence : []),
   ].slice(0, 10); // a multi-link email carries more rows — keep sender/body rows from being cut
 
-  // Prefer the most alarming leg's verdict sentence as the headline explanation. Since 100 = safe,
-  // the leg with the LOWEST score is the most dangerous → lead with its words.
-  const legs = [sender, body, link].filter(Boolean).sort((a, b) => (a.ai_score ?? 100) - (b.ai_score ?? 100));
-  const worst = legs[0] ?? null;
+  // Lead with the most alarming leg's verdict/title (lowest effective score; a neutral clean body,
+  // eff=null, is treated as least alarming so it never leads a safe email with an "it's clean" line
+  // when a more specific leg exists).
+  const ordered = [...scoredLegs].sort((a, b) => (a.eff ?? 100) - (b.eff ?? 100));
+  const worst = ordered[0]?.report ?? null;
 
   // Tags: union across legs (deduped), capped.
-  const tags = [...new Set(legs.flatMap((r) => (Array.isArray(r.tags) ? r.tags : [])))].slice(0, 4);
+  const tags = [...new Set(scoredLegs.flatMap(({ report }) => (Array.isArray(report.tags) ? report.tags : [])))].slice(0, 4);
 
   // CONFIDENCE (never moves the number): HIGH when ≥2 independent legs corroborate danger — each
-  // either landing in the dangerous band (< 35) or already high-confidence. This mirrors the
-  // "≥2 strong signals → high" rule in verdict.js / phishingSignals.js. A forwarded email is our
-  // richest input, so cross-leg agreement is exactly the signal that should read as high-confidence.
-  const corroborating = legs.filter((r) => (r.ai_score ?? 100) < 35 || r.ai_confidence === "high").length;
-  const ai_confidence = corroborating >= 2 ? "high" : (legs.some((r) => r.ai_confidence === "high") ? "high" : (worst?.ai_confidence ?? "low"));
+  // either landing in the dangerous band (< 35, using the EFFECTIVE score) or already high-confidence.
+  // This mirrors the "≥2 strong signals → high" rule in verdict.js / phishingSignals.js.
+  const corroborating = scoredLegs.filter(({ report, eff }) => (eff ?? 100) < 35 || report.ai_confidence === "high").length;
+  const ai_confidence = corroborating >= 2 ? "high" : (scoredLegs.some(({ report }) => report.ai_confidence === "high") ? "high" : (worst?.ai_confidence ?? "low"));
 
   return {
     ai_score: score,

@@ -162,10 +162,28 @@ export const persistSenderReport = async ({ email, report, user, contextText = n
   }
 }
 
-// Stable dedup key for a forwarded email. Re-forwarding the same email bumps reportCount instead
-// of creating a duplicate. Distinct `email:` namespace from `sender:` / URL keys.
+// Strip a chain of reply/forward prefixes ("Fwd:", "Fw:", "Re:", localized-ish variants) off the
+// front of a subject, then normalize case + whitespace. So "Fwd: Fwd: Re: Alert" and "alert" collapse
+// to the same key — two people forwarding the same scam (each client adds its own prefix) still dedup.
+const normalizeSubject = (subject) =>
+  String(subject || "")
+    .replace(/^(\s*(fwd?|re|fw)\s*:\s*)+/i, "") // drop leading Fwd:/Fw:/Re: chain
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+// Stable dedup key for a forwarded email. Re-forwarding the same email bumps reportCount instead of
+// creating a duplicate. Distinct `email:` namespace from `sender:` / URL keys.
+//
+// KEY ON THE CONTENT, NOT THE FORWARDER. The envelope `from` is whoever FORWARDED the mail (the
+// user's own Gmail), so keying on it meant two different people forwarding the SAME scam produced
+// two different keys — no cross-user dedup, and the LLM/scan ran again for a threat we'd already
+// scored (Somal's "some other user sends the same one → should come from cache" point). We now key on
+// the ORIGINAL sender parsed from the forwarded body (the real suspect) + the normalized subject +
+// the body — so the same scam forwarded by anyone, with any Fwd:/Re: prefix, dedups to one Indicator.
 const emailCanonicalKey = ({ from, subject = "", body = "" }) => {
-  const fingerprint = `${String(from || "").trim().toLowerCase()}|${String(subject).slice(0, 200)}|${String(body).slice(0, 500)}`;
+  const originalSender = extractOriginalSender(body) || extractEmailAddress(from) || String(from || "").trim().toLowerCase();
+  const fingerprint = `${originalSender}|${normalizeSubject(subject).slice(0, 200)}|${String(body).slice(0, 500)}`;
   return `email:${createHash("sha256").update(fingerprint).digest("hex").slice(0, 40)}`;
 }
 
@@ -335,13 +353,39 @@ const runEmailPipeline = async (indicatorId, { from, subject, body, html, header
   }
 }
 
-// Scan a URL and return a VerdictCard-shaped report (+ screenshot), WITHOUT creating or updating
-// any Indicator. Used by the forwarded-email pipeline to fold a link's verdict into the combined
-// email report — the forwarded email is its own single reviewable Indicator, so its link does NOT
-// get a separate global url: indicator (a minor loss of cross-user URL dedup, in exchange for one
-// clean reviewable unit per email). Throws on scan failure so the caller can treat the link leg as
-// unavailable (best-effort), exactly like the other legs.
+// Shape a stored/global URL Indicator row into the VerdictCard-shaped link leg the email combine
+// expects. Same fields whether the verdict was just computed or read from the cache.
+const indicatorToLinkReport = (i) => ({
+  ai_score: i.aiScore,
+  ai_verdict: i.aiVerdict,
+  ai_confidence: i.aiConfidence,
+  title: i.aiTitle ?? null,
+  tags: asArray(i.aiTags) ?? [],
+  evidence: asArray(i.aiReasons) ?? [],
+  screenshot_url: i.screenshotUrl ?? null,
+});
+
+// Scan a URL for the forwarded-email pipeline and return a VerdictCard-shaped link leg — now
+// CACHE-AWARE against the SAME global url: Indicator that submitUrl uses (keyed by canonicalize()).
+// This closes the gap Somal flagged: a link is scored ONCE and reused "irrespective where I'm
+// entering from" — a link someone already checked manually (or via another user's forward) is served
+// from the DB instead of re-running urlscan + the LLM, and a link first seen in a forward populates
+// the cache for later manual checks. The forwarded email is still its own reviewable Indicator; this
+// only shares the LINK's verdict, so we don't lose the "one clean reviewable unit per email" property.
+// Throws on a real scan failure (cache miss + scan error) so the caller treats the link leg as
+// unavailable (best-effort), exactly like before.
 export const scanLinkForReport = async (rawUrl, contextText = null) => {
+  // Same canonical key as submitUrl, so both entry points share one global indicator.
+  let canonicalKey;
+  try { canonicalKey = canonicalize(rawUrl); } catch { canonicalKey = String(rawUrl).trim().toLowerCase(); }
+
+  // CACHE HIT: a finished global verdict for this URL already exists → reuse it, no scan, no LLM.
+  const existing = await prisma.indicator.findUnique({ where: { canonicalKey } }).catch(() => null);
+  if (existing?.status === "done" && typeof existing.aiScore === "number") {
+    return indicatorToLinkReport(existing);
+  }
+
+  // CACHE MISS: run the real scan + verdict.
   const [scan, bl] = await Promise.all([scanUrl(rawUrl), checkBlacklist(rawUrl)]);
   const verdict = await generateVerdict({
     evidence: scan.evidence,
@@ -352,6 +396,40 @@ export const scanLinkForReport = async (rawUrl, contextText = null) => {
     contextText,
     rawUrl,
   });
+
+  // Persist the verdict as the global url: Indicator (upsert on the unique canonicalKey) so future
+  // checks — manual OR forwarded — hit the cache above. Best-effort: a write failure must NOT sink
+  // the link leg (we already have the verdict to return), so swallow and carry on.
+  try {
+    const data = {
+      status: "done",
+      domain: safeDomain(rawUrl, canonicalKey),
+      aiScore: verdict.ai_score,
+      aiVerdict: verdict.ai_verdict,
+      aiConfidence: verdict.ai_confidence,
+      aiTitle: verdict.title ?? null,
+      aiDescription: verdict.description ?? null,
+      aiTags: verdict.tags ?? [],
+      aiReasons: verdict.evidence_summary ?? [],
+      screenshotUrl: scan.screenshot_url ?? null,
+      urlscanUuid: scan.urlscan_uuid ?? null,
+      finalUrl: scan.final_url ?? null,
+      finalHost: scan.final_host ?? null,
+      redirectedToDifferentHost: scan.redirected_to_different_host ?? false,
+      domainAgeDays: scan.domain_age_days ?? null,
+      blacklistHit: bl.blacklist_hit,
+      blacklistSource: bl.blacklist_source ?? null,
+    };
+    // Only fill a NEW/pending row (don't clobber a row mid-scan from submitUrl); create if absent.
+    await prisma.indicator.upsert({
+      where: { canonicalKey },
+      update: { ...data, reportCount: { increment: 0 } },
+      create: { canonicalKey, reportCount: 0, ...data },
+    });
+  } catch (e) {
+    console.warn("⚠ scanLinkForReport cache write failed (non-fatal):", e.message);
+  }
+
   return {
     ai_score: verdict.ai_score,
     ai_verdict: verdict.ai_verdict,

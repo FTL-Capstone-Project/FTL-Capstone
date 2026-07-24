@@ -21,17 +21,24 @@ const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 // marks the "asking for the keys" signals — a message asking for your password / money / SSN is
 // phishing-shaped on its own, so any one of them forces the hard danger ceiling (like verdict.js
 // treats a credential form on a new domain).
+// `soft:true` marks the two signals that are the NORMAL texture of legitimate mail — urgency
+// ("respond by Friday") and a generic greeting ("Dear customer") appear constantly in real
+// newsletters, bills, and reminders. They still carry danger weight, but they must NOT count as
+// CORROBORATION for a crown-jewel ask in the email path (see scoreEmailBodySignals below): a
+// legit "log into your account by Friday" was tanking to DANGER because urgency+greeting were
+// treated as evidence of phishing. Only a HARD signal (a second crown-jewel, impersonation,
+// attachment, grammar) or a suspicious sender/link should escalate a lone crown-jewel.
 export const SIGNAL_CATALOG = {
   credentials:        { weight: 35, severity: "dangerous", crownJewel: true,  text: "Asks you to enter or confirm a password / login credentials" },
   sensitive_info:     { weight: 35, severity: "dangerous", crownJewel: true,  text: "Requests sensitive personal data (SSN, full card number, bank details, or a 2FA/one-time code)" },
   payment:            { weight: 33, severity: "dangerous", crownJewel: true,  text: "Pressures you to send money, wire funds, buy gift cards, or pay a fee" },
   link_mismatch:      { weight: 30, severity: "dangerous", crownJewel: false, text: "A link or button hides its real destination (the visible text doesn't match where it actually goes)" },
   sender_mismatch:    { weight: 25, severity: "dangerous", crownJewel: false, text: "The sender's display name / claimed brand doesn't match the actual email address" },
-  urgency:            { weight: 18, severity: "review",    crownJewel: false, text: "Uses urgency or threats to rush you (account suspension, deadline, legal action)" },
+  urgency:            { weight: 18, severity: "review",    crownJewel: false, soft: true, text: "Uses urgency or threats to rush you (account suspension, deadline, legal action)" },
   attachment:         { weight: 15, severity: "review",    crownJewel: false, text: "Urges you to open an attachment or enable content/macros" },
   brand_impersonation:{ weight: 12, severity: "review",    crownJewel: false, text: "Claims to be a well-known brand in a context that doesn't add up" },
   grammar:            { weight: 10, severity: "review",    crownJewel: false, text: "Contains notable spelling or grammar mistakes unusual for the real sender" },
-  generic_greeting:   { weight: 8,  severity: "review",    crownJewel: false, text: "Uses a generic greeting (\"Dear customer\") instead of your name" },
+  generic_greeting:   { weight: 8,  severity: "review",    crownJewel: false, soft: true, text: "Uses a generic greeting (\"Dear customer\") instead of your name" },
 };
 
 // An image we found NO red flags in still can't be called "Safe": we couldn't scan a link or
@@ -66,6 +73,33 @@ export const scorePhishingSignals = (signalTypes = []) => {
   const confidence = hardSignal || strong >= 2 ? "high" : known.length >= 1 ? "medium" : "low";
 
   return { score, evidence, confidence, hardSignal, signalCount: known.length };
+};
+
+// Score a forwarded EMAIL's body signals — DIFFERENT from scorePhishingSignals (the image path)
+// on purpose. A screenshot is scored in isolation (no verifiable sender/link), so it needs the
+// crown-jewel hard-ceiling and the NO_SIGNAL_CEILING as standalone safety rails. A forwarded EMAIL
+// is NOT isolated: its sender and its links are scored as their OWN legs and combined worst-of. So
+// here we deliberately do LESS: we return the raw weighted score + the signal metadata, and let the
+// combine step (combineEmailReports) decide — with cross-leg context — whether a crown-jewel ask
+// escalates to danger. This is what stops "log into your account by Friday" from a real brand (a
+// lone `credentials` + soft signals, clean sender, safe link) from being force-tanked to DANGER,
+// which was the dominant false-positive source. Pure → unit-testable.
+//   crownCount     = how many crown-jewel asks (credentials/sensitive_info/payment) are present
+//   hardOtherCount = non-crown, non-soft signals present (impersonation/attachment/grammar/mismatch)
+//   count          = total known signals (0 = a clean body → the combine treats it as NEUTRAL, not 65)
+export const scoreEmailBodySignals = (signalTypes = []) => {
+  const seen = new Set();
+  const known = [];
+  for (const t of signalTypes) {
+    const key = String(t || "").trim().toLowerCase();
+    if (SIGNAL_CATALOG[key] && !seen.has(key)) { seen.add(key); known.push(key); }
+  }
+  const evidence = known.map((k) => ({ text: SIGNAL_CATALOG[k].text, severity: SIGNAL_CATALOG[k].severity }));
+  const danger = known.reduce((sum, k) => sum + SIGNAL_CATALOG[k].weight, 0);
+  const crownCount = known.filter((k) => SIGNAL_CATALOG[k].crownJewel).length;
+  const hardOtherCount = known.filter((k) => !SIGNAL_CATALOG[k].crownJewel && !SIGNAL_CATALOG[k].soft).length;
+  // Raw weighted score only — NO crown-jewel ceiling, NO no-signal cap. Those decisions move to combine.
+  return { rawScore: clamp(100 - danger), evidence, known, crownCount, hardOtherCount, count: known.length };
 };
 
 // Bucket a safety score the same way the rest of the app does (verdict.js scoreBucket).
