@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@clerk/clerk-react";
-import { Eye, ShieldCheck, Flag, Clock, Check, Users } from "lucide-react";
-import { api } from "../../lib/api.js";
+import { Eye, ShieldCheck, Flag, Clock } from "lucide-react";
 import { VERDICT_STYLES } from "../../config/constants.js";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import ScoreGauge from "./ScoreGauge.jsx";
@@ -24,7 +22,6 @@ const bucket = (score) => {
 //   indicatorId  — the DB id of this check. Needed for "Report it". Sender reports are
 //                  ephemeral (no persisted indicator), so they pass none → no Report button.
 const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
-  const { getToken } = useAuth();
   const { ai_score, ai_verdict, ai_confidence, screenshot_url, report_count, evidence } = indicator;
   const kind = bucket(ai_score);
   const style = VERDICT_STYLES[kind];
@@ -48,34 +45,6 @@ const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
     if (typeof res?.reported_count === "number") setReportedCount(res.reported_count);
   }
 
-  // ── community "Mark safe" vote ──────────────────────────────────────────────
-  // The inverse of "Report it": the user checked this link and believes it's genuinely fine. Seeded
-  // from the server so a revisit shows the voted state instead of inviting a duplicate (which the
-  // unique constraint would reject anyway).
-  const [trusted, setTrusted] = useState(indicator.trusted_by_me ?? false);
-  const [trustVotes, setTrustVotes] = useState(indicator.trust_votes ?? 0);
-  const [trusting, setTrusting] = useState(false);
-  const [trustError, setTrustError] = useState("");
-
-  // Only offer it where it means something: there's nothing to vouch for on a link we already call
-  // safe, and an ephemeral report with no persisted indicator has no row to attach a vote to.
-  const canTrust = reportId != null && (kind === "review" || kind === "dangerous");
-
-  const markSafe = async () => {
-    if (trusting || trusted) return;
-    setTrusting(true);
-    setTrustError("");
-    try {
-      const res = await api.post(`/api/indicators/${reportId}/trust`, {}, { getToken });
-      setTrusted(true);
-      if (typeof res?.trust_votes === "number") setTrustVotes(res.trust_votes);
-    } catch (e) {
-      setTrustError(e.body?.error || "Couldn't record your vote just now.");
-    } finally {
-      setTrusting(false);
-    }
-  }
-
   // urlscan screenshots are best-effort and can lag the verdict: retry once, then hide.
   const [shotSrc, setShotSrc] = useState(screenshot_url);
   const [shotOk, setShotOk] = useState(true);
@@ -90,11 +59,7 @@ const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
     setRetried(false);
     setReviewStatus(indicator.global_review_status ?? null);
     setReportedCount(indicator.reported_count ?? 0);
-    // Re-sync the vote state too, or a reused card instance would carry the previous check's vote.
-    setTrusted(indicator.trusted_by_me ?? false);
-    setTrustVotes(indicator.trust_votes ?? 0);
-    setTrustError("");
-  }, [screenshot_url, indicator.global_review_status, indicator.trusted_by_me, indicator.trust_votes]);
+  }, [screenshot_url, indicator.global_review_status]);
   const handleShotError = () => {
     if (!retried) { setRetried(true); setTimeout(() => setShotSrc(`${screenshot_url}?r=${Date.now()}`), 2500); }
     else setShotOk(false);
@@ -152,36 +117,18 @@ const VerdictCard = ({ indicator, onAskMore, indicatorId }) => {
           </p>
         )}
 
-        {/* "Thanks, noted" confirmation once the user has vouched for this link. */}
-        {trusted && (
-          <p style={{ marginTop: 14, fontSize: "0.85em", color: "var(--safe)", display: "flex", alignItems: "center", gap: 6 }}>
-            <Check size={14} /> Thanks — noted. Your vote flags this for a second look; it doesn't change the verdict.
-          </p>
-        )}
-        {trustError && (
-          <p role="alert" style={{ marginTop: 10, fontSize: "0.85em", color: "var(--danger)" }}>{trustError}</p>
-        )}
-        {/* How many people have vouched — only worth showing once it's more than just this user. */}
-        {trustVotes > 1 && (
-          <p style={{ marginTop: 8, fontSize: "0.85em", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }}>
-            <Users size={14} /> {trustVotes} people have marked this safe.
-          </p>
-        )}
-
-        {/* Action buttons. Report it → global security-team review. Mark safe → community
-            "I checked this and trust it" vote, which flags a possible false positive. */}
+        {/* Action buttons. Report it → global security-team review.
+            NO "Mark safe" here on purpose. A community "I trust this" vote was built and then
+            pulled: because indicators are GLOBAL, the resulting count rendered to OTHER users as
+            "N people have marked this safe" — so a handful of throwaway accounts could show a
+            victim a reassuring line right next to a red verdict. The vote never moved the score,
+            but that display was the real hazard. If it comes back, the count must be visible to
+            ANALYSTS ONLY (a false-positive triage hint), never to the person being warned. */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
           {canReport && (
             <button onClick={() => setModalOpen(true)} disabled={underReview}
               style={btn(style.color, true, underReview)}>
               <Flag size={14} /> {underReview ? "Reported" : "Report it"}
-            </button>
-          )}
-          {canTrust && (
-            <button onClick={markSafe} disabled={trusted || trusting}
-              title={trusted ? "You've already vouched for this link" : "I checked this and believe it's safe"}
-              style={btn(style.color, false, trusted || trusting)}>
-              {trusted ? <><Check size={14} /> Marked safe</> : <><ShieldCheck size={14} /> {trusting ? "Saving…" : "Mark safe"}</>}
             </button>
           )}
           <button onClick={() => onAskMore?.()} style={btn("var(--primary)", false)}>Ask Orbo more</button>

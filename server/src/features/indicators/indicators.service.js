@@ -607,17 +607,6 @@ export const readIndicatorForClient = async (indicatorId, user) => {
   }
   if (indicator.status !== "done") return base; // pending / scanning → no verdict yet
 
-  // Did THIS caller already cast a community "Mark safe" vote here? Cheap indexed lookup on the
-  // unique (indicatorId, userId) pair. Deliberately AFTER the early returns: this route is the
-  // poll target during a scan, and the vote button only exists on a finished verdict — so a
-  // still-scanning poll shouldn't pay for a query whose answer nothing renders yet.
-  const trustedByCaller = user?.id != null
-    ? Boolean(await prisma.userTrust.findUnique({
-        where: { indicatorId_userId: { indicatorId, userId: user.id } },
-        select: { id: true },
-      }))
-    : false;
-
   const bucket = scoreBucket(indicator.aiScore);
   // Forwarded-email rows carry a per-leg score breakdown folded into aiReasons; lift it out so it
   // becomes its own `legs` field instead of an odd-looking evidence bullet. URL rows have none.
@@ -659,10 +648,6 @@ export const readIndicatorForClient = async (indicatorId, user) => {
     // "Report it" → global review flow: lets the card show an "under review" banner.
     global_review_status: indicator.globalReviewStatus,
     reported_count: indicator.reportedCount,
-    // Community "Mark safe" votes. trusted_by_me lets the button load already in its "Marked safe"
-    // state on a revisit, instead of inviting a duplicate vote the unique constraint would reject.
-    trust_votes: indicator.trustVotes,
-    trusted_by_me: trustedByCaller,
   };
 }
 
@@ -693,47 +678,6 @@ export const reportIndicator = async (indicatorId, { reason = null, userId = nul
   ]);
 
   return { global_review_status: updated.globalReviewStatus, reported_count: updated.reportedCount };
-};
-
-// "Mark safe": the community counterpart to "Report it". A user who checked a link and believes it's
-// actually fine can vouch for it. Like reportIndicator, this is a COUNTER ONLY — it never touches
-// aiScore or the verdict, so no amount of votes can turn a phishing page green. It's a signal for the
-// (portrayed) reviewers that a verdict may be a false positive, nothing more.
-//
-// One vote per person: UserTrust has @@unique([indicatorId, userId]), so a duplicate hits P2002 and we
-// return the CURRENT count with already_voted:true instead of double-counting. The insert and the
-// counter bump share one $transaction, so the count can never drift from the number of vote rows —
-// if the unique constraint rejects the insert, the increment rolls back with it.
-//
-// Returns null if the indicator doesn't exist (→ the route answers 404).
-export const trustIndicator = async (indicatorId, { userId = null } = {}) => {
-  // An anonymous vote would be unlimited-stuffable (no row to collide with), so it isn't a vote.
-  if (userId == null) return { unauthenticated: true };
-
-  const i = await prisma.indicator.findUnique({ where: { id: indicatorId }, select: { id: true } });
-  if (!i) return null;
-
-  try {
-    const [, updated] = await prisma.$transaction([
-      prisma.userTrust.create({ data: { indicatorId, userId } }),
-      prisma.indicator.update({
-        where: { id: indicatorId },
-        data: { trustVotes: { increment: 1 } },
-      }),
-    ]);
-    return { trust_votes: updated.trustVotes, already_voted: false };
-  } catch (e) {
-    // P2002 = unique constraint violation = this user already vouched for this indicator. That's a
-    // no-op, not an error: report the count as it stands so the button can show its "voted" state.
-    if (e?.code === "P2002") {
-      const current = await prisma.indicator.findUnique({
-        where: { id: indicatorId },
-        select: { trustVotes: true },
-      });
-      return { trust_votes: current?.trustVotes ?? 0, already_voted: true };
-    }
-    throw e;
-  }
 };
 
 // ── closure loop (analyst review) · owner: Ozias ──

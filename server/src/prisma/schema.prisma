@@ -111,10 +111,13 @@ model Indicator {
   // so this migration can't disturb existing rows.
   globalReviewStatus String? // null | pending review | confirmed safe | confirmed dangerous
   reportedCount      Int     @default(0)
-  // Community "Mark safe" votes — the inverse of reportedCount. A user who checked a link and
-  // believes it's actually fine can vouch for it, which is a signal that a review/dangerous verdict
-  // may be a false positive. This is a COUNTER ONLY: it never edits aiScore (a vote brigade must not
-  // be able to turn a phishing page green). UserTrust holds who voted, so one person can't stuff it.
+  // UNUSED — parked, nothing reads or writes this. The community "Mark safe" vote was built and
+  // then pulled before the demo: because indicators are GLOBAL, the count rendered to OTHER users
+  // as "N people have marked this safe", so a few throwaway accounts could show a victim a
+  // reassuring line next to a red verdict. (The vote never moved aiScore — that display was the
+  // hazard.) Column + UserTrust are LEFT IN PLACE rather than dropped: both are empty, and a
+  // destructive migration on the shared DB buys nothing. If the feature returns, the count must be
+  // ANALYST-ONLY. See the note in client VerdictCard.jsx.
   trustVotes      Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -144,11 +147,10 @@ model ReportReason {
   @@index([indicatorId])
 }
 
-// One user's community "Mark safe" vote on an indicator. Exists purely so a single person can't
-// inflate trustVotes: the @@unique below makes a second vote from the same user a constraint
-// violation the route turns into a friendly "you already vouched for this" instead of a 500.
-// userId is NOT nullable here (unlike ReportReason) — an anonymous trust vote would be
-// unlimited-stuffable, which defeats the point of the table.
+// UNUSED — parked (empty table, no code path touches it). See the trustVotes note on Indicator for
+// why the "Mark safe" vote was pulled and why this is left in place rather than dropped.
+// One user's vote on one indicator; the @@unique is what kept a single person from inflating the
+// count. If this is revived, keep that constraint AND surface the count to analysts only.
 model UserTrust {
   id          Int      @id @default(autoincrement())
   indicatorId Int
