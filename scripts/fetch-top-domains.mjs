@@ -22,8 +22,15 @@ import { registeredDomain } from "../server/src/services/typosquat.js";
 import { NEVER_REPUTABLE } from "../server/src/services/reputation.js";
 
 const TRANCO_URL = "https://tranco-list.eu/top-1m.csv.zip";
-const TOP_N = 50_000; // conservative tier — deep enough for the vendor/infra ecosystem, shallow
-                      // enough to stay a tight, low-false-positive "clearly-established" set.
+// How deep into the ranking counts as "established". Raised 50k → 200k after measuring the real
+// senders users complained about: govdelivery.com is rank 6k and otter.ai 9k (both covered at 50k),
+// but legionathletics.com — an ordinary, decade-old business whose newsletter kept reading "Be
+// careful" — is rank 113k. A 50k cutoff can NEVER reach it, so every mid-sized legitimate sender was
+// left to the model's mood, and the only remedy was hand-adding domains to the curated allowlist one
+// complaint at a time. 200k covers that whole band while staying far away from the junk tail.
+// Safe to go this deep because reputation only vouches for a sender's IDENTITY, never its content:
+// lookalike/webmail checks run BEFORE it, and the body + link legs still judge the message itself.
+const TOP_N = 200_000;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outFile = resolve(here, "../server/src/services/data/reputable-domains.txt");

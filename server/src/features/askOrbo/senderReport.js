@@ -13,7 +13,7 @@ import { isReputableDomain } from "../../services/reputation.js";
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 
-// A recognized, established sender domain (reputation.js: curated allowlist or Tranco top-50k, minus
+// A recognized, established sender domain (reputation.js: curated allowlist or Tranco top-200k, minus
 // shared-hosting/shortener domains) that is NOT a brand lookalike and NOT free webmail is floored here.
 // WHY 70 (the "safe" line): the whole point is to stop a legit-but-unfamiliar sender (a niche company,
 // a school, a gym) from VETOING the forwarded-email verdict via worst-of. reconcileLegScores only lets

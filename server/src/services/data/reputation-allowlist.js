@@ -1,7 +1,7 @@
 // ── feature: reputation · owner: Ozias ──
 // HAND-CURATED allowlist of legitimate REGISTERED domains that should earn a trust floor even when
 // they aren't (or aren't yet) in the bundled Tranco popularity list. This is the PRECISION layer of
-// reputation.js: the bundled top-50k gives broad recall for the mainstream vendor ecosystem, but many
+// reputation.js: the bundled top-200k gives broad recall for the mainstream vendor ecosystem, but many
 // perfectly-legitimate NICHE sites (a local business, a regional school, a small SaaS) rank far below
 // 50k or aren't ranked at all — this is where we recognize them.
 //

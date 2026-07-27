@@ -100,8 +100,41 @@ describe("checkSenderDns — free native MX/SPF/DMARC signals", () => {
     resolve.mockResolvedValue(["1.2.3.4"]);
     const r = await checkSenderDns("slow.com", { timeoutMs: 20 });
     expect(r.checked).toBe(true);
-    expect(r.hasMx).toBe(false);       // the hanging MX lookup resolved to "not present"
+    expect(r.hasMx).toBe(false);       // we never learned of an MX record...
+    // ...but "didn't answer" is NOT the same as "isn't there", so it must not be charged as a
+    // missing MX. (The DMARC lookup DID answer with no DMARC record here, so that penalty stands.)
+    expect(r.evidence.some((e) => /no mail \(MX\) records/i.test(e.text))).toBe(false);
     expect(r.resolves).toBe(true);     // TXT/A still succeeded
+  });
+
+  it("a resolver blip (nothing answers) reports NOT CHECKED and accuses the sender of nothing", async () => {
+    // THE BUG THIS GUARDS: a timeout used to be scored exactly like a definitive "no such record", so
+    // every lookup failing meant resolves=false → the full 30-point no_resolve penalty, plus evidence
+    // telling the user a real domain "may not exist". One slow resolver was enough to turn ordinary
+    // legitimate senders into "Be careful" warnings. Our own ignorance must never cost the sender points.
+    resolveMx.mockRejectedValue(err("ETIMEOUT"));
+    resolveTxt.mockRejectedValue(err("ESERVFAIL"));
+    resolve.mockRejectedValue(err("EAI_AGAIN"));
+    const r = await checkSenderDns("perfectly-real-business.com");
+    expect(r.checked).toBe(false);     // → callers skip the DNS adjustment entirely
+    expect(r.penalty).toBe(0);
+    expect(r.evidence).toHaveLength(0); // no "doesn't resolve" accusation
+  });
+
+  it("an inconclusive DMARC lookup isn't charged as a missing DMARC policy", async () => {
+    // Partial failure: the domain clearly exists and has MX + SPF, but the _dmarc lookup never
+    // answered. Charging no_dmarc here would penalize a well-configured sender for our bad luck.
+    resolveMx.mockResolvedValue([{ exchange: "mx.real.com", priority: 10 }]);
+    resolveTxt.mockImplementation(async (name) => {
+      if (name.startsWith("_dmarc.")) throw err("ETIMEOUT");
+      return [["v=spf1 include:_spf.real.com ~all"]];
+    });
+    resolve.mockResolvedValue(["1.2.3.4"]);
+    const r = await checkSenderDns("real.com");
+    expect(r.resolves).toBe(true);
+    expect(r.hasDmarc).toBe(false);
+    expect(r.penalty).toBe(0);
+    expect(r.evidence.some((e) => /no DMARC policy/i.test(e.text))).toBe(false);
   });
 
   it("handles multi-chunk TXT records (SPF split across strings)", async () => {

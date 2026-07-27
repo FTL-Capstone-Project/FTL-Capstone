@@ -37,6 +37,15 @@ const guarded = (promise, timeoutMs) => {
   ]).finally(() => clearTimeout(timer));
 };
 
+// Did a lookup actually ANSWER us? There's a world of difference between "the resolver told us this
+// record does not exist" (evidence we can legitimately score) and "we never got a reply" (our own
+// ignorance). Node reports the first as ENOTFOUND/ENODATA and the second as a timeout / SERVFAIL /
+// refused / temporary failure. Only an ANSWER may cost the sender points — see the penalty block.
+const DEFINITIVE_ABSENCE = new Set(["ENOTFOUND", "ENODATA", "NOTFOUND", "NXDOMAIN"]);
+// The subset that means "this domain name does not exist at all" (not merely "no record of this type").
+const NXDOMAIN_CODES = new Set(["ENOTFOUND", "NOTFOUND", "NXDOMAIN"]);
+const isDetermined = (result) => result.ok || DEFINITIVE_ABSENCE.has(result.code);
+
 // Danger WEIGHTS for the DNS negatives (subtracted from 100 by the caller, capped). Small on
 // purpose — these are soft signals, not proof. Kept in one visible table like verdict.js.
 const DNS_WEIGHTS = {
@@ -68,8 +77,24 @@ export const checkSenderDns = async (domain, { timeoutMs = 3000 } = {}) => {
     guarded(dns.resolve(host), timeoutMs), // A records — a second way to confirm the domain exists
   ]);
 
+  // Which lookups actually came back with an answer (records OR a definitive "not there")?
+  const answered = { mx: isDetermined(mx), txt: isDetermined(txt), dmarc: isDetermined(dmarcTxt), addr: isDetermined(addr) };
+
   // "Resolves" = the domain exists in DNS in ANY form (mail, txt, or address record).
-  const resolves = (mx.ok && mx.value.length > 0) || (txt.ok && txt.value.length > 0) || (addr.ok && addr.value.length > 0);
+  const hasAnyRecords = (mx.ok && mx.value.length > 0) || (txt.ok && txt.value.length > 0) || (addr.ok && addr.value.length > 0);
+  // Only claim a domain is MISSING from DNS when we actually established that: either the resolver
+  // said the name doesn't exist, or every existence probe answered and none found anything.
+  const knownAbsent = [mx, txt, dmarcTxt, addr].some((r) => !r.ok && NXDOMAIN_CODES.has(r.code))
+    || (answered.mx && answered.txt && answered.addr);
+
+  // Inconclusive across the board (resolver blip, offline dev box, sandbox with no DNS) → we learned
+  // NOTHING. Report "not checked" so callers skip the DNS adjustment entirely instead of scoring our
+  // ignorance. Without this, a transient blip cost every unknown-domain sender the full 30-point
+  // no_resolve penalty AND told the user a perfectly real domain "may not exist" — a false-positive
+  // storm triggered by nothing but slow DNS. (This is what the timeout note above always promised.)
+  if (!hasAnyRecords && !knownAbsent) return none;
+
+  const resolves = hasAnyRecords;
   const hasMx = mx.ok && Array.isArray(mx.value) && mx.value.length > 0;
   const flatTxt = txt.ok ? txt.value.map((chunks) => chunks.join("")) : [];
   const hasSpf = flatTxt.some((r) => /^v=spf1\b/i.test(r));
@@ -84,14 +109,14 @@ export const checkSenderDns = async (domain, { timeoutMs = 3000 } = {}) => {
     // absent) — that would double-count one underlying fact. Emit the single strong signal.
     add("no_resolve", `The domain "${host}" doesn't resolve on the internet — it may not exist or is misconfigured, which is very unusual for a genuine sender`);
   } else {
-    if (!hasMx) add("no_mx", `"${host}" has no mail (MX) records — it isn't set up to receive email, unusual for a real organization`);
+    if (answered.mx && !hasMx) add("no_mx", `"${host}" has no mail (MX) records — it isn't set up to receive email, unusual for a real organization`);
     // Missing SPF is only a red flag when DMARC is ALSO missing. Big senders (uber.com,
     // google.com) legitimately publish SPF on their sending SUBDOMAINS, not the apex, and rely on
     // DMARC for apex protection — so "no apex SPF but yes DMARC" is a normal, well-configured
     // pattern, not a warning. Penalizing it dinged legit brands (the uber.com false-alarm). We
     // only flag missing SPF when there's no DMARC either, i.e. genuinely no domain auth at all.
-    if (!hasSpf && !hasDmarc) add("no_spf", `"${host}" publishes no SPF record — combined with no DMARC, this domain has no email authentication at all, which is unusual for a legitimate sender`);
-    if (!hasDmarc) add("no_dmarc", `"${host}" publishes no DMARC policy — most established organizations do`);
+    if (answered.txt && !hasSpf && answered.dmarc && !hasDmarc) add("no_spf", `"${host}" publishes no SPF record — combined with no DMARC, this domain has no email authentication at all, which is unusual for a legitimate sender`);
+    if (answered.dmarc && !hasDmarc) add("no_dmarc", `"${host}" publishes no DMARC policy — most established organizations do`);
     // Any email authentication present is informational only. Presence is NOT proof of trust
     // (scammers can set these up on their own domain), so weight 0 and say so — never a false
     // reassurance. Cover the big-sender case (MX + DMARC, apex SPF on subdomains) too.

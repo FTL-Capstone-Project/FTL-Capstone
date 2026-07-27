@@ -20,7 +20,7 @@ import { isReputableDomain } from "./reputation.js";
 
 const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 
-// A recognized, ESTABLISHED site (services/reputation.js: curated allowlist or Tranco top-50k, minus
+// A recognized, ESTABLISHED site (services/reputation.js: curated allowlist or Tranco top-200k, minus
 // shared-hosting/shortener domains) is floored to this SAFETY score so that SOFT-only penalties — an
 // ESP click-tracker's off-domain redirect, plain HTTP, an unusual port — can't drag it below the
 // "safe" band (>=70). This is the one POSITIVE signal in an otherwise all-subtractive rubric: a legit
