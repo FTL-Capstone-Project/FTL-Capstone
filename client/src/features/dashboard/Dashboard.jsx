@@ -6,9 +6,12 @@ import { useEffect, useState } from "react";
 import { useApi } from "../../lib/useApi.js";
 import { useOrbisRole } from "../../lib/useOrbisRole.js";
 import AnalystDashboard from "./AnalystDashboard.jsx";
+import MemberDashboard from "./MemberDashboard.jsx";
 import StatTile from "./StatTile.jsx";
 import SubmissionHistoryChart from "./SubmissionHistoryChart.jsx";
 import ResultsDonut from "./ResultsDonut.jsx";
+import ThreatTypesChart from "./ThreatTypesChart.jsx";
+import SafetySignals from "./SafetySignals.jsx";
 import RecentSubmissions from "./RecentSubmissions.jsx";
 import ActivityRail from "./ActivityRail.jsx";
 import DashboardEmpty from "./DashboardEmpty.jsx";
@@ -16,8 +19,10 @@ import DashboardEmpty from "./DashboardEmpty.jsx";
 const Dashboard = () => {
   const { role } = useOrbisRole();
 
-  // Analysts see the org-wide triage dashboard; all other roles see their personal one.
+  // Role split: analysts get the org-wide triage dashboard, members get the team-aware
+  // dashboard, and individuals fall through to the personal one below.
   if (role === "analyst") return <AnalystDashboard />;
+  if (role === "member") return <MemberDashboard />;
 
   const api = useApi();
   const [data, setData] = useState(null);
@@ -86,16 +91,23 @@ const Dashboard = () => {
               label="Threats Found"
               value={stats.threatsFound.value}
               trend={stats.threatsFound.trend}
+              // "Threats Found" is a THIS-WEEK count. If it's 0 but you've caught threats before,
+              // note the all-time total (from the donut) so a quiet week doesn't read as "never".
+              sub={
+                stats.threatsFound.value === 0 && data.results.dangerous > 0
+                  ? `${data.results.dangerous} found all-time`
+                  : undefined
+              }
             />
             <StatTile
-              label="My Safety Score"
-              value={stats.safetyScore == null ? "—" : `${stats.safetyScore}/100`}
-              sub={stats.safetyScore == null ? "Run a check to see this" : "Avg safety of links you checked"}
+              label="Safe Rate"
+              value={stats.safeRate == null ? "—" : `${stats.safeRate}%`}
+              sub={stats.safeRate == null ? "Run a check to see this" : "Share of your checks that were safe"}
             />
             <StatTile
-              label="Checks Remaining"
-              value={`${Math.max(0, stats.checksRemaining.limit - stats.checksRemaining.used)}/${stats.checksRemaining.limit}`}
-              progress={(1 - stats.checksRemaining.used / stats.checksRemaining.limit) * 100}
+              label="Top Threat Type"
+              value={stats.topThreatType ?? "None yet"}
+              sub={stats.topThreatType ? "What you're targeted with most" : "No threats caught so far"}
             />
           </div>
 
@@ -104,6 +116,18 @@ const Dashboard = () => {
             <SubmissionHistoryChart history={data.submissionHistory} />
             <ResultsDonut results={data.results} />
           </div>
+
+          {/* Parsed intelligence: threat categories + deterministic red flags / channels.
+              ThreatTypes only renders once the user has actually hit risky links; before
+              then we give the red-flags/channels card the full width so there's no empty gap. */}
+          {data.threatTypes?.length > 0 ? (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <ThreatTypesChart types={data.threatTypes} />
+              <SafetySignals redFlags={data.redFlags} channels={data.channels} />
+            </div>
+          ) : (
+            <SafetySignals redFlags={data.redFlags} channels={data.channels} />
+          )}
 
           {/* Bottom: recent submissions */}
           <RecentSubmissions items={data.recentSubmissions} />

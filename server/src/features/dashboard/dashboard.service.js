@@ -13,10 +13,14 @@
 import { prisma } from "../../db.js";
 import { scoreBucket } from "../../services/verdict.js";
 
-const MONTHLY_QUOTA = 50; // display-only cap shown on the "Checks Remaining" tile (not enforced)
 const RECENT_LIMIT = 4; // "My Recent Submissions" rows
 const ACTIVITY_LIMIT = 6; // right-rail activity feed rows
 const HISTORY_DAYS = 30; // "My Submission History" bar chart window
+const NEW_DOMAIN_DAYS = 30; // a domain younger than this is a "brand-new domain" red flag
+const THREAT_TYPE_LIMIT = 6; // how many threat-type bars to send the chart
+
+// aiTags is stored as JSON — normalize whatever we get back to a plain string array.
+const tagsOf = (indicator) => (Array.isArray(indicator.aiTags) ? indicator.aiTags : []);
 
 // ---- small date helpers (UTC, no external dep) ----
 const daysAgo = (n) => {
@@ -24,10 +28,6 @@ const daysAgo = (n) => {
   d.setUTCHours(0, 0, 0, 0);
   d.setUTCDate(d.getUTCDate() - n);
   return d;
-}
-const startOfThisMonth = () => {
-  const d = new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 }
 const ymd = (date) => {
   return date.toISOString().slice(0, 10); // "2026-07-14"
@@ -59,10 +59,8 @@ export const getDashboard = async (userId) => {
     include: { indicator: true },
   });
 
-  const now = new Date();
   const weekStart = daysAgo(7);
   const prevWeekStart = daysAgo(14);
-  const monthStart = startOfThisMonth();
   const historyStart = daysAgo(HISTORY_DAYS - 1); // inclusive of today → 30 buckets
 
   // ---- de-dupe to unique indicators for the "results" + "recent" widgets ----
@@ -77,8 +75,12 @@ export const getDashboard = async (userId) => {
   }
 
   // ---- stat tiles ----
-  const thisWeekCount = submissions.filter((s) => s.createdAt >= weekStart).length;
-  const lastWeekCount = submissions.filter(
+  // Count UNIQUE checks (deduped), NOT raw submissions — so this tile agrees with the
+  // "My Results" donut, "Threats Found", and "Safe Rate", which all count unique links.
+  // (Re-checking the same link is a cache hit, not a new check, so it shouldn't inflate
+  // the count past what the donut shows. This was the "tile says 2, chart shows 1" bug.)
+  const thisWeekCount = uniqueChecks.filter((s) => s.createdAt >= weekStart).length;
+  const lastWeekCount = uniqueChecks.filter(
     (s) => s.createdAt >= prevWeekStart && s.createdAt < weekStart
   ).length;
 
@@ -91,21 +93,58 @@ export const getDashboard = async (userId) => {
     (s) => s.createdAt >= prevWeekStart && s.createdAt < weekStart
   ).length;
 
-  // "My safety score" = average aiScore across my scored unique checks (100 = safe).
+  // "Safe rate" = share of my unique checks that came back safe. This is an honest
+  // engagement stat (higher = fewer of the links I ran into were risky) and — unlike
+  // the old avg-score tile — it never punishes someone for diligently checking scams.
   const scored = uniqueChecks.filter((s) => s.indicator.aiScore != null);
-  const safetyScore =
-    scored.length === 0
-      ? null
-      : Math.round(scored.reduce((sum, s) => sum + s.indicator.aiScore, 0) / scored.length);
+  const safeCount = scored.filter((s) => scoreBucket(s.indicator.aiScore) === "safe").length;
+  const safeRate = scored.length === 0 ? null : Math.round((safeCount / scored.length) * 100);
 
-  // "Checks remaining" = display-only usage this calendar month vs the quota.
-  const usedThisMonth = submissions.filter((s) => s.createdAt >= monthStart).length;
+  // "Top threat type" = the aiTags category that shows up most across my RISKY checks
+  // (dangerous + review bands). This is the single most useful thing a personal user can
+  // learn — "you keep getting hit with credential phishing" — and aiTags is set on every
+  // AI verdict, so it's reliable (unlike the key-dependent urlscan/Safe-Browsing signals).
+  const riskyChecks = uniqueChecks.filter((s) => scoreBucket(s.indicator.aiScore) !== "safe");
+  const tagCounts = new Map();
+  for (const s of riskyChecks) {
+    for (const tag of tagsOf(s.indicator)) {
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    }
+  }
+  const threatTypes = [...tagCounts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, THREAT_TYPE_LIMIT);
+  const topThreatType = threatTypes[0]?.label ?? null;
 
   const stats = {
     checksThisWeek: { value: thisWeekCount, trend: trend(thisWeekCount, lastWeekCount) },
     threatsFound: { value: threatsThisWeek, trend: trend(threatsThisWeek, threatsLastWeek) },
-    safetyScore, // number 0-100 or null (→ empty state on the client)
-    checksRemaining: { used: usedThisMonth, limit: MONTHLY_QUOTA }, // display-only
+    safeRate, // 0-100 percent, or null (→ empty state on the client)
+    topThreatType, // most common risky-check category, or null if I've hit no threats
+  };
+
+  // ---- Threat types the user keeps running into (drives a small bar chart) ----
+  // Already computed above as `threatTypes` (top N by frequency across risky checks).
+
+  // ---- Red flags detected across ALL my unique checks ----
+  // These are deterministic signals urlscan / Safe Browsing attached to the indicator.
+  // NOTE: they're key-dependent (stub to false/null when the external key is unset), so
+  // the client only renders the ones with a non-zero count — a fresh deploy without keys
+  // simply shows fewer flags instead of a wall of misleading zeros.
+  const redFlags = {
+    knownBad: uniqueChecks.filter((s) => s.indicator.blacklistHit).length,
+    redirect: uniqueChecks.filter((s) => s.indicator.redirectedToDifferentHost).length,
+    newDomain: uniqueChecks.filter(
+      (s) => s.indicator.domainAgeDays != null && s.indicator.domainAgeDays < NEW_DOMAIN_DAYS
+    ).length,
+  };
+
+  // ---- Where my threats arrive: web checks vs forwarded emails (source) ----
+  // `source` is set by real app code on every submission, so this split is always accurate.
+  const channels = {
+    web: submissions.filter((s) => s.source !== "email").length,
+    email: submissions.filter((s) => s.source === "email").length,
   };
 
   // ---- My Results donut (unique checks grouped by verdict band) ----
@@ -167,5 +206,5 @@ export const getDashboard = async (userId) => {
     .sort((a, b) => b.at - a.at)
     .slice(0, ACTIVITY_LIMIT);
 
-  return { stats, submissionHistory, results, recentSubmissions, activity };
+  return { stats, submissionHistory, results, recentSubmissions, activity, threatTypes, redFlags, channels };
 }

@@ -2,10 +2,10 @@
 // Dashboard.jsx routes by role:
 //   analyst    → AnalystDashboard (org-wide, Recharts charts)
 //   individual → personal Dashboard (hand-built SVG/CSS charts)
-//   member     → personal Dashboard (same as individual)
-// This test asserts the branching and that the analyst + personal variants
-// receive the right data. Each variant's charts are tested in their own file;
-// here we focus on the router + data-fetch contract.
+//   member     → MemberDashboard (personal + team situational awareness)
+// This test asserts the branching and that each variant receives the right data.
+// Each variant's charts are tested in their own file; here we focus on the router
+// + data-fetch contract.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -20,14 +20,14 @@ vi.mock("@clerk/clerk-react", () => {
   return { useAuth: () => ({ getToken }), useOrganization: () => ({}), useUser: () => ({ user: null }) };
 });
 
-// api.get backs both /api/dashboard (personal) and /api/history (analyst).
+// api.get backs both /api/dashboard (personal + member) and /api/history (analyst).
 const apiGet = vi.fn();
 vi.mock("../../lib/api.js", () => ({ api: { get: (...a) => apiGet(...a) } }));
 
 // Stub Recharts so JSDOM doesn't need a real SVG engine.
 vi.mock("recharts", () => ({
   BarChart: ({ children }) => <div data-testid="barchart">{children}</div>,
-  Bar: () => null,
+  Bar: ({ children }) => <div>{children}</div>,
   PieChart: ({ children }) => <div data-testid="piechart">{children}</div>,
   Pie: () => null,
   Cell: () => null,
@@ -35,12 +35,13 @@ vi.mock("recharts", () => ({
   YAxis: () => null,
   Tooltip: () => null,
   Legend: () => null,
+  LabelList: () => null,
   ResponsiveContainer: ({ children }) => <div>{children}</div>,
 }));
 
 const { default: Dashboard } = await import("./Dashboard.jsx");
 
-// ── Analyst stats payload (shape from G2·02) ────────────────────────────────
+// ── Analyst stats payload (shape from the /api/history stats branch) ────────
 const ANALYST_STATS = {
   stats: {
     verdictBreakdown: { safe: 4, review: 2, dangerous: 1, total: 7 },
@@ -49,10 +50,26 @@ const ANALYST_STATS = {
       { date: "2026-07-16", count: 4 },
     ],
     pendingCount: 3,
+    oldestPendingDays: 4,
+    threatsThisWeek: { value: 1, trend: { pct: 0, direction: "flat" } },
+    reviewedThisWeek: { value: 2, trend: { pct: 50, direction: "up" } },
+    aiAgreement: { pct: 80, sample: 5 },
+    scoreCalibration: { avgDelta: -4, sample: 5 },
+    avgTurnaroundDays: 2,
+    sharedRate: { pct: 60, shared: 3, closed: 5 },
+    topTargeted: [{ domain: "paypa1.com", count: 1 }],
+    threatTypes: [{ label: "Credential phishing", count: 2 }],
+    confidenceMix: { high: 3, medium: 2, low: 1, unknown: 1 },
+    topReporters: [{ name: "Anya K.", count: 4 }, { name: "Marcus T.", count: 2 }],
+    redFlags: { knownBad: 1, redirect: 0, newDomain: 2 },
+    channels: { web: 5, email: 2 },
   },
   recent: [
-    { indicatorId: 10, title: "Fake PayPal login", domain: "paypa1.com", score: 18, kind: "dangerous", reporter: "Anya K.", createdAt: "2026-07-15T10:00:00Z" },
-    { indicatorId: 11, title: "HR benefits email",  domain: "acme.com",  score: 91, kind: "safe",      reporter: "Marcus T.", createdAt: "2026-07-14T08:00:00Z" },
+    { indicatorId: 10, title: "Fake PayPal login", domain: "paypa1.com", score: 18, kind: "dangerous", reporter: "Anya K.", screenshotUrl: null, reviewStatus: "confirmed malicious", createdAt: "2026-07-15T10:00:00Z" },
+    { indicatorId: 11, title: "HR benefits email",  domain: "acme.com",  score: 91, kind: "safe",      reporter: "Marcus T.", screenshotUrl: null, reviewStatus: "pending review",      createdAt: "2026-07-14T08:00:00Z" },
+  ],
+  activity: [
+    { kind: "submission", label: "Reported by Anya K.", subject: "Fake PayPal login", at: "2026-07-15T10:00:00Z" },
   ],
 };
 
@@ -61,13 +78,26 @@ const PERSONAL_STATS = {
   stats: {
     checksThisWeek: { value: 5, trend: { pct: 10, direction: "up" } },
     threatsFound:   { value: 1, trend: { pct: 0,  direction: "flat" } },
-    safetyScore: 82,
-    checksRemaining: { used: 5, limit: 50 },
+    safeRate: 67,
+    topThreatType: "Credential phishing",
   },
   submissionHistory: [{ date: "2026-07-15", count: 2 }],
   results: { safe: 4, suspicious: 1, dangerous: 1, total: 6 },
   recentSubmissions: [],
   activity: [],
+  threatTypes: [{ label: "Credential phishing", count: 1 }],
+  redFlags: { knownBad: 0, redirect: 1, newDomain: 0 },
+  channels: { web: 5, email: 1 },
+};
+
+// ── Member payload = personal + a team block (server attaches `team`) ───────
+const MEMBER_STATS = {
+  ...PERSONAL_STATS,
+  team: {
+    stats: { teamThreatsThisWeek: 3, teamReportsThisWeek: 12, activeCampaigns: 1, teamTotalChecks: 20 },
+    threatTypes: [{ label: "Credential phishing", count: 4 }],
+    recentlyConfirmed: [],
+  },
 };
 
 beforeEach(() => {
@@ -86,11 +116,18 @@ describe("Dashboard role-router", () => {
 
     // After fetch resolves, shows the analyst heading + stat tiles.
     await waitFor(() => screen.getByRole("heading", { name: /analyst dashboard/i }));
-    expect(screen.getByText("Total Checks")).toBeInTheDocument();
-    // "Pending Review" appears as both a stat tile label and a card heading.
+    // "AI Agreement" is a new analyst-only tile; "Pending Review" appears as both a
+    // stat tile label and a card heading.
+    expect(screen.getByText("AI Agreement")).toBeInTheDocument();
     expect(screen.getAllByText("Pending Review").length).toBeGreaterThanOrEqual(1);
-    // Charts are stubbed; assert placeholders rendered.
-    expect(screen.getByTestId("barchart")).toBeInTheDocument();
+    // New analyst analytics cards + the shared right rail (relabeled "Team Activity").
+    expect(screen.getByText("Review Insights")).toBeInTheDocument();
+    expect(screen.getByText("AI Confidence Mix")).toBeInTheDocument();
+    expect(screen.getByText("Top Reporters")).toBeInTheDocument();
+    expect(screen.getByText("Team Activity")).toBeInTheDocument();
+    // Charts are stubbed; assert placeholders rendered. The analyst now has several
+    // bar charts (trend + threat-types + top-targeted), so allow one-or-more.
+    expect(screen.getAllByTestId("barchart").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByTestId("piechart")).toBeInTheDocument();
     // Fetch was called with /api/history (analyst endpoint).
     expect(apiGet).toHaveBeenCalledWith("/api/history", expect.anything());
@@ -105,19 +142,23 @@ describe("Dashboard role-router", () => {
     await waitFor(() => screen.getByRole("heading", { name: /my dashboard/i }));
     // Personal tiles, not analyst ones.
     expect(screen.getByText("My Checks This Week")).toBeInTheDocument();
+    expect(screen.getByText("Safe Rate")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /analyst dashboard/i })).not.toBeInTheDocument();
     // Personal variant fetches /api/dashboard, not /api/history.
     expect(apiGet).toHaveBeenCalledWith("/api/dashboard", expect.anything());
   });
 
-  it("renders the personal variant for role=member (member ≠ analyst)", async () => {
-    mockRole.mockReturnValue({ role: "member" });
-    apiGet.mockResolvedValue(PERSONAL_STATS);
+  it("renders the member variant for role=member (team-aware, not analyst)", async () => {
+    mockRole.mockReturnValue({ role: "member", orgName: "Acme" });
+    apiGet.mockResolvedValue(MEMBER_STATS);
 
     render(<MemoryRouter><Dashboard /></MemoryRouter>);
 
-    await waitFor(() => screen.getByRole("heading", { name: /my dashboard/i }));
+    // Member gets a team dashboard heading + a team-specific tile, and fetches
+    // /api/dashboard (server attaches the `team` block).
+    await waitFor(() => screen.getByText("Team Threats This Week"));
     expect(screen.queryByRole("heading", { name: /analyst dashboard/i })).not.toBeInTheDocument();
+    expect(apiGet).toHaveBeenCalledWith("/api/dashboard", expect.anything());
   });
 
   it("analyst variant shows pending-review items from recent[]", async () => {
@@ -126,8 +167,48 @@ describe("Dashboard role-router", () => {
 
     render(<MemoryRouter><Dashboard /></MemoryRouter>);
 
-    await waitFor(() => screen.getByText("Fake PayPal login"));
-    expect(screen.getByText("Fake PayPal login")).toBeInTheDocument();
+    // "Fake PayPal login" now shows in BOTH the pending queue and the Team Activity
+    // rail (its subject), so allow more than one match.
+    await waitFor(() => screen.getAllByText("Fake PayPal login"));
+    expect(screen.getAllByText("Fake PayPal login").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("HR benefits email")).toBeInTheDocument();
+  });
+
+  it("analyst empty states are accurate: checks exist but all safe → not 'nothing yet'", async () => {
+    mockRole.mockReturnValue({ role: "analyst" });
+    // An org that has run checks, but every one came back safe: risky/dangerous slices are
+    // empty. The cards must say "all N were safe", NOT a misleading "No ... yet".
+    apiGet.mockResolvedValue({
+      stats: {
+        verdictBreakdown: { safe: 5, review: 0, dangerous: 0, total: 5 },
+        trend: [{ date: "2026-07-15", count: 2 }],
+        pendingCount: 0,
+        oldestPendingDays: 0,
+        threatsThisWeek: { value: 0, trend: { pct: 0, direction: "flat" } },
+        reviewedThisWeek: { value: 0, trend: { pct: 0, direction: "flat" } },
+        aiAgreement: null,
+        scoreCalibration: null,
+        avgTurnaroundDays: null,
+        sharedRate: null,
+        topTargeted: [],   // no dangerous hosts
+        threatTypes: [],   // no risky categories
+        confidenceMix: { high: 5, medium: 0, low: 0, unknown: 0 },
+        topReporters: [{ name: "Anya K.", count: 5 }],
+        redFlags: {},
+        channels: { web: 5, email: 0 },
+      },
+      recent: [],
+      activity: [],
+    });
+
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    await waitFor(() => screen.getByText("Threat Types"));
+    // Accurate: names the safe checks instead of implying no activity.
+    expect(screen.getByText(/all 5 checked links came back safe/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing your team checked landed on a flagged host/i)).toBeInTheDocument();
+    // The old misleading copy must be gone.
+    expect(screen.queryByText(/no risky submissions yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no dangerous links yet/i)).not.toBeInTheDocument();
   });
 });

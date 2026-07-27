@@ -8,12 +8,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import orboWave from "../../assets/orbo/orbo-wave.png";
 
-const ActivityRail = ({ activity }) => {
+// `title` lets a variant relabel the feed — personal/member show "My Activity", the
+// analyst shows a team-wide "Team Activity" feed. Defaults so existing callers are unchanged.
+const ActivityRail = ({ activity = [], title = "My Activity" }) => {
   return (
     <aside style={{ display: "grid", gap: 20, alignContent: "start" }}>
-      {/* My Activity */}
+      {/* Activity feed */}
       <div>
-        <h2 style={{ color: "var(--navy)", fontSize: "1.05em", margin: "0 0 14px" }}>My Activity</h2>
+        <h2 style={{ color: "var(--navy)", fontSize: "1.05em", margin: "0 0 14px" }}>{title}</h2>
         {activity.length === 0 ? (
           <p style={{ color: "var(--text-dim)", fontSize: "0.85em" }}>No activity yet.</p>
         ) : (
@@ -50,14 +52,17 @@ const ActivityRail = ({ activity }) => {
         )}
       </div>
 
-      <AskOrboMini />
+      <AskOrboChat />
     </aside>
   );
 }
 
-// A compact prompt that jumps into a fresh Orbo chat. It doesn't answer inline
-// (that's the chat's job) — it routes to /ask-orbo, the canonical chat Home.
-const AskOrboMini = () => {
+// The Ask Orbo chat panel that lives on the right rail. This is a LAYOUT SHELL for
+// now — it blocks out the space an inline chat will fill later (header, scrollable
+// message area with a placeholder greeting, input pinned to the bottom). Submitting
+// or clicking the greeting jumps to /ask-orbo (the full chat Home) until the inline
+// chat is wired up. Don't build real messaging here yet — just reserve the space.
+const AskOrboChat = () => {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
 
@@ -72,19 +77,53 @@ const AskOrboMini = () => {
         border: "1px solid var(--border)",
         borderRadius: "var(--radius)",
         boxShadow: "var(--shadow)",
-        padding: 16,
+        display: "flex",
+        flexDirection: "column",
+        // Reserve a real chat-sized block so the layout is designed around it now.
+        height: 360,
+        overflow: "hidden",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <img src={orboWave} alt="" width={28} height={28} style={{ objectFit: "contain" }} />
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "12px 16px",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <img src={orboWave} alt="" width={26} height={26} style={{ objectFit: "contain" }} />
         <span style={{ fontWeight: 700, color: "var(--navy)", fontSize: "0.9em" }}>Ask Orbo</span>
       </div>
+
+      {/* Message area (placeholder — inline chat lands here later). Scrolls on its own. */}
+      <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <img src={orboWave} alt="" width={24} height={24} style={{ objectFit: "contain", flexShrink: 0 }} />
+          <div
+            style={{
+              background: "var(--canvas)",
+              borderRadius: "4px 12px 12px 12px",
+              padding: "10px 12px",
+              fontSize: "0.84em",
+              color: "var(--text)",
+              lineHeight: 1.45,
+            }}
+          >
+            Hi! I'm Orbo. Ask me about a link, a report, or anything on your dashboard.
+          </div>
+        </div>
+      </div>
+
+      {/* Input pinned to the bottom. */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           go();
         }}
-        style={{ display: "flex", gap: 8 }}
+        style={{ display: "flex", gap: 8, padding: 12, borderTop: "1px solid var(--border)" }}
       >
         <input
           value={q}

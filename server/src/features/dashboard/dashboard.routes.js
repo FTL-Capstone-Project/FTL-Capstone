@@ -10,13 +10,23 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { getDashboard } from "./dashboard.service.js";
+import { getTeamSnapshot } from "./team.service.js";
 
 export const dashboardRouter = Router();
 
 // GET /api/dashboard — everything the page needs in one round-trip.
+//
+// Individuals get just their personal payload. A user in an org (member OR analyst)
+// additionally gets a `team` block of org-wide situational awareness — attached only
+// when orgId is present, so an individual's response shape is unchanged. Analysts have
+// their own richer dashboard, but attaching `team` here is harmless (they don't read it).
 dashboardRouter.get("/", requireAuth, async (req, res, next) => {
   try {
     const data = await getDashboard(req.user.id);
+    // Members see personal stats + team awareness. getTeamSnapshot returns null for
+    // individuals (no orgId), so we only add the key when there's a team to show.
+    const team = await getTeamSnapshot(req.user.orgId);
+    if (team) data.team = team;
     return res.json(data);
   } catch (err) {
     return next(err);

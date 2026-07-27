@@ -160,15 +160,22 @@ describe("GET /api/history?org=1 (Team History)", () => {
 });
 
 describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
-  // Mock setup: the stats branch calls submission.findMany TWICE (all subs + recent)
-  // and orgReview.count ONCE. We queue two return values on submissionFindMany.
+  // Mock setup: the stats branch calls submission.findMany TWICE (all subs + recent),
+  // then orgReview.findMany ONCE (pending age / throughput / AI agreement). We queue
+  // the two submission return values, and set orgReviewFindMany per test.
   const analystUser = { id: 7, orgId: 99, role: "analyst", name: "Priya S." };
 
-  const makeSub = (indicatorId, aiScore, createdAt, name = "Anya K.") => ({
+  // Widened to carry the fields the new analyst stats read: source (channel split),
+  // user.name (top reporters), and the indicator's aiConfidence + red-flag signals.
+  const makeSub = (indicatorId, aiScore, createdAt, name = "Anya K.", { source = "web", aiConfidence = null } = {}) => ({
     indicatorId,
     rawUrl: `https://example.com/${indicatorId}`,
     createdAt: new Date(createdAt),
-    indicator: { aiTitle: `title-${indicatorId}`, domain: `d${indicatorId}.com`, aiScore },
+    source,
+    indicator: {
+      aiTitle: `title-${indicatorId}`, domain: `d${indicatorId}.com`, finalHost: null, aiTags: [], aiScore,
+      aiConfidence, blacklistHit: false, redirectedToDifferentHost: false, domainAgeDays: null,
+    },
     user: { name },
   });
 
@@ -186,24 +193,27 @@ describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
   });
 
   it("returns stats + recent scoped strictly to req.user.orgId", async () => {
-    // submission.findMany is called TWICE: all-subs for verdict breakdown, then recent.
+    // submission.findMany is called TWICE now: all-subs (also powers the 30-day trend in-memory),
+    // then the recent-activity feed. (The trend no longer runs its own query.)
     submissionFindMany
       .mockResolvedValueOnce([
-        // all org subs (for verdict breakdown)
-        makeSub(10, 22, "2026-07-15"),  // dangerous
-        makeSub(11, 91, "2026-07-14"),  // safe
-        makeSub(12, 54, "2026-07-13"),  // review
+        // all org subs (for verdict breakdown + confidence/channel/reporter/trend stats)
+        makeSub(10, 22, "2026-07-15", "Anya K.", { source: "email", aiConfidence: "high" }),  // dangerous
+        makeSub(11, 91, "2026-07-14", "Anya K.", { aiConfidence: "low" }),                     // safe
+        makeSub(12, 54, "2026-07-13", "Marcus T.", { aiConfidence: "medium" }),                // review
       ])
       .mockResolvedValueOnce([
-        // recent 7-day subs (for trend — just createdAt needed)
-        { createdAt: new Date("2026-07-15") },
-        { createdAt: new Date("2026-07-14") },
-      ])
-      .mockResolvedValueOnce([
-        // recent activity feed
-        { ...makeSub(10, 22, "2026-07-15", "Marcus T."), rawUrl: "https://ex.com/10" },
+        // recent activity feed (carries screenshotUrl for the queue thumbnail)
+        { ...makeSub(10, 22, "2026-07-15", "Marcus T."), rawUrl: "https://ex.com/10", indicator: { aiTitle: "title-10", domain: "d10.com", aiScore: 22, screenshotUrl: "https://cdn/shot10.png" } },
       ]);
-    orgReviewCount.mockResolvedValue(2); // 2 pending reviews
+    // orgReview.findMany now powers pending age / throughput / AI agreement / calibration /
+    // turnaround / shared rate. Two pending reviews, plus one closed+shared review where the
+    // analyst's band matches the AI's band (18 vs 22 → both dangerous).
+    orgReviewFindMany.mockResolvedValue([
+      { indicatorId: 11, reviewStatus: "pending review", humanScore: null, sharedWithOrg: false, createdAt: new Date("2026-07-10"), updatedAt: new Date("2026-07-10"), indicator: { aiScore: 20 } },
+      { indicatorId: 12, reviewStatus: "pending review", humanScore: null, sharedWithOrg: false, createdAt: new Date("2026-07-14"), updatedAt: new Date("2026-07-14"), indicator: { aiScore: 40 } },
+      { indicatorId: 10, reviewStatus: "confirmed malicious", humanScore: 18, sharedWithOrg: true, createdAt: new Date("2026-07-12"), updatedAt: new Date("2026-07-15"), indicator: { aiScore: 22 } },
+    ]);
 
     const res = await request(appAs(analystUser)).get("/api/history");
 
@@ -213,8 +223,8 @@ describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
     for (const call of submissionFindMany.mock.calls) {
       expect(call[0].where).toMatchObject({ orgId: 99 });
     }
-    // orgReview.count must also be scoped to the same orgId.
-    expect(orgReviewCount).toHaveBeenCalledWith(
+    // orgReview.findMany must also be scoped to the same orgId.
+    expect(orgReviewFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ orgId: 99 }) })
     );
 
@@ -226,16 +236,42 @@ describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
       total: 3,
     });
     expect(res.body.stats.pendingCount).toBe(2);
+    // AI agreement: the one analyst-scored review (18 vs 22, both dangerous) → 100%.
+    expect(res.body.stats.aiAgreement).toMatchObject({ pct: 100, sample: 1 });
+    // Score calibration: signed avg (human − AI) = 18 − 22 = −4 (team scores stricter).
+    expect(res.body.stats.scoreCalibration).toMatchObject({ avgDelta: -4, sample: 1 });
+    // Turnaround: the one closed review opened 07-12, closed 07-15 → 3 days.
+    expect(res.body.stats.avgTurnaroundDays).toBe(3);
+    // Shared rate: 1 of 1 closed reviews was shared → 100%.
+    expect(res.body.stats.sharedRate).toMatchObject({ pct: 100, shared: 1, closed: 1 });
+    // Confidence mix across the 3 unique indicators: one each high/medium/low.
+    expect(res.body.stats.confidenceMix).toMatchObject({ high: 1, medium: 1, low: 1, unknown: 0 });
+    // Channel split (per submission): 1 email + 2 web.
+    expect(res.body.stats.channels).toMatchObject({ web: 2, email: 1 });
+    // Top reporters (per submission): Anya K. reported 2, Marcus T. 1.
+    expect(res.body.stats.topReporters).toEqual([
+      { name: "Anya K.", count: 2 },
+      { name: "Marcus T.", count: 1 },
+    ]);
 
-    // Trend has exactly 7 buckets (one per day).
-    expect(res.body.stats.trend).toHaveLength(7);
+    // Trend now spans 30 buckets (one per day) — widened from 7 so older org data shows.
+    expect(res.body.stats.trend).toHaveLength(30);
 
-    // Recent activity has the indicator details.
+    // Recent activity has the indicator details (pending queue), now including the real
+    // screenshot URL (thumbnail) and the review status (18 vs 22 review is "confirmed malicious").
     expect(res.body.recent).toHaveLength(1);
     expect(res.body.recent[0]).toMatchObject({
       indicatorId: 10,
       kind: "dangerous",
       reporter: "Marcus T.",
+      screenshotUrl: "https://cdn/shot10.png",
+      reviewStatus: "confirmed malicious",
+    });
+    // ...and the reshaped right-rail activity feed (kind/label/subject/at).
+    expect(res.body.activity).toHaveLength(1);
+    expect(res.body.activity[0]).toMatchObject({
+      kind: "submission",
+      label: "Reported by Marcus T.",
     });
   });
 
@@ -246,14 +282,21 @@ describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
         makeSub(10, 22, "2026-07-15"),
         makeSub(10, 22, "2026-07-14"), // duplicate
       ])
-      .mockResolvedValueOnce([])  // recent subs (trend)
-      .mockResolvedValueOnce([]); // recent activity
-    orgReviewCount.mockResolvedValue(0);
+      .mockResolvedValueOnce([]); // recent activity (trend is now derived from the all-subs call)
+    orgReviewFindMany.mockResolvedValue([]); // no reviews → pending 0, agreement null
 
     const res = await request(appAs(analystUser)).get("/api/history");
 
     expect(res.status).toBe(200);
     expect(res.body.stats.verdictBreakdown.total).toBe(1);   // deduplicated
     expect(res.body.stats.verdictBreakdown.dangerous).toBe(1);
+    expect(res.body.stats.pendingCount).toBe(0);
+    expect(res.body.stats.aiAgreement).toBeNull(); // no analyst-scored reviews
+    // No reviews at all → every review-derived stat falls back to null (client shows empty states).
+    expect(res.body.stats.scoreCalibration).toBeNull();
+    expect(res.body.stats.avgTurnaroundDays).toBeNull();
+    expect(res.body.stats.sharedRate).toBeNull();
+    // Confidence unknown (aiConfidence not set on the deduped indicator) folds into `unknown`.
+    expect(res.body.stats.confidenceMix).toMatchObject({ high: 0, medium: 0, low: 0, unknown: 1 });
   });
 });
