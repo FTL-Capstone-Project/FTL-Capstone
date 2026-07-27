@@ -106,7 +106,9 @@ const matchBucketCount = (text) => {
     filters.push({ column: "createdAt", op: "gte", value: startOfUtcDay(6) });
     title += " this week";
   }
-  return { chart: "count", groupBy: null, filters, verdictBucket: COUNT_BUCKETS[bucketWord], title };
+  // bucketCount marks this for the evidence-carrying builder (number + the links behind it),
+  // rather than the generic path's bare total.
+  return { chart: "count", bucketCount: true, groupBy: null, filters, verdictBucket: COUNT_BUCKETS[bucketWord], title };
 };
 
 // Try to map a question straight to an answer with NO LLM call. Returns a validated spec or null.
@@ -227,6 +229,11 @@ const emptyResult = (spec) => {
       data: { totals: { total: 0, dangerous: 0, suspicious: 0, safe: 0 }, daily: [], topThreats: [], findings: [] },
       chartSpec: { type: "report", title: spec.title, empty: true },
     };
+  }
+  // A bucket count keeps its own shape when empty so the client renders the same card, not a
+  // different one — the evidence list is simply empty.
+  if (spec.bucketCount) {
+    return { data: [], chartSpec: { type: "bucketCount", title: spec.title, total: 0, reportTotal: 0, band: spec.verdictBucket, empty: true } };
   }
   if (spec.chart === "count") return { data: [{ label: "Total", value: 0 }], chartSpec: { type: "count", title: spec.title, empty: true } };
   return { data: [], chartSpec: { type: spec.chart, title: spec.title, empty: true } };
@@ -537,6 +544,75 @@ const buildReport = (prisma, spec, orgId, indicatorIds) => {
   return buildWeeklyReport(prisma, spec, orgId);
 };
 
+// ── "How many <verdict> links this week?" — the count, PLUS the links it counted ────────────
+// A bare number is not actionable: an analyst's next question is always "which ones?". So the
+// count chip returns the matching links with the detail needed to triage them, and the client
+// renders the number with an evidence list underneath.
+//
+// This builder also fixes a subtle correctness bug in the generic path. `createdAt` in FIELDS
+// maps to Indicator.createdAt = when the URL was FIRST SEEN GLOBALLY (by any org, ever). What an
+// analyst means by "this week" is when THEIR ORG reported it — Submission.createdAt. Filtering on
+// the indicator's own date counted links the org reported months ago but that happened to be
+// first seen recently (and missed old links freshly re-reported). We count DISTINCT indicators
+// from the org's submissions in the window instead.
+const buildBucketCount = async (prisma, spec, orgId) => {
+  const range = BUCKET_RANGES[spec.verdictBucket];
+  // The date filter (if the question was scoped to a week) applies to the SUBMISSION.
+  const submittedAt = spec.filters.find((f) => f.column === "createdAt");
+
+  const submissions = await prisma.submission.findMany({
+    where: {
+      orgId,
+      ...(submittedAt ? { createdAt: { [submittedAt.op]: submittedAt.value } } : {}),
+      indicator: { aiScore: range },
+    },
+    orderBy: { createdAt: "desc" }, // newest first, so the dedup below keeps the latest report
+    select: {
+      indicatorId: true,
+      createdAt: true,
+      user: { select: { name: true, email: true } },
+      indicator: { select: { aiTitle: true, domain: true, aiScore: true, aiTags: true, blacklistHit: true } },
+    },
+    take: MAX_ROWS,
+  });
+
+  // One row per link even when several teammates reported it — but keep the report count, since
+  // "5 people hit this one" is exactly the signal an analyst prioritises on.
+  const byIndicator = new Map();
+  for (const s of submissions) {
+    const existing = byIndicator.get(s.indicatorId);
+    if (existing) { existing.reportCount += 1; continue; }
+    const tags = Array.isArray(s.indicator?.aiTags) ? s.indicator.aiTags : [];
+    byIndicator.set(s.indicatorId, {
+      indicatorId: s.indicatorId,
+      title: s.indicator?.aiTitle ?? s.indicator?.domain ?? "Untitled link",
+      domain: s.indicator?.domain ?? null,
+      score: s.indicator?.aiScore ?? null,
+      band: bucketOf(s.indicator?.aiScore),
+      tag: tags[0] ?? null,
+      blacklisted: s.indicator?.blacklistHit ?? false,
+      reportedBy: s.user?.name ?? s.user?.email ?? "A teammate",
+      reportedAt: s.createdAt,
+      reportCount: 1,
+    });
+  }
+  // Most dangerous first (lowest safety score) — the triage order the analyst wants.
+  const links = [...byIndicator.values()].sort((a, b) => (a.score ?? 100) - (b.score ?? 100));
+
+  return {
+    data: links,
+    chartSpec: {
+      type: "bucketCount",
+      title: spec.title,
+      total: links.length,
+      // How many times those links were reported in total — "8 reports across 5 links".
+      reportTotal: submissions.length,
+      band: spec.verdictBucket,
+      empty: links.length === 0,
+    },
+  };
+};
+
 // Run the validated query and shape the result into { data, chartSpec } for the client.
 // `prisma` is passed in (same testable pattern as the other services). `orgId` is the caller's
 // org — every read is narrowed to it (story #12); null/0 → an empty result, never a global read.
@@ -548,6 +624,10 @@ export const runNlpQuery = async (prisma, spec, orgId) => {
 
   // The five named reports each have their own builder.
   if (spec.report) return buildReport(prisma, spec, orgId, indicatorIds);
+
+  // A verdict-bucket count answers with evidence (see buildBucketCount). Only the keyword path
+  // sets this shape — an LLM-authored count with a groupBy still uses the generic path below.
+  if (spec.bucketCount) return buildBucketCount(prisma, spec, orgId);
 
   const where = { ...buildWhere(spec), id: { in: indicatorIds } };
   const rows = await prisma.indicator.findMany({

@@ -180,6 +180,79 @@ describe("matchReport — the no-LLM fast path for the 5 wireframed reports", ()
   });
 });
 
+describe("bucket count — the number PLUS the links behind it", () => {
+  // The org reported the same dangerous link twice and another one once.
+  const submissions = [
+    {
+      indicatorId: 7, createdAt: new Date("2026-07-26T09:00:00Z"),
+      user: { name: "Anya K.", email: "anya@x.com" },
+      indicator: { aiTitle: "Fake Microsoft 365 sign-in", domain: "ms365-verify.com", aiScore: 8, aiTags: ["Credential phishing"], blacklistHit: true },
+    },
+    {
+      indicatorId: 9, createdAt: new Date("2026-07-25T09:00:00Z"),
+      user: { name: "Diego R.", email: "diego@x.com" },
+      indicator: { aiTitle: "Fake payroll form", domain: "payroll-portal.com", aiScore: 18, aiTags: ["Business email compromise"], blacklistHit: false },
+    },
+    {
+      indicatorId: 7, createdAt: new Date("2026-07-24T09:00:00Z"),
+      user: { name: "Sarah L.", email: "sarah@x.com" },
+      indicator: { aiTitle: "Fake Microsoft 365 sign-in", domain: "ms365-verify.com", aiScore: 8, aiTags: ["Credential phishing"], blacklistHit: true },
+    },
+  ];
+  const mockPrisma = {
+    submission: {
+      findMany: vi.fn(async ({ select }) => (select?.indicatorId && !select?.indicator
+        ? [{ indicatorId: 7 }, { indicatorId: 9 }]   // orgIndicatorIds()
+        : submissions)),
+    },
+  };
+
+  it("returns one row per link, most dangerous first, with the report count", async () => {
+    const spec = matchReport("How many dangerous links this week?");
+    const { data, chartSpec } = await runNlpQuery(mockPrisma, spec, 5);
+
+    expect(chartSpec.type).toBe("bucketCount");
+    expect(chartSpec.total).toBe(2);        // two distinct links…
+    expect(chartSpec.reportTotal).toBe(3);  // …reported three times between them
+    expect(chartSpec.band).toBe("dangerous");
+
+    expect(data).toHaveLength(2);
+    expect(data[0]).toMatchObject({
+      indicatorId: 7, score: 8, band: "dangerous", tag: "Credential phishing",
+      blacklisted: true, reportCount: 2,
+    });
+    // Newest report wins the row's attribution (submissions come back newest-first).
+    expect(data[0].reportedBy).toBe("Anya K.");
+    expect(data[1].score).toBe(18); // 8 before 18 — lowest safety score first
+  });
+
+  // The bug this builder fixes: FIELDS.createdAt maps to Indicator.createdAt (when the URL was
+  // first seen GLOBALLY by any org), but "this week" means when THIS org reported it.
+  it("scopes 'this week' to the org's SUBMISSION date, not the indicator's global first-seen date", async () => {
+    mockPrisma.submission.findMany.mockClear();
+    await runNlpQuery(mockPrisma, matchReport("how many dangerous links this week"), 5);
+
+    // The evidence query (the one selecting the indicator) must filter on the submission's own
+    // createdAt, and must never put a date filter on the nested indicator.
+    const evidenceCall = mockPrisma.submission.findMany.mock.calls
+      .map(([args]) => args)
+      .find((args) => args.select?.indicator);
+    expect(evidenceCall.where.createdAt).toMatchObject({ gte: expect.any(Date) });
+    expect(evidenceCall.where.indicator).toEqual({ aiScore: { lt: 35 } });
+    expect(evidenceCall.where.indicator.createdAt).toBeUndefined();
+    expect(evidenceCall.where.orgId).toBe(5); // story #12 isolation
+  });
+
+  it("omits the date filter when the question isn't week-scoped", async () => {
+    mockPrisma.submission.findMany.mockClear();
+    await runNlpQuery(mockPrisma, matchReport("how many dangerous links"), 5);
+    const evidenceCall = mockPrisma.submission.findMany.mock.calls
+      .map(([args]) => args)
+      .find((args) => args.select?.indicator);
+    expect(evidenceCall.where.createdAt).toBeUndefined();
+  });
+});
+
 describe("named reports — the whitelist holds", () => {
   it("accepts the 5 report names and fixes the chart type + title itself", () => {
     const s = validateSpec({ report: "heatmap", chart: "count", title: "ignore me" });

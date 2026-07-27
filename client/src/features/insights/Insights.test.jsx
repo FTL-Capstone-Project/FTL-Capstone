@@ -3,8 +3,13 @@
 // report) plus the generic count path, by faking the POST /api/nlp-query response and asserting
 // the right renderer ran.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+
+// The bucket-count card links each row into the triage queue, and react-router's <Link> needs
+// router context — so every render here is wrapped.
+const render = (ui) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 const apiPost = vi.fn();
 vi.mock("../../lib/api.js", () => ({ api: { post: (...a) => apiPost(...a) } }));
@@ -222,6 +227,55 @@ describe("Insights — empty states and errors still behave", () => {
     await ask({ data: [{ label: "Total", value: 0 }], chartSpec: { type: "count", title: "Dangerous links this week", empty: true } });
     expect(await screen.findByText(/nothing to count/i)).toBeTruthy();
     expect(screen.queryByText("0")).toBeNull();
+  });
+});
+
+describe("Insights — the verdict count answers with evidence", () => {
+  const links = [
+    { indicatorId: 7, title: "Fake Microsoft 365 sign-in", domain: "ms365-verify.com", score: 8,
+      band: "dangerous", tag: "Credential phishing", blacklisted: true,
+      reportedBy: "Anya K.", reportedAt: new Date().toISOString(), reportCount: 3 },
+    { indicatorId: 9, title: "Fake payroll form", domain: "payroll-portal.com", score: 18,
+      band: "dangerous", tag: "Business email compromise", blacklisted: false,
+      reportedBy: "Diego R.", reportedAt: new Date().toISOString(), reportCount: 1 },
+  ];
+
+  it("shows the count AND each link's triage detail, not just a bare number", async () => {
+    await ask({
+      data: links,
+      chartSpec: { type: "bucketCount", title: "Dangerous links this week", total: 2, reportTotal: 4, band: "dangerous" },
+    });
+
+    // The headline count.
+    expect(await screen.findByText("2")).toBeTruthy();
+    // Reports vs links are different numbers — both must be spelled out.
+    expect(screen.getByText(/4 reports across 2 links/)).toBeTruthy();
+    // The evidence: title, score, attack type, reporter, and the repeat-report count.
+    expect(screen.getByText("Fake Microsoft 365 sign-in")).toBeTruthy();
+    expect(screen.getByText("8")).toBeTruthy();
+    expect(screen.getByText(/Credential phishing/)).toBeTruthy();
+    expect(screen.getByText(/Anya K\./)).toBeTruthy();
+    expect(screen.getByText("3")).toBeTruthy();
+    // A blacklist hit is the strongest signal on a row, so it's badged.
+    expect(screen.getByText("Blacklisted")).toBeTruthy();
+    expect(screen.getByText("Most dangerous first")).toBeTruthy();
+  });
+
+  it("links each row into the triage queue so the analyst can act on it", async () => {
+    await ask({
+      data: links,
+      chartSpec: { type: "bucketCount", title: "Dangerous links this week", total: 2, reportTotal: 4, band: "dangerous" },
+    });
+    const row = await screen.findByText("Fake Microsoft 365 sign-in");
+    expect(row.closest("a").getAttribute("href")).toBe("/reports?q=ms365-verify.com");
+  });
+
+  it("says 'none found' for a zero count rather than showing an empty chart frame", async () => {
+    await ask({
+      data: [],
+      chartSpec: { type: "bucketCount", title: "Dangerous links this week", total: 0, reportTotal: 0, band: "dangerous" },
+    });
+    expect(await screen.findByText(/none found/i)).toBeTruthy();
   });
 
   it("still renders the generic count answer (David's original path is untouched)", async () => {

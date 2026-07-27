@@ -13,6 +13,7 @@ import CampaignTable from "./charts/CampaignTable.jsx";
 import ScoreHistogram from "./charts/ScoreHistogram.jsx";
 import WeeklyReport from "./charts/WeeklyReport.jsx";
 import EmptyChart from "./charts/EmptyChart.jsx";
+import BucketCount from "./charts/BucketCount.jsx";
 
 // ── feature: insights · owner: David · charts 3–6 built by Ozias ──
 // AI Feature B frontend. An analyst asks the threat history in plain English; the server
@@ -44,6 +45,9 @@ const Chart = ({ data, chartSpec }) => {
   if (chartSpec.type === "trend") return <TrendChart data={data} chartSpec={chartSpec} />;
   if (chartSpec.type === "table") return <CampaignTable data={data} chartSpec={chartSpec} />;
   if (chartSpec.type === "histogram") return <ScoreHistogram data={data} chartSpec={chartSpec} />;
+  // A verdict count answers with the links behind the number, so it reads its own totals from
+  // chartSpec rather than from data[0] like the generic count does.
+  if (chartSpec.type === "bucketCount") return <BucketCount data={data} chartSpec={chartSpec} />;
 
   // ── the generic charts ──
   // An org with no data yet: say so rather than rendering empty axes.
