@@ -6,24 +6,50 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { api } from "../../lib/api.js";
+import { CHART_COLORS, defaultAxisProps, defaultTooltipStyle } from "../../lib/chartConfig.js";
+import HeatmapChart from "./charts/HeatmapChart.jsx";
+import TrendChart from "./charts/TrendChart.jsx";
+import CampaignTable from "./charts/CampaignTable.jsx";
+import ScoreHistogram from "./charts/ScoreHistogram.jsx";
+import WeeklyReport from "./charts/WeeklyReport.jsx";
 
-// ── feature: insights · owner: David ──
+// ── feature: insights · owner: David · charts 3–6 built by Ozias ──
 // AI Feature B frontend. An analyst asks the threat history in plain English; the server
 // (POST /api/nlp-query) turns it into a validated chartSpec + data, which we render with
 // Recharts. Lives at /insights (NOT /ask-orbo — that's the chat Home). If the server can't
 // map the question it returns { fallback }, which we show as a "try rephrasing" note.
-
-const COLORS = ["var(--primary)", "var(--safe)", "var(--review)", "var(--danger)", "var(--ring)"];
+//
+// chartSpec.type decides the renderer:
+//   count/bar/line/pie  → the generic charts below (one number, or one series of labels+values)
+//   heatmap/trend/table/histogram/report → the 5 wireframed named reports, one component each
+//     under ./charts/. `report` is special: its `data` is an OBJECT, not an array.
 
 const EXAMPLES = [
+  "Generate a weekly threat report",
+  "When are threats most commonly submitted?",
+  "How have attack types trended over the last 90 days?",
+  "Break down the active threat campaigns",
+  "Show me the score distribution",
   "How many dangerous links this week?",
-  "Break down all checks by verdict",
-  "How many blacklisted domains?",
-  "Show checks by review status",
 ];
 
 // Render the chart for a { data, chartSpec } result.
 const Chart = ({ data, chartSpec }) => {
+  // ── the 5 named reports ──
+  // These come first because `report` hands us an object rather than an array, which the
+  // generic array-based renderers below would choke on.
+  if (chartSpec.type === "report") return <WeeklyReport data={data} chartSpec={chartSpec} />;
+  if (chartSpec.type === "heatmap") return <HeatmapChart data={data} chartSpec={chartSpec} />;
+  if (chartSpec.type === "trend") return <TrendChart data={data} chartSpec={chartSpec} />;
+  if (chartSpec.type === "table") return <CampaignTable data={data} chartSpec={chartSpec} />;
+  if (chartSpec.type === "histogram") return <ScoreHistogram data={data} chartSpec={chartSpec} />;
+
+  // ── the generic charts ──
+  // An org with no data yet: say so rather than rendering empty axes.
+  if (chartSpec.type !== "count" && data.length === 0) {
+    return <p style={{ color: "var(--text-dim)" }}>No submissions match that question yet.</p>;
+  }
+
   if (chartSpec.type === "count") {
     const total = data[0]?.value ?? 0;
     return (
@@ -37,25 +63,25 @@ const Chart = ({ data, chartSpec }) => {
     <ResponsiveContainer width="100%" height={300}>
       {chartSpec.type === "line" ? (
         <LineChart data={data}>
-          <XAxis dataKey="label" stroke="var(--text-dim)" fontSize={12} />
-          <YAxis allowDecimals={false} stroke="var(--text-dim)" fontSize={12} />
-          <Tooltip />
+          <XAxis dataKey="label" {...defaultAxisProps} />
+          <YAxis allowDecimals={false} {...defaultAxisProps} />
+          <Tooltip {...defaultTooltipStyle} />
           <Line type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={2} />
         </LineChart>
       ) : chartSpec.type === "pie" ? (
         <PieChart>
           <Pie data={data} dataKey="value" nameKey="label" outerRadius={110} label>
-            {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+            {data.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
           </Pie>
-          <Tooltip />
+          <Tooltip {...defaultTooltipStyle} />
         </PieChart>
       ) : (
         <BarChart data={data}>
-          <XAxis dataKey="label" stroke="var(--text-dim)" fontSize={12} />
-          <YAxis allowDecimals={false} stroke="var(--text-dim)" fontSize={12} />
-          <Tooltip />
+          <XAxis dataKey="label" {...defaultAxisProps} />
+          <YAxis allowDecimals={false} {...defaultAxisProps} />
+          <Tooltip {...defaultTooltipStyle} />
           <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-            {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+            {data.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
           </Bar>
         </BarChart>
       )}

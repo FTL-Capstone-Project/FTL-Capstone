@@ -7,7 +7,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireAnalyst } from "../../middleware/requireAnalyst.js";
 import { rateLimit } from "../../middleware/rateLimit.js";
 import { prisma } from "../../db.js";
-import { answerNlpQuery } from "./nlpQuery.service.js";
+import { answerNlpQuery, matchReport } from "./nlpQuery.service.js";
 import { env } from "../../config/env.js";
 
 export const nlpQueryRouter = Router();
@@ -24,9 +24,14 @@ nlpQueryRouter.post("/", requireAuth, requireAnalyst, limit, async (req, res) =>
   if (question.length > MAX_QUESTION) {
     return res.status(400).json({ error: "That question is too long — please shorten it." });
   }
-  if (!env.llmApiKey) return res.status(503).json({ error: "Insights are not configured" });
+  // The 5 named reports (weekly/heatmap/trend/campaigns/distribution) are answered by keyword
+  // match + plain queries, so they work with no LLM key. Only free-form questions need Claude.
+  if (!env.llmApiKey && !matchReport(question)) {
+    return res.status(503).json({ error: "Insights are not configured" });
+  }
   try {
-    const result = await answerNlpQuery(prisma, question.trim());
+    // orgId scopes every read to the caller's own org (project_plan.md §5, story #12).
+    const result = await answerNlpQuery(prisma, question.trim(), req.user.orgId);
     return res.json(result); // { data, chartSpec } | { fallback }
   } catch (e) {
     console.warn("⚠ nlp-query failed:", e.message);

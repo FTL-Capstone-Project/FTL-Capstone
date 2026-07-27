@@ -1,4 +1,4 @@
-// ── feature: nlp-query · owner: David ──
+// ── feature: nlp-query · owner: David · charts 3–6 built by Ozias ──
 // AI Feature B: an analyst asks the threat history in plain English ("how many dangerous
 // links this week?", "top impersonated brands"), and we turn it into a CHART.
 //
@@ -7,7 +7,20 @@
 // operator, and value against that whitelist and build a PARAMETERIZED Prisma query. Model
 // output that fails validation is rejected → the "try rephrasing" fallback. This is the same
 // discipline as the verdict pipeline: the AI narrates/proposes, code makes the real decision.
+//
+// TWO KINDS OF ANSWER:
+//   1. a GENERIC chart (count/bar/line/pie) built from a free-form filter + groupBy — David's
+//      original path, unchanged below.
+//   2. a NAMED REPORT (weekly report, heatmap, 90-day trend, campaigns table, score histogram) —
+//      the five wireframed variants. These take no filters, so the model only picks a name from
+//      the REPORTS whitelist and code does all the querying and maths.
+//
+// ORG ISOLATION (project_plan.md §5, story #12): indicators are a GLOBAL table shared by every
+// org, so every read here is narrowed to the indicators THIS analyst's org actually submitted.
+// Without that narrowing an analyst would be counting other orgs' links.
 import { chatJSON } from "../../services/llm.js";
+import { scoreBucket } from "../../services/verdict.js";
+import { listCampaigns } from "../campaigns/campaigns.service.js";
 
 // ── The whitelist: the ONLY fields/operators/values the analyst can query. ──
 // Each field maps to a real Indicator column and declares its type + allowed operators.
@@ -32,6 +45,39 @@ const BUCKET_RANGES = {
 // Chart types we can render (the client maps these to Recharts). Whitelisted too.
 const CHART_TYPES = ["bar", "line", "pie", "count"];
 
+// ── The NAMED REPORTS whitelist (the 5 wireframed variants) ──
+// Same idea as CHART_TYPES: the model may only name one of these keys. The chart type is
+// DERIVED here from the key — never taken from the model — so the two can't disagree.
+// Titles match the wireframes in client/src/assets/wireframes/Analyst/.
+const REPORTS = {
+  weekly:       { chart: "report",    title: "Weekly Threat Report" },
+  heatmap:      { chart: "heatmap",   title: "Submission Activity Heatmap" },
+  trend:        { chart: "trend",     title: "90-Day Threat Trend by Attack Type" },
+  campaigns:    { chart: "table",     title: "Active Threat Campaigns" },
+  distribution: { chart: "histogram", title: "Orbis Score Distribution" },
+};
+
+// The prompt chips on the Insights page are canned strings, so we can recognise the common
+// questions WITHOUT paying for a Claude call. Each report lists keyword sets: a question matches
+// when every word in any one set appears. Order matters — the first match wins.
+const REPORT_KEYWORDS = {
+  weekly:       [["weekly"], ["week", "report"]],
+  heatmap:      [["heatmap"], ["heat", "map"], ["when", "submitted"], ["most", "common", "time"]],
+  trend:        [["trend"], ["90", "day"], ["over", "time"], ["attack", "type"]],
+  campaigns:    [["campaign"]],
+  distribution: [["distribution"], ["histogram"], ["score", "spread"], ["score", "breakdown"]],
+};
+
+// Try to map a question straight to a named report (no LLM). Returns a validated spec or null.
+export const matchReport = (question) => {
+  const text = String(question ?? "").toLowerCase();
+  for (const [report, keywordSets] of Object.entries(REPORT_KEYWORDS)) {
+    const hit = keywordSets.some((set) => set.every((word) => text.includes(word)));
+    if (hit) return { report, chart: REPORTS[report].chart, title: REPORTS[report].title };
+  }
+  return null;
+};
+
 // Group-by dimensions the analyst can slice by (safe columns only).
 const GROUP_BY = {
   verdict:     "aiScore",     // bucketed into safe/review/dangerous
@@ -42,7 +88,17 @@ const GROUP_BY = {
 
 // The JSON contract we force the LLM to return. Kept tight so validation is simple.
 const SYSTEM = `You translate an analyst's plain-English question about a threat-history database
-into a STRICT JSON query spec. You do NOT write SQL. Reply with ONLY minified JSON:
+into a STRICT JSON query spec. You do NOT write SQL. Reply with ONLY minified JSON.
+
+If the question asks for one of these five standard reports, reply ONLY:
+{"report":"weekly|heatmap|trend|campaigns|distribution"}
+  weekly       = a weekly threat report / this week's summary
+  heatmap      = WHEN threats are submitted (day-of-week x time-of-day activity)
+  trend        = how attack types have trended over the last 90 days
+  campaigns    = a breakdown of active threat campaigns
+  distribution = the spread/distribution of safety scores
+
+Otherwise reply:
 {"chart":"bar|line|pie|count","groupBy":"verdict|status|reviewStatus|day|null",
 "filters":[{"field":"score|domainAge|blacklisted|status|reviewStatus|createdAt","op":"gte|lte|gt|lt|eq","value":<number|boolean|string>}],
 "verdictBucket":"safe|review|dangerous|null","title":"<short chart title>"}
@@ -54,6 +110,15 @@ question can't be expressed with these fields, reply {"unmappable":true}. No pro
 // null → caller returns the "try rephrasing" fallback. This is the security gate.
 export const validateSpec = (spec) => {
   if (!spec || typeof spec !== "object" || spec.unmappable) return null;
+
+  // A named report short-circuits everything: the key must be in REPORTS, and we take the chart
+  // type + title from OUR table, not from the model. Any filters/groupBy it sent are ignored.
+  if (spec.report != null) {
+    const report = REPORTS[spec.report];
+    if (!report) return null; // unknown report name → reject (same as an unknown chart type)
+    return { report: spec.report, chart: report.chart, title: report.title };
+  }
+
   if (!CHART_TYPES.includes(spec.chart)) return null;
 
   const groupBy = spec.groupBy && GROUP_BY[spec.groupBy] ? spec.groupBy : null;
@@ -92,13 +157,367 @@ const buildWhere = (spec) => {
   return where;
 };
 
-// Bucket a raw safety score into the verdict label (mirrors scoreBucket).
-const bucketOf = (score) => (score == null ? "review" : score >= 70 ? "safe" : score >= 35 ? "review" : "dangerous");
+// Bucket a raw safety score into the verdict label. Delegates to the ONE shared rubric in
+// services/verdict.js so Insights can never disagree with Reports or the dashboard about
+// what "dangerous" means (safe ≥70 · review ≥35 · else dangerous).
+const bucketOf = (score) => scoreBucket(score);
+
+// ── Org isolation ───────────────────────────────────────────────────────────────────────────
+// Indicators are GLOBAL (one row per URL, shared by every org), so "which indicators may this
+// analyst see?" = "which indicators did their org submit?". We look that up once and then narrow
+// every query with `id: { in: ids }`. Same shape as the analyst branch in history.routes.js.
+const orgIndicatorIds = async (prisma, orgId) => {
+  const rows = await prisma.submission.findMany({
+    where: { orgId },
+    select: { indicatorId: true },
+    distinct: ["indicatorId"],
+    take: MAX_ROWS,
+  });
+  return rows.map((r) => r.indicatorId);
+};
+
+// An "I looked, there's nothing here" answer. Used when the analyst has no org, or the org has
+// no submissions yet. Shape matches a real answer so the client renders its normal empty state
+// instead of erroring — and, crucially, we return this INSTEAD of running an unscoped query.
+const emptyResult = (spec) => {
+  if (spec.chart === "report") {
+    return {
+      data: { totals: { total: 0, dangerous: 0, suspicious: 0, safe: 0 }, daily: [], topThreats: [], findings: [] },
+      chartSpec: { type: "report", title: spec.title, empty: true },
+    };
+  }
+  if (spec.chart === "count") return { data: [{ label: "Total", value: 0 }], chartSpec: { type: "count", title: spec.title, empty: true } };
+  return { data: [], chartSpec: { type: spec.chart, title: spec.title, empty: true } };
+};
+
+// ── Small date + maths helpers (UTC, no external dep) ──
+// UTC everywhere, matching dashboard.service.js. The heatmap surfaces this in its subtitle so an
+// analyst in another timezone isn't misled by the hour labels.
+const startOfUtcDay = (daysBack = 0) => {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - daysBack);
+  return d;
+};
+
+// Percent change current-vs-previous. Same rubric as dashboard.service.js's trend() so the two
+// screens describe a rise the same way.
+const percentChange = (current, previous) => {
+  if (previous === 0) {
+    if (current === 0) return { pct: 0, direction: "flat" };
+    return { pct: 100, direction: "up" }; // grew from nothing
+  }
+  const change = ((current - previous) / previous) * 100;
+  return { pct: Math.round(Math.abs(change)), direction: change > 0 ? "up" : change < 0 ? "down" : "flat" };
+};
+
+// aiTags is a Json column, so it can be an array, a string, or null. Normalize defensively.
+const tagsOf = (indicator) => {
+  const raw = indicator?.aiTags;
+  if (Array.isArray(raw)) return raw.filter((t) => typeof t === "string" && t.trim());
+  if (typeof raw === "string" && raw.trim()) return [raw];
+  return [];
+};
+
+// The tag we treat as an indicator's "attack type" = its first tag. Seed data leads with the
+// category ("Credential phishing"), which is what the trend chart groups by.
+const attackTypeOf = (indicator) => tagsOf(indicator)[0] ?? "Uncategorized";
+
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// 8 three-hour columns — matches the wireframe's 12am/3am/6am/…/9pm headings.
+const SLOT_LABELS = ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"];
+const HEATMAP_DAYS = 30;   // "Past 30 days" per the wireframe subtitle
+const TREND_DAYS = 90;     // "90-Day Threat Trend"
+const TREND_SERIES = 4;    // wireframe legend shows 4 attack types
+const MAX_ROWS = 1000;     // safety cap on every read (matches the original take: 1000)
+
+// ── Report 1 · Submission Activity Heatmap (day-of-week × time-of-day) ──────────────────────
+// Counts the org's submissions in a 7×8 grid. Mon=0 (the wireframe starts the week on Monday)
+// and each slot is a 3-hour block. Returns every cell, including empty ones, so the client can
+// render a complete grid without inventing gaps.
+const buildHeatmap = async (prisma, spec, orgId) => {
+  const since = startOfUtcDay(HEATMAP_DAYS - 1);
+  const rows = await prisma.submission.findMany({
+    where: { orgId, createdAt: { gte: since } },
+    select: { createdAt: true },
+    take: MAX_ROWS,
+  });
+
+  // Pre-build all 56 cells at zero so the grid is always complete.
+  const grid = new Map();
+  for (let day = 0; day < 7; day++) {
+    for (let slot = 0; slot < SLOT_LABELS.length; slot++) grid.set(`${day}:${slot}`, 0);
+  }
+
+  for (const { createdAt } of rows) {
+    const d = new Date(createdAt);
+    const day = (d.getUTCDay() + 6) % 7;              // JS Sunday=0 → our Monday=0
+    const slot = Math.floor(d.getUTCHours() / 3);      // 0-23 → one of 8 blocks
+    const key = `${day}:${slot}`;
+    grid.set(key, (grid.get(key) ?? 0) + 1);
+  }
+
+  const data = [...grid.entries()].map(([key, value]) => {
+    const [day, slot] = key.split(":").map(Number);
+    return { day, slot, value };
+  });
+  const max = Math.max(0, ...data.map((c) => c.value));
+
+  return {
+    data,
+    chartSpec: {
+      type: "heatmap",
+      title: spec.title,
+      days: DAY_LABELS,
+      slots: SLOT_LABELS,
+      max,
+      subtitle: `Past ${HEATMAP_DAYS} days · times shown in UTC`,
+    },
+  };
+};
+
+// ── Report 2 · 90-Day Threat Trend by Attack Type ───────────────────────────────────────────
+// One line per attack type (the indicator's first aiTag), bucketed into weeks. We keep only the
+// busiest few types so the chart stays readable, and compute each one's first-half → second-half
+// change in code (no LLM writing numbers).
+const buildTrend = async (prisma, spec, orgId, indicatorIds) => {
+  const since = startOfUtcDay(TREND_DAYS - 1);
+  const rows = await prisma.submission.findMany({
+    where: { orgId, indicatorId: { in: indicatorIds }, createdAt: { gte: since } },
+    select: { createdAt: true, indicator: { select: { aiTags: true } } },
+    take: MAX_ROWS,
+  });
+
+  // Rank attack types by volume, keep the top few.
+  const volumeByType = new Map();
+  for (const r of rows) {
+    const type = attackTypeOf(r.indicator);
+    volumeByType.set(type, (volumeByType.get(type) ?? 0) + 1);
+  }
+  const series = [...volumeByType.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, TREND_SERIES)
+    .map(([type]) => type);
+
+  // 13 weekly buckets across 90 days. Each bucket starts with every series at 0 so Recharts
+  // draws a continuous line instead of breaking where a type had no submissions.
+  const WEEKS = Math.ceil(TREND_DAYS / 7);
+  const buckets = [];
+  for (let week = 0; week < WEEKS; week++) {
+    const start = new Date(since);
+    start.setUTCDate(start.getUTCDate() + week * 7);
+    const label = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][start.getUTCMonth()]} ${start.getUTCDate()}`;
+    const bucket = { label };
+    for (const type of series) bucket[type] = 0;
+    buckets.push(bucket);
+  }
+
+  for (const r of rows) {
+    const type = attackTypeOf(r.indicator);
+    if (!series.includes(type)) continue; // outside the top N — not plotted
+    const daysIn = Math.floor((new Date(r.createdAt) - since) / 86_400_000);
+    const week = Math.min(WEEKS - 1, Math.max(0, Math.floor(daysIn / 7)));
+    buckets[week][type] += 1;
+  }
+
+  // Per-series delta: second half of the window vs the first half.
+  const half = Math.floor(WEEKS / 2);
+  const deltas = series.map((type) => {
+    const first = buckets.slice(0, half).reduce((sum, b) => sum + b[type], 0);
+    const second = buckets.slice(half).reduce((sum, b) => sum + b[type], 0);
+    return { label: type, ...percentChange(second, first) };
+  });
+
+  return { data: buckets, chartSpec: { type: "trend", title: spec.title, series, deltas, subtitle: `Past ${TREND_DAYS} days` } };
+};
+
+// ── Report 3 · Active Threat Campaigns (table) ──────────────────────────────────────────────
+// Reuses listCampaigns() (the same helper GET /api/campaigns serves the triage queue from) so
+// the field names match what the queue already renders, then enriches each row with the average
+// safety score of its indicators. Status is derived from that average:
+//   dangerous → Active · review → Monitoring · safe → Contained
+const CAMPAIGN_STATUS = { dangerous: "Active", review: "Monitoring", safe: "Contained" };
+
+const buildCampaignTable = async (prisma, spec, orgId) => {
+  const campaigns = await listCampaigns(prisma, orgId);
+  if (campaigns.length === 0) {
+    return { data: [], chartSpec: { type: "table", title: spec.title, empty: true } };
+  }
+
+  // One query for every campaign's reviews + scores (avoids an N+1 across campaigns).
+  const reviews = await prisma.orgReview.findMany({
+    where: { orgId, campaignId: { in: campaigns.map((c) => c.id) } },
+    select: { campaignId: true, indicator: { select: { aiScore: true } } },
+    take: MAX_ROWS,
+  });
+
+  const scoresByCampaign = new Map();
+  for (const r of reviews) {
+    const score = r.indicator?.aiScore;
+    if (score == null) continue; // unscored indicators shouldn't drag the average
+    if (!scoresByCampaign.has(r.campaignId)) scoresByCampaign.set(r.campaignId, []);
+    scoresByCampaign.get(r.campaignId).push(score);
+  }
+
+  const data = campaigns.map((c) => {
+    const scores = scoresByCampaign.get(c.id) ?? [];
+    const avgScore = scores.length ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : null;
+    const band = bucketOf(avgScore);
+    return {
+      id: c.id,
+      name: c.name,
+      indicatorCount: c.indicatorCount,
+      reportCount: c.reportCount,
+      avgScore,
+      band,
+      status: CAMPAIGN_STATUS[band],
+      last_seen: c.last_seen,
+    };
+  });
+
+  // Most dangerous first (lowest safety score), so the analyst's eye lands on what matters.
+  data.sort((a, b) => (a.avgScore ?? 101) - (b.avgScore ?? 101));
+
+  return {
+    data,
+    chartSpec: { type: "table", title: spec.title, subtitle: `${data.length} campaign${data.length === 1 ? "" : "s"} detected` },
+  };
+};
+
+// ── Report 4 · Orbis Score Distribution (histogram) ─────────────────────────────────────────
+// Ten buckets of 10 points across the 0-100 safety score, each coloured by its verdict band.
+// NOTE: the band edges come from scoreBucket() (safe ≥70 · review ≥35), NOT the wireframe's
+// 0-33/34-66/67-100 labels — the code is the single source of truth the rest of the app shares.
+const buildHistogram = async (prisma, spec, orgId, indicatorIds) => {
+  const rows = await prisma.indicator.findMany({
+    where: { id: { in: indicatorIds }, aiScore: { not: null } },
+    select: { aiScore: true },
+    take: MAX_ROWS,
+  });
+
+  const buckets = Array.from({ length: 10 }, (_, i) => ({
+    label: `${i * 10}–${i * 10 + 9}`,
+    value: 0,
+    band: bucketOf(i * 10 + 5), // colour by the middle of the bucket
+  }));
+  for (const { aiScore } of rows) {
+    const index = Math.min(9, Math.max(0, Math.floor(aiScore / 10)));
+    buckets[index].value += 1;
+  }
+
+  // Legend rows: count + share per verdict band, with the REAL score edges.
+  const total = rows.length;
+  const bandCounts = { dangerous: 0, review: 0, safe: 0 };
+  for (const { aiScore } of rows) bandCounts[bucketOf(aiScore)] += 1;
+  const share = (n) => (total === 0 ? 0 : Math.round((n / total) * 1000) / 10); // 1 decimal
+  const bands = [
+    { band: "dangerous", label: "Dangerous (0–34)",  count: bandCounts.dangerous, pct: share(bandCounts.dangerous) },
+    { band: "review",    label: "Suspicious (35–69)", count: bandCounts.review,    pct: share(bandCounts.review) },
+    { band: "safe",      label: "Safe (70–100)",      count: bandCounts.safe,      pct: share(bandCounts.safe) },
+  ];
+
+  return {
+    data: buckets,
+    chartSpec: { type: "histogram", title: spec.title, bands, subtitle: `${total} scored submission${total === 1 ? "" : "s"}` },
+  };
+};
+
+// ── Report 5 · Weekly Threat Report ─────────────────────────────────────────────────────────
+// The composite card: totals, a stacked day-by-verdict bar chart, the week's worst threats, and
+// findings. The findings text is COMPUTED (percentChange above), never LLM-written, so the
+// numbers in the sentence always match the numbers in the chart.
+const buildWeeklyReport = async (prisma, spec, orgId) => {
+  const weekStart = startOfUtcDay(6);      // 7 days incl. today
+  const prevWeekStart = startOfUtcDay(13); // the 7 days before that, for the comparison
+
+  const rows = await prisma.submission.findMany({
+    where: { orgId, createdAt: { gte: prevWeekStart } },
+    select: {
+      indicatorId: true,
+      createdAt: true,
+      indicator: { select: { aiTitle: true, domain: true, aiScore: true, aiTags: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: MAX_ROWS,
+  });
+
+  const thisWeek = rows.filter((r) => r.createdAt >= weekStart);
+  const lastWeek = rows.filter((r) => r.createdAt < weekStart);
+
+  // Totals by band (BAND_KEY maps our internal "review" band to the UI's "suspicious" wording).
+  const BAND_KEY = { dangerous: "dangerous", review: "suspicious", safe: "safe" };
+  const totals = { total: thisWeek.length, dangerous: 0, suspicious: 0, safe: 0 };
+  for (const r of thisWeek) totals[BAND_KEY[bucketOf(r.indicator?.aiScore)]] += 1;
+
+  // One stacked bar per day, Mon-first, including quiet days.
+  const daily = [];
+  for (let i = 6; i >= 0; i--) {
+    const dayStart = startOfUtcDay(i);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+    const ofDay = thisWeek.filter((r) => r.createdAt >= dayStart && r.createdAt < dayEnd);
+    const bar = { label: DAY_LABELS[(dayStart.getUTCDay() + 6) % 7].slice(0, 1), dangerous: 0, suspicious: 0, safe: 0 };
+    for (const r of ofDay) bar[BAND_KEY[bucketOf(r.indicator?.aiScore)]] += 1;
+    daily.push(bar);
+  }
+
+  // Top threats = this week's most dangerous unique indicators (lowest safety score first).
+  const seen = new Set();
+  const unique = [];
+  for (const r of thisWeek) {
+    if (seen.has(r.indicatorId)) continue;
+    seen.add(r.indicatorId);
+    unique.push(r);
+  }
+  const topThreats = unique
+    .sort((a, b) => (a.indicator?.aiScore ?? 101) - (b.indicator?.aiScore ?? 101))
+    .slice(0, 4)
+    .map((r) => ({
+      indicatorId: r.indicatorId,
+      title: r.indicator?.aiTitle ?? r.indicator?.domain ?? "Unknown link",
+      tag: attackTypeOf(r.indicator),
+      aiScore: r.indicator?.aiScore ?? null,
+      band: bucketOf(r.indicator?.aiScore),
+    }));
+
+  // Findings, computed from the two windows.
+  const volume = percentChange(thisWeek.length, lastWeek.length);
+  const dangerousLastWeek = lastWeek.filter((r) => bucketOf(r.indicator?.aiScore) === "dangerous").length;
+  const dangerous = percentChange(totals.dangerous, dangerousLastWeek);
+  const findings = [
+    { text: `${volume.pct}% ${volume.direction === "down" ? "fewer" : "more"} submissions than last week`, ...volume },
+    { text: `${dangerous.pct}% ${dangerous.direction === "down" ? "drop" : "increase"} in dangerous links vs last week`, ...dangerous },
+  ];
+  if (topThreats.length > 0) {
+    findings.push({ text: `Most common attack type: ${topThreats[0].tag}`, direction: "flat", pct: 0 });
+  }
+
+  const range = `${weekStart.toISOString().slice(0, 10)} → ${new Date().toISOString().slice(0, 10)}`;
+  return { data: { totals, daily, topThreats, findings }, chartSpec: { type: "report", title: spec.title, subtitle: range } };
+};
+
+// Dispatch a validated named report to its builder.
+const buildReport = (prisma, spec, orgId, indicatorIds) => {
+  if (spec.report === "heatmap") return buildHeatmap(prisma, spec, orgId);
+  if (spec.report === "trend") return buildTrend(prisma, spec, orgId, indicatorIds);
+  if (spec.report === "campaigns") return buildCampaignTable(prisma, spec, orgId);
+  if (spec.report === "distribution") return buildHistogram(prisma, spec, orgId, indicatorIds);
+  return buildWeeklyReport(prisma, spec, orgId);
+};
 
 // Run the validated query and shape the result into { data, chartSpec } for the client.
-// `prisma` is passed in (same testable pattern as the other services).
-export const runNlpQuery = async (prisma, spec) => {
-  const where = buildWhere(spec);
+// `prisma` is passed in (same testable pattern as the other services). `orgId` is the caller's
+// org — every read is narrowed to it (story #12); null/0 → an empty result, never a global read.
+export const runNlpQuery = async (prisma, spec, orgId) => {
+  if (!orgId) return emptyResult(spec);
+
+  const indicatorIds = await orgIndicatorIds(prisma, orgId);
+  if (indicatorIds.length === 0) return emptyResult(spec);
+
+  // The five named reports each have their own builder.
+  if (spec.report) return buildReport(prisma, spec, orgId, indicatorIds);
+
+  const where = { ...buildWhere(spec), id: { in: indicatorIds } };
   const rows = await prisma.indicator.findMany({
     where,
     select: { aiScore: true, status: true, globalReviewStatus: true, createdAt: true, domain: true },
@@ -124,12 +543,18 @@ export const runNlpQuery = async (prisma, spec) => {
 };
 
 // Top-level: question → validated spec → data. Returns { data, chartSpec } or a fallback.
-export const answerNlpQuery = async (prisma, question) => {
+// `orgId` is the caller's org, threaded through so every query stays org-scoped.
+export const answerNlpQuery = async (prisma, question, orgId) => {
+  // Fast path: the 5 named reports are recognisable from keywords, so the common questions
+  // (including every prompt chip on the Insights page) skip the Claude call entirely.
+  const matched = matchReport(question);
+  if (matched) return runNlpQuery(prisma, matched, orgId);
+
   const raw = await chatJSON({ system: SYSTEM, user: `Question: ${question}\n\nReturn the JSON spec.`, maxTokens: 300, temperature: 0 });
   const spec = validateSpec(raw);
   if (!spec) {
     return { fallback: "I couldn't turn that into a chart. Try rephrasing — e.g. \"how many dangerous links this week?\" or \"break down checks by verdict\"." };
   }
-  const result = await runNlpQuery(prisma, spec);
+  const result = await runNlpQuery(prisma, spec, orgId);
   return result;
 };
