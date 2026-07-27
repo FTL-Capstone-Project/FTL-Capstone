@@ -21,7 +21,9 @@ import { registeredDomain } from "../../services/typosquat.js";
 import { escalateSubmission } from "../submissions/submissions.service.js";
 import { createNotification } from "../notifications/notifications.service.js";
 import { generateSenderReport } from "../askOrbo/senderReport.js";
-import { analyzeEmailBody, combineEmailReports, combineLinkReports } from "../webhooks/emailAnalysis.js";
+import { buildNextSteps } from "../../services/nextSteps.js";
+import { effectiveKind } from "../history/history.service.js";
+import { analyzeEmailBody, combineEmailReports, combineLinkReports, buildLegsRow } from "../webhooks/emailAnalysis.js";
 import { extractEmailAddress, extractOriginalSender, extractOriginalSenderParts, extractHtmlLinks, parseAuthResults } from "../webhooks/inboundEmail.js";
 
 // In dev-stub auth mode, req.user is a fake { id: 1, ... } that may not exist in the DB,
@@ -286,9 +288,17 @@ const runEmailPipeline = async (indicatorId, { from, subject, body, html, header
     // back-compat, else none. Each scan is best-effort and tagged with its URL for the per-link rows.
     const urls = (Array.isArray(rawUrls) && rawUrls.length) ? rawUrls : (hasLink && rawUrl ? [rawUrl] : []);
 
+    // The sender leg used to get ONLY the subject line as context, so it would confidently report
+    // "no urgent requests or suspicious content in the context" about an email whose BODY was full of
+    // urgency — landing that row right next to the body leg's opposite finding. Give it the subject
+    // AND the body so both legs describe the same message. generateSenderReport already fences this
+    // as untrusted input and caps it at 1000 chars, so a longer string needs no extra guarding.
+    const senderContext = [subject && `Subject: ${subject}`, body && `Message: ${body}`]
+      .filter(Boolean).join("\n");
+
     // Sender + body + all links, each best-effort (a failed leg is simply absent from the combine).
     const [sender, bodyReport, linkScans] = await Promise.all([
-      generateSenderReport({ email: senderToJudge, context: subject || "" })
+      generateSenderReport({ email: senderToJudge, context: senderContext })
         .catch((e) => { console.warn("⚠ email sender leg failed:", e.message); return null; }),
       analyzeEmailBody({ from, subject, body, senderIdentity, htmlLinks, auth, replyTo }),
       Promise.all(urls.map((url) =>
@@ -300,6 +310,13 @@ const runEmailPipeline = async (indicatorId, { from, subject, body, html, header
 
     const link = combineLinkReports(linkScans); // one link leg from N scans (worst-of + per-link rows)
     const report = combineEmailReports({ sender, body: bodyReport, link });
+    // Keep the per-leg breakdown instead of discarding it: the combine is a worst-of across three
+    // legs, so "63/100" alone doesn't say whether the sender, the wording, or a link caused it —
+    // exactly what an analyst needs to know before writing an authoritative verdict. It rides along
+    // as one tagged row inside aiReasons (see buildLegsRow) so no schema change is needed.
+    const reasons = report.legs
+      ? [...(report.evidence ?? []), buildLegsRow(report.legs)]
+      : (report.evidence ?? []);
     await prisma.indicator.update({
       where: { id: indicatorId },
       data: {
@@ -309,7 +326,7 @@ const runEmailPipeline = async (indicatorId, { from, subject, body, html, header
         aiConfidence: report.ai_confidence,
         aiTitle: report.title ?? null,
         aiTags: report.tags ?? [],
-        aiReasons: report.evidence ?? [],
+        aiReasons: reasons,
         // Fold in the worst link's sandbox screenshot when the email had a scanned link.
         screenshotUrl: link?.screenshot_url ?? null,
       },
@@ -493,6 +510,18 @@ const runPipeline = async (indicatorId, rawUrl, contextText) => {
 // Defined above its first use below because arrow consts are not hoisted.
 const asArray = (v) => (Array.isArray(v) ? v : null);
 
+// The forwarded-email pipeline stores its per-leg score breakdown as one tagged entry INSIDE the
+// aiReasons array (see buildLegsRow — the column is read as an array in four places, so it couldn't
+// become an object). Pull that entry out here so the client gets `legs` as its own field and the row
+// never renders as a "why" bullet. Rows saved before this change have no legs entry → legs is null.
+const splitLegsRow = (rows) => {
+  const legsRow = rows.find((row) => row?.kind === "legs" && row.legs);
+  return {
+    evidence: rows.filter((row) => row?.kind !== "legs"),
+    legs: legsRow?.legs ?? null,
+  };
+};
+
 // Shape one indicator for the client poll (GET /api/indicators/:id), merging the
 // caller's org_review if any. Field names match what the client + Reports card expect.
 //
@@ -532,8 +561,18 @@ export const readIndicatorForClient = async (indicatorId, user) => {
   if (user?.orgId != null) {
     const r = await prisma.orgReview.findUnique({
       where: { orgId_indicatorId: { orgId: user.orgId, indicatorId } },
+      include: { reviewedByUser: true }, // to ATTRIBUTE the verdict ("Priya S. · Jul 8") in the modal
     });
-    if (r) review = { human_score: r.humanScore, human_verdict: r.humanVerdict, review_status: r.reviewStatus };
+    // reviewed_by / reviewed_at let the modal show WHO decided this and WHEN. Without them the
+    // analyst's verdict rendered as an anonymous, undated claim — so it read as another opinion
+    // rather than the authoritative one. Both were already on OrgReview; we just weren't reading them.
+    if (r) review = {
+      human_score: r.humanScore,
+      human_verdict: r.humanVerdict,
+      review_status: r.reviewStatus,
+      reviewed_by: r.reviewedByUser?.name ?? null,
+      reviewed_at: r.updatedAt,
+    };
   }
 
   // IDOR guard (SEC-MED): indicators are GLOBAL threat-intel, so the verdict/score/tags are
@@ -550,7 +589,10 @@ export const readIndicatorForClient = async (indicatorId, user) => {
         ...(user?.orgId != null ? [{ orgId: user.orgId }] : []),
       ],
     },
-    select: { id: true },
+    // `source` ("web" | "email") rides along on the guard's existing query — no extra round-trip.
+    // The advice below needs it: a forwarded email can be reported as phishing in your mail app,
+    // a pasted URL can't, and telling someone to do the wrong one reads as generic filler.
+    select: { id: true, source: true },
   });
   const ownsDetail = Boolean(submittedByCaller);
 
@@ -577,6 +619,20 @@ export const readIndicatorForClient = async (indicatorId, user) => {
     : false;
 
   const bucket = scoreBucket(indicator.aiScore);
+  // Forwarded-email rows carry a per-leg score breakdown folded into aiReasons; lift it out so it
+  // becomes its own `legs` field instead of an odd-looking evidence bullet. URL rows have none.
+  const { evidence, legs } = splitLegsRow(asArray(indicator.aiReasons) ?? []);
+
+  // "What to do" — deterministic advice, computed here so the modal and the emailed report (which
+  // is handed exactly this object) can never give different answers. Keyed off the EFFECTIVE
+  // bucket, so once an analyst overrides Orbo the advice follows the badge the user actually sees
+  // rather than the AI score it replaced. `signal` keys come from the email body rows
+  // (phishingSignals.js SIGNAL_CATALOG); URL rows have none and fall back to bucket-only advice.
+  const nextSteps = buildNextSteps({
+    bucket: effectiveKind(indicator.aiScore, review && { humanScore: review.human_score, reviewStatus: review.review_status }),
+    signals: evidence.map((row) => row?.signal).filter(Boolean),
+    source: submittedByCaller?.source ?? "web",
+  });
   return {
     ...base,
     ai_score: indicator.aiScore,
@@ -587,7 +643,13 @@ export const readIndicatorForClient = async (indicatorId, user) => {
     title: indicator.aiTitle || deriveTitle(indicator, bucket),
     description: indicator.aiDescription || firstSentence(indicator.aiVerdict),
     tags: asArray(indicator.aiTags) ?? deriveTags(indicator, bucket),
-    evidence: asArray(indicator.aiReasons) ?? [],
+    evidence,
+    // Short, ordered actions the user can take. Computed, never model-written, so the advice can't
+    // contradict the score.
+    next_steps: nextSteps,
+    // Which leg drove the verdict (sender / message wording / links), for analyst triage. Null for
+    // URL checks and for email rows scored before this was persisted.
+    legs,
     domain: indicator.domain,
     // Landing URL + host: caller-sensitive (can be an internal hostname/token) → submitters only.
     // The boolean "did it leave the domain" is safe to share (no hostname leak).
@@ -749,7 +811,8 @@ export const getIndicatorContext = async (indicatorId) => {
     title: i.aiTitle || deriveTitle(i, scoreBucket(i.aiScore)),
     verdict: i.aiVerdict, score: i.aiScore, confidence: i.aiConfidence,
     tags: asArray(i.aiTags) ?? deriveTags(i, scoreBucket(i.aiScore)),
-    reasons: (asArray(i.aiReasons) ?? []).map((r) => r.text),
+    // Skip the stored per-leg breakdown row — it's analyst plumbing, not a reason to quote at a user.
+    reasons: (asArray(i.aiReasons) ?? []).filter((r) => r?.kind !== "legs").map((r) => r.text),
     domain: i.domain,
     // The true destination, so "Ask Orbo more" answers with fact instead of "even if it redirected".
     final_host: i.finalHost,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { scorePhishingSignals, buildImageReport, SIGNAL_CATALOG } from "./phishingSignals.js";
+import { scorePhishingSignals, scoreEmailBodySignals, buildImageReport, SIGNAL_CATALOG } from "./phishingSignals.js";
 
 describe("scorePhishingSignals — deterministic image scoring", () => {
   it("a clean image (no signals) can't be called safe — capped at review", () => {
@@ -95,5 +95,63 @@ describe("buildImageReport — VerdictCard-shaped output", () => {
     const r = buildImageReport({ signals: ["urgency"], modelTitle: long });
     expect(r.title).not.toBe(long);
     expect(r.title.length).toBeLessThanOrEqual(60);
+  });
+});
+
+// The fix for the real report that scored 74/100 and still showed a green "Looks safe" badge over the
+// words "may not be trustworthy". The whole 26-point deduction came from urgency + generic_greeting on
+// an email whose sender and links were clean. A deadline and a "Dear customer" are the normal texture
+// of legitimate mail, so UNCORROBORATED they now cost soloWeight instead of full weight.
+//
+// The safety constraint these tests exist to protect: the last false-positive audit found 44 FPs and
+// ZERO false-negatives, so this recalibration must not create one. It can't, by construction — the
+// discount only applies when NO hard signal fired, and every phishing shape carries at least one.
+describe("scoreEmailBodySignals — soft signals only discount when nothing corroborates them", () => {
+  it("the reported email (deadline + generic greeting, nothing else) now reads clearly safe", () => {
+    // Was 100 - 18 - 8 = 74: technically "safe" but only just, and the rows read as a warning.
+    expect(scoreEmailBodySignals(["urgency", "generic_greeting"]).rawScore).toBe(91);
+  });
+
+  it("a lone soft signal barely moves the score", () => {
+    expect(scoreEmailBodySignals(["urgency"]).rawScore).toBe(94);          // was 82
+    expect(scoreEmailBodySignals(["generic_greeting"]).rawScore).toBe(97); // was 92
+  });
+
+  it("NO FALSE NEGATIVES: every phishing shape scores exactly as before the recalibration", () => {
+    // Each of these carries a hard signal, so the soft ones snap back to full weight. These numbers
+    // are the pre-change values — if any of them moves, the discount has leaked into phishing.
+    const unchanged = [
+      [["credentials", "urgency"], 47],
+      [["credentials", "urgency", "generic_greeting"], 39],
+      [["sender_mismatch", "urgency"], 57],
+      [["link_mismatch", "urgency", "generic_greeting"], 44],
+      [["credentials", "link_mismatch", "urgency"], 17],
+      [["payment", "urgency"], 49],
+      [["attachment", "urgency"], 67],
+      [["grammar", "urgency", "generic_greeting"], 64],
+    ];
+    for (const [signals, expected] of unchanged) {
+      expect(scoreEmailBodySignals(signals).rawScore, signals.join("+")).toBe(expected);
+    }
+  });
+
+  it("a crown-jewel ask alone is enough to restore the full soft weight", () => {
+    // "urgent + confirm your password" SHOULD compound — that's the actual phishing pattern.
+    const withCrown = scoreEmailBodySignals(["credentials", "urgency"]);
+    const soloUrgencyCost = 100 - scoreEmailBodySignals(["urgency"]).rawScore;
+    expect(100 - withCrown.rawScore).toBe(SIGNAL_CATALOG.credentials.weight + SIGNAL_CATALOG.urgency.weight);
+    expect(soloUrgencyCost).toBeLessThan(SIGNAL_CATALOG.urgency.weight);
+  });
+
+  it("carries each row's real cost so the report can show WHY the score is what it is", () => {
+    const solo = scoreEmailBodySignals(["urgency", "generic_greeting"]);
+    expect(solo.evidence.map((row) => row.weight)).toEqual([6, 3]);
+    // Same signals, now corroborated → the rows report their full cost.
+    const corroborated = scoreEmailBodySignals(["credentials", "urgency", "generic_greeting"]);
+    expect(corroborated.evidence.find((row) => row.text.match(/urgency/i)).weight).toBe(18);
+  });
+
+  it("leaves the IMAGE path on full weights (a screenshot has no sender or link to fall back on)", () => {
+    expect(scorePhishingSignals(["urgency", "generic_greeting"]).score).toBe(74);
   });
 });

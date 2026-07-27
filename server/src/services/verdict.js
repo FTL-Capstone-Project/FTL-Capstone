@@ -157,13 +157,14 @@ export const generateVerdict = async ({ evidence = [], blacklist_hit, blacklist_
       // "Dangerous" tag. cleanTags now drops severity-word tags that disagree with the bucket.
       tags: cleanTags(ai.tags, raw, scoreBucket(score), blacklist_source),
       // Always exactly 3 "why Orbo flagged this" reasons (Claude's, padded from evidence if needed).
-      evidence_summary: buildReasons(ai.reasons, evidence, score),
+      // rubric.hits lets each row show what that signal actually cost the score.
+      evidence_summary: buildReasons(ai.reasons, evidence, score, rubric.hits),
     };
   } catch (e) {
     console.warn("⚠ Claude verdict failed, using rule-based fallback:", e.message);
     // Same rubric score/confidence as the happy path — only the WORDS are rule-written,
     // so the number is identical whether Claude answered or not.
-    return ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal, anchoredScore, confidence: rubric.confidence });
+    return ruleBasedVerdict({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal, anchoredScore, confidence: rubric.confidence, hits: rubric.hits });
   }
 }
 
@@ -250,7 +251,7 @@ const claudeVerdict = async ({ evidence, blacklist_hit, blacklist_source, domain
 // ── Rule-based fallback (also used before a key exists / on Claude errors) ──
 // The NUMBER is the same deterministic rubric score as the happy path (passed in as
 // anchoredScore); this function only writes rule-based WORDS around it.
-const ruleBasedVerdict = ({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal, anchoredScore, confidence }) => {
+const ruleBasedVerdict = ({ evidence, blacklist_hit, blacklist_source, domain_age_days, raw, hardSignal, anchoredScore, confidence, hits = [] }) => {
   const score = anchoredScore;
 
   const bucket = scoreBucket(score);
@@ -272,7 +273,7 @@ const ruleBasedVerdict = ({ evidence, blacklist_hit, blacklist_source, domain_ag
     title: fallbackTitle(raw, blacklist_source, score),
     description: firstSentence(ai_verdict),
     tags: cleanTags(null, raw, bucket, blacklist_source),
-    evidence_summary: buildReasons(null, evidence, score),
+    evidence_summary: buildReasons(null, evidence, score, hits),
   };
 }
 
@@ -284,10 +285,46 @@ export const scoreBucket = (score) => {
   return "dangerous";
 }
 
-// Return the "why" rows [{text, severity}] — AT LEAST 3 always. For a SAFE link, 3 reassuring
-// reasons is enough. For a suspicious/dangerous link, keep MORE (up to 6) so the user sees the
-// full case against clicking. Prefer the model's reasons, fall back to scan evidence, then pad.
-const buildReasons = (modelReasons, evidence, score) => {
+// The rubric fires on CONDITIONS (`hits`), but the sentences the user reads are written somewhere
+// else (urlscan.js / urlShape.js / typosquat.js). This table is the join between them: it tells us
+// which row a triggered hit is explaining, so the row can show what that signal actually cost
+// ("Domain first seen 3 days ago  −35 pts") instead of a bar whose length means nothing. A hit we
+// can't match to a row simply shows no chip — we never invent a cost for a sentence.
+const HIT_ROW_PATTERNS = {
+  blacklistHit: /known[- ]bad|blacklist|safe browsing/i,
+  urlscanMalicious: /flagged this page as malicious/i,
+  domainUnder7Days: /domain first seen/i,
+  domainUnder30Days: /domain first seen/i,
+  domainUnder90Days: /domain first seen/i,
+  credFormOnNewDomain: /password|credential|login form/i,
+  redirectsOffDomain: /redirects to a different domain/i,
+  brandImpersonation: /impersonat|deceptive web address|lookalike of/i,
+  insecureHttp: /insecure http|no encryption/i,
+  rawIpHost: /raw IP address/i,
+  unusualPort: /unusual network port/i,
+};
+
+// Stamp the real danger weight onto each row we can match to a triggered hit. Two guards keep the
+// number honest: each hit is consumed at most once (two "Domain first seen" rows can't both claim
+// the same 35 points), and a reassurance row (severity "safe") never gets a cost — it didn't take
+// anything off the score.
+const withHitWeights = (rows, hits) => {
+  const unclaimed = Array.isArray(hits) ? [...hits] : [];
+  if (!unclaimed.length) return rows;
+  return rows.map((row) => {
+    if (row.severity === "safe") return row;
+    const i = unclaimed.findIndex((hit) => HIT_ROW_PATTERNS[hit.label]?.test(row.text));
+    if (i === -1) return row;
+    const [hit] = unclaimed.splice(i, 1);
+    return { ...row, weight: hit.weight };
+  });
+}
+
+// Return the "why" rows [{text, severity, weight?}] — AT LEAST 3 always. For a SAFE link, 3
+// reassuring reasons is enough. For a suspicious/dangerous link, keep MORE (up to 6) so the user
+// sees the full case against clicking. Prefer the model's reasons, fall back to scan evidence, then
+// pad. `hits` is the rubric's {label, weight} list; pass it and the rows carry their real cost.
+const buildReasons = (modelReasons, evidence, score, hits = []) => {
   const bucket = scoreBucket(score);
   // A reason can't be scarier than the overall verdict: on a SAFE link, a "dangerous" red-dot
   // reason contradicts the badge. Clamp each reason's severity to the bucket's ceiling.
@@ -321,7 +358,10 @@ const buildReasons = (modelReasons, evidence, score) => {
     if (rows.length >= 3) break;
     if (!rows.some((r) => r.text === p)) rows.push({ text: p, severity: isSafe ? "safe" : "review" });
   }
-  return rows.slice(0, cap);
+  // Stamp costs LAST — after the severity clamp — so a row clamped down to "safe" on a safe-scored
+  // link can't also claim it took points off. The padded generic lines match no hit pattern, so
+  // they stay chip-less, which is right: they're context, not measured signals.
+  return withHitWeights(rows.slice(0, cap), hits);
 }
 
 // ── helpers for the Reports-card fields (title / description / tags) ──

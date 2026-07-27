@@ -28,17 +28,24 @@ const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
 // legit "log into your account by Friday" was tanking to DANGER because urgency+greeting were
 // treated as evidence of phishing. Only a HARD signal (a second crown-jewel, impersonation,
 // attachment, grammar) or a suspicious sender/link should escalate a lone crown-jewel.
+// `soloWeight` is the SMALLER weight a soft signal carries when it is the ONLY kind of thing we
+// found — i.e. nothing hard corroborates it (email path only, see scoreEmailBodySignals). A real
+// email with a deadline and "Dear customer" was scoring 100-18-8 = 74: technically "safe", but
+// only just, and the two rows made the report read as a warning. A deadline is not fraud; it's a
+// deadline. Uncorroborated, these two signals should nudge the score, not decide it. When ANY hard
+// signal is present they snap back to full `weight`, because "urgent + asks for your password" is
+// exactly the pattern that SHOULD compound.
 export const SIGNAL_CATALOG = {
   credentials:        { weight: 35, severity: "dangerous", crownJewel: true,  text: "Asks you to enter or confirm a password / login credentials" },
   sensitive_info:     { weight: 35, severity: "dangerous", crownJewel: true,  text: "Requests sensitive personal data (SSN, full card number, bank details, or a 2FA/one-time code)" },
   payment:            { weight: 33, severity: "dangerous", crownJewel: true,  text: "Pressures you to send money, wire funds, buy gift cards, or pay a fee" },
   link_mismatch:      { weight: 30, severity: "dangerous", crownJewel: false, text: "A link or button hides its real destination (the visible text doesn't match where it actually goes)" },
   sender_mismatch:    { weight: 25, severity: "dangerous", crownJewel: false, text: "The sender's display name / claimed brand doesn't match the actual email address" },
-  urgency:            { weight: 18, severity: "review",    crownJewel: false, soft: true, text: "Uses urgency or threats to rush you (account suspension, deadline, legal action)" },
+  urgency:            { weight: 18, severity: "review",    crownJewel: false, soft: true, soloWeight: 6, text: "Uses urgency or threats to rush you (account suspension, deadline, legal action)" },
   attachment:         { weight: 15, severity: "review",    crownJewel: false, text: "Urges you to open an attachment or enable content/macros" },
   brand_impersonation:{ weight: 12, severity: "review",    crownJewel: false, text: "Claims to be a well-known brand in a context that doesn't add up" },
   grammar:            { weight: 10, severity: "review",    crownJewel: false, text: "Contains notable spelling or grammar mistakes unusual for the real sender" },
-  generic_greeting:   { weight: 8,  severity: "review",    crownJewel: false, soft: true, text: "Uses a generic greeting (\"Dear customer\") instead of your name" },
+  generic_greeting:   { weight: 8,  severity: "review",    crownJewel: false, soft: true, soloWeight: 3, text: "Uses a generic greeting (\"Dear customer\") instead of your name" },
 };
 
 // An image we found NO red flags in still can't be called "Safe": we couldn't scan a link or
@@ -94,10 +101,32 @@ export const scoreEmailBodySignals = (signalTypes = []) => {
     const key = String(t || "").trim().toLowerCase();
     if (SIGNAL_CATALOG[key] && !seen.has(key)) { seen.add(key); known.push(key); }
   }
-  const evidence = known.map((k) => ({ text: SIGNAL_CATALOG[k].text, severity: SIGNAL_CATALOG[k].severity }));
-  const danger = known.reduce((sum, k) => sum + SIGNAL_CATALOG[k].weight, 0);
   const crownCount = known.filter((k) => SIGNAL_CATALOG[k].crownJewel).length;
   const hardOtherCount = known.filter((k) => !SIGNAL_CATALOG[k].crownJewel && !SIGNAL_CATALOG[k].soft).length;
+
+  // Is there anything HARD backing up the soft signals? A crown-jewel ask or a non-soft red flag
+  // both count. If not, the soft signals drop to their `soloWeight` — see the catalog comment: a
+  // deadline + "Dear customer" on otherwise-clean mail is the texture of legitimate email, not
+  // evidence of a scam, and it was quietly setting the whole email's score via worst-of.
+  const corroborated = crownCount > 0 || hardOtherCount > 0;
+  const weightOf = (key) => {
+    const entry = SIGNAL_CATALOG[key];
+    return entry.soft && !corroborated ? (entry.soloWeight ?? entry.weight) : entry.weight;
+  };
+
+  // Carry each row's actual cost so the report can show WHY the score is what it is (a "-6 pts"
+  // row) instead of a bar whose length means nothing. Only this path has real weights.
+  // `signal` carries the CATALOG KEY through to the client too. Without it, only the prose
+  // survives, so anything downstream wanting to act on "this email had a sender mismatch" would
+  // have to regex the sentence — fragile, and it silently breaks the moment we reword a `text`.
+  // Both fields are additive inside the existing aiReasons JSON, so no migration.
+  const evidence = known.map((k) => ({
+    signal: k,
+    text: SIGNAL_CATALOG[k].text,
+    severity: SIGNAL_CATALOG[k].severity,
+    weight: weightOf(k),
+  }));
+  const danger = known.reduce((sum, k) => sum + weightOf(k), 0);
   // Raw weighted score only — NO crown-jewel ceiling, NO no-signal cap. Those decisions move to combine.
   return { rawScore: clamp(100 - danger), evidence, known, crownCount, hardOtherCount, count: known.length };
 };

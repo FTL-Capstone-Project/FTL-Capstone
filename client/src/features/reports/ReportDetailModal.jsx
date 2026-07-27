@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import { X, ShieldCheck, Clock, FileCheck2 } from "lucide-react";
+import { X, ShieldCheck, Clock, FileCheck2, UserCheck, Layers } from "lucide-react";
 import { api } from "../../lib/api.js";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import StatusChip from "./StatusChip.jsx";
+import WhyThisScore from "./WhyThisScore.jsx";
 
 // The four authoritative review states an analyst can set. `value` must match the
 // backend exactly (OrgReview.reviewStatus + the PATCH /review route's whitelist) and
@@ -37,12 +38,45 @@ const scoreKind = (score) => {
   return "dangerous";
 }
 
+// THE ANALYST WINS. Which verdict the modal HEADER wears: the analyst's once they've
+// recorded one, otherwise Orbo's. Mirrors the server's effectiveKind() in
+// history.service.js — we recompute it here (instead of just reading report.kind) so the
+// badge flips the instant an analyst saves, without waiting for the list to refetch.
+// "pending review" / "investigating" are work-in-progress, NOT a verdict.
+const effectiveKind = (aiScore, review) => {
+  if (review?.human_score != null) return scoreKind(review.human_score);
+  if (review?.review_status === "confirmed malicious") return "dangerous";
+  if (review?.review_status === "confirmed safe") return "safe";
+  return scoreKind(aiScore);
+}
+
+// Human-readable date for the review attribution line ("Priya S. · Jul 8, 2026").
+const formatReviewDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
 const KIND_COLOR = { safe: "var(--safe)", review: "var(--review)", dangerous: "var(--danger)" };
 
-// Threat-vector bar fill by severity. We have a severity per reason (not a measured %),
-// so the bar length is QUALITATIVE (higher = more severe) — we deliberately show no
-// fabricated percentage number. Reflects the wireframe's bar look, honestly.
-const SEVERITY_FILL = { dangerous: 92, review: 58, safe: 28 };
+// The two statuses that mean an analyst reached a CONCLUSION (vs. still working on it).
+const CONFIRMED_STATUSES = ["confirmed malicious", "confirmed safe"];
+
+// The three legs of a forwarded-email score, in the order they're analyzed. Plain-English labels:
+// the API calls the middle one "body", but "message" is what a reader understands.
+const LEG_LABELS = [["sender", "sender"], ["body", "message"], ["link", "links"]];
+
+// How sure the scoring was, in plain English. `ai_confidence` is deterministic — it counts how
+// many INDEPENDENT signals agreed (see computeSafetyScore in verdict.js), so it is NOT the
+// model's opinion of itself. Worth showing because "91, and only one weak signal informed that"
+// is a genuinely different situation from "91, corroborated three ways", and the number alone
+// hides the difference.
+const CONFIDENCE_NOTE = {
+  high: "Several independent checks agreed on this.",
+  medium: "A few checks informed this score.",
+  low: "Only limited signals were available — treat this as a weak read.",
+};
 
 const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClose }) => {
   const { getToken } = useAuth();
@@ -121,7 +155,7 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
   const url = report.url || detail?.domain || "";
   const screenshotUrl = detail?.screenshot_url ?? report.screenshot_url ?? null;
   const aiScore = detail?.ai_score ?? report.ai_score ?? null;
-  const kind = scoreKind(aiScore);
+  const orboKind = scoreKind(aiScore); // colors the "Orbo score" card only — always Orbo's own read
   // Full safety-analysis text: prefer the fuller ai_verdict, fall back to the card's description.
   const analysis = detail?.ai_verdict || report.description || null;
   // Threat vectors: prefer the fetched detail; fall back to the list row's evidence if
@@ -129,13 +163,32 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
   const evidence = Array.isArray(detail?.evidence) ? detail.evidence
     : Array.isArray(report.evidence) ? report.evidence
     : [];
+  // Per-leg score breakdown (forwarded emails only — see buildLegsRow on the server). Null for URL
+  // checks and for email reports scored before we started persisting it.
+  const legs = detail?.legs ?? null;
+  // What to DO about this result. Server-computed (see services/nextSteps.js) so this modal and the
+  // emailed report always give the same advice, and so the advice can't contradict the score.
+  const nextSteps = Array.isArray(detail?.next_steps) ? detail.next_steps : [];
+  // How many independent signals agreed on the score ("low" | "medium" | "high").
+  const confidence = detail?.ai_confidence ?? null;
 
-  // Analyst review data. Name comes from the LIST row (detail omits it); score/status
-  // prefer whichever source has them.
-  const analystName = report.review?.reviewed_by ?? null;
-  const analystScore = report.review?.human_score ?? detail?.review?.human_score ?? null;
-  const reviewStatus = detail?.review?.review_status ?? report.review?.review_status ?? "pending review";
+  // Analyst review data. The detail fetch is the FRESHER source (it re-reads after a save),
+  // so it wins; the list row is the fallback that makes the modal render instantly on open.
+  const review = detail?.review ?? report.review ?? null;
+  const analystName = review?.reviewed_by ?? report.review?.reviewed_by ?? null;
+  const analystScore = review?.human_score ?? null;
+  const analystNotes = review?.human_verdict ?? null;
+  const reviewedAt = formatReviewDate(review?.reviewed_at);
+  const reviewStatus = review?.review_status ?? "pending review";
   const analystHasScored = analystScore != null;
+  // "Decided" is broader than "scored": closing something confirmed-malicious IS a verdict even with
+  // no number typed. Drives whether we say "Awaiting analyst review" or "Closed by <name>".
+  const analystDecided = analystHasScored || CONFIRMED_STATUSES.includes(reviewStatus);
+  // The verdict the header badge shows — the analyst's if they've decided, else Orbo's.
+  const kind = effectiveKind(aiScore, review);
+  // Did a human actually overturn Orbo? Drives the "Analyst overrode Orbo" note so the
+  // reader understands why the badge disagrees with the big Orbo number beside it.
+  const analystOverrode = kind !== orboKind;
 
   // Refetch the indicator so the modal re-renders with the new human score + StatusChip.
   const refetchDetail = async () => {
@@ -246,8 +299,10 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
         {/* ── Score card(s): the persona difference lives here ── */}
         <div style={{ display: "grid", gap: 12, marginBottom: 24,
           gridTemplateColumns: isMember ? "1fr 1fr" : "1fr" }}>
-          {/* Orbo (AI) score — shown to everyone */}
-          <ScoreCard label="Orbo score" score={aiScore} kind={kind} subtitle="Scored by Orbo (AI)" />
+          {/* Orbo (AI) score — shown to everyone. Keeps ORBO's own color even when an analyst
+              overrode it, so you can see the two verdicts differ instead of them silently agreeing. */}
+          <ScoreCard label="Orbo score" score={aiScore} kind={orboKind} subtitle="Scored by Orbo (AI)"
+            note={confidence ? CONFIDENCE_NOTE[confidence] ?? null : null} />
 
           {/* Analyst score — ORG MEMBERS ONLY */}
           {isMember && (
@@ -266,19 +321,45 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
                 }
               />
             ) : (
-              // Waiting-for-analyst state (story #7: closure hasn't happened yet).
+              // No analyst NUMBER yet. Two very different situations, and showing "Awaiting analyst
+              // review" for both was its own contradiction: an analyst can close something
+              // "confirmed malicious" WITHOUT typing a score, and this card would still say we were
+              // waiting on them — right below a header badge already carrying their verdict.
               <div style={cardStyle}>
                 <div style={cardLabelStyle}>Analyst score</div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
                   padding: "8px 0" }}>
-                  <Clock size={26} color="var(--text-dim)" />
+                  {analystDecided
+                    ? <UserCheck size={26} color="var(--text-dim)" />
+                    : <Clock size={26} color="var(--text-dim)" />}
                   <StatusChip status={reviewStatus} />
                 </div>
-                <div style={cardSubtitleStyle}>Awaiting analyst review</div>
+                <div style={cardSubtitleStyle}>
+                  {analystDecided
+                    ? `Closed by ${analystName ?? "an analyst"}`
+                    : "Awaiting analyst review"}
+                </div>
               </div>
             )
           )}
         </div>
+
+        {/* Per-leg breakdown — ANALYSTS ONLY. An email score is a worst-of across three legs, so
+            "63/100" alone doesn't say whether the sender, the wording, or a link caused it. That's
+            the first thing an analyst needs before writing an authoritative verdict. Only forwarded
+            emails have legs; URL checks and older rows show nothing. */}
+        {isAnalyst && legs && (
+          <p style={{ margin: "-12px 0 24px", fontSize: "0.82em", color: "var(--text-dim)",
+            display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <Layers size={14} />
+            <span>Score breakdown:</span>
+            {LEG_LABELS.map(([key, label]) => (
+              <span key={key}>
+                {label} <strong style={{ color: "var(--text)" }}>{legs[key] ?? "n/a"}</strong>
+              </span>
+            ))}
+          </p>
+        )}
 
         {/* ── Safety analysis ── */}
         {analysis && (
@@ -288,16 +369,9 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
           </section>
         )}
 
-        {/* ── Threat vectors (real evidence rows; bar length reflects severity) ── */}
-        {evidence.length > 0 ? (
-          <section>
-            <h3 style={sectionHeadingStyle}>Threat vectors</h3>
-            <div style={{ display: "grid", gap: 14 }}>
-              {evidence.map((item, i) => (
-                <ThreatVector key={i} text={item.text} severity={item.severity} />
-              ))}
-            </div>
-          </section>
+        {/* ── Why this score: ranked concerns, collapsed reassurances, what to do ── */}
+        {evidence.length > 0 || nextSteps.length > 0 ? (
+          <WhyThisScore evidence={evidence} nextSteps={nextSteps} />
         ) : loading ? (
           <p style={{ color: "var(--text-dim)", fontSize: "0.88em" }}>Loading details…</p>
         ) : fetchFailed ? (
@@ -398,13 +472,71 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
             </form>
           </section>
         )}
+
+        {/* ── The analyst's verdict, ATTRIBUTED (wireframe: the signed block at the bottom) ──
+            The whole point of analyst review is that a HUMAN closed the loop — so their decision
+            has to be visible and signed. Before this, `human_verdict` was written to the DB and
+            read back only to prefill the analyst's own form; the person who reported the link never
+            saw a word of it. Sits last (per the wireframe) so an analyst reads it as "what was
+            decided before" right under the form they're about to edit.
+            Renders only once an analyst actually DECIDED — a score, notes, or a confirmed status.
+            A bare "pending review" is a ticket being opened, not a verdict. */}
+        {review && (analystHasScored || analystNotes || CONFIRMED_STATUSES.includes(reviewStatus)) && (
+          <section
+            // Named, not headed: the wireframe shows no heading over this block (the attribution
+            // row IS the label), but screen-reader users still need to know what the region is.
+            aria-label="Analyst verdict"
+            style={{ marginTop: 20, border: "1px solid var(--border)", borderRadius: 12,
+              padding: 16, background: "var(--canvas)" }}
+          >
+            {/* Attribution row: who decided, when (left) · what they decided (right) */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span aria-hidden style={{ width: 26, height: 26, borderRadius: "50%",
+                background: "var(--primary)", color: "#fff", fontSize: "0.75em", fontWeight: 700,
+                display: "grid", placeItems: "center", flexShrink: 0 }}>
+                {(analystName ?? "A").trim().charAt(0).toUpperCase()}
+              </span>
+              <span style={{ fontSize: "0.9em", color: "var(--navy)", fontWeight: 700 }}>
+                {analystName ?? "Security analyst"}
+              </span>
+              {reviewedAt && (
+                <span style={{ fontSize: "0.82em", color: "var(--text-dim)" }}>· {reviewedAt}</span>
+              )}
+              {/* marginLeft:auto pushes the verdict pill to the right edge, as in the wireframe. */}
+              <span style={{ marginLeft: "auto" }}><StatusChip status={reviewStatus} /></span>
+            </div>
+
+            {/* The analyst's own words. pre-wrap so their line breaks survive. */}
+            {analystNotes && (
+              <p style={{ margin: "12px 0 0", color: "var(--text)", lineHeight: 1.6,
+                fontSize: "0.92em", whiteSpace: "pre-wrap" }}>
+                {analystNotes}
+              </p>
+            )}
+
+            {/* Explain the disagreement instead of leaving two clashing verdicts on screen. */}
+            {analystOverrode && (
+              <p style={{ margin: "12px 0 0", color: "var(--text-dim)", fontSize: "0.82em",
+                display: "flex", alignItems: "center", gap: 6 }}>
+                <UserCheck size={14} />
+                This human review overrides Orbo's automated score.
+              </p>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );
 }
 
-// One "Orbo score" / "Analyst score" card: big number /100 + a subtitle line.
-const ScoreCard = ({ label, score, kind, subtitle }) => {
+// One "Orbo score" / "Analyst score" card: big number /100 + a track + a subtitle line.
+//
+// The track is the ONE genuinely quantitative mark in the report: the score really is a ratio
+// out of 100, so a bar whose fill is score/100 is honest. (The old per-row "threat vector" bars
+// were not — they were three fixed lengths pretending to be measurements.) It also gives the
+// number a shape you can compare at a glance between the Orbo and Analyst cards.
+const ScoreCard = ({ label, score, kind, subtitle, note }) => {
+  const hasScore = typeof score === "number";
   return (
     <div style={cardStyle}>
       <div style={cardLabelStyle}>{label}</div>
@@ -414,21 +546,22 @@ const ScoreCard = ({ label, score, kind, subtitle }) => {
         </span>
         <span style={{ fontSize: "1em", color: "var(--text-dim)" }}>/100</span>
       </div>
+      {hasScore && (
+        // role="img" + a label: a screen reader gets "Safety score 91 out of 100" instead of
+        // silence, since the bar itself is a pair of empty divs.
+        <div role="img" aria-label={`${label}: ${score} out of 100`}
+          style={{ height: 6, borderRadius: 999, background: "var(--border)", overflow: "hidden",
+            margin: "0 0 10px" }}>
+          <div style={{ width: `${Math.max(0, Math.min(100, score))}%`, height: "100%",
+            borderRadius: 999, background: KIND_COLOR[kind] }} />
+        </div>
+      )}
       <div style={cardSubtitleStyle}>{subtitle}</div>
-    </div>
-  );
-}
-
-// A single threat-vector row: label + severity-colored bar (qualitative, no fake %).
-const ThreatVector = ({ text, severity }) => {
-  const color = KIND_COLOR[severity] ?? "var(--primary)";
-  const fill = SEVERITY_FILL[severity] ?? 50;
-  return (
-    <div>
-      <div style={{ fontSize: "0.92em", color: "var(--text)", marginBottom: 6 }}>{text}</div>
-      <div style={{ height: 8, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
-        <div style={{ width: `${fill}%`, height: "100%", borderRadius: 999, background: color }} />
-      </div>
+      {/* Confidence caveat — only when we have one. Keeps a high score from reading as a
+          guarantee when few signals actually agreed on it. */}
+      {note && (
+        <div style={{ ...cardSubtitleStyle, marginTop: 6, fontStyle: "italic" }}>{note}</div>
+      )}
     </div>
   );
 }

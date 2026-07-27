@@ -136,7 +136,11 @@ const ReportCard = ({ report, showReviewStatus = false, onOpen,
         {/* Orbo (AI) score — shown to everyone. Individuals see it as "SAFETY SCORE";
             org members see the dual layout, so it's labeled "ORBO SCORE". */}
         <div style={scoreLabelStyle}>{showReviewStatus ? "ORBO SCORE" : "SAFETY SCORE"}</div>
-        <div style={{ fontSize: "1.5em", fontWeight: 800, color: `var(--${scoreColor(report.kind)})` }}>
+        {/* Colored from ORBO's OWN score, not report.kind — because `kind` now follows the
+            analyst when one has overridden Orbo (see effectiveKind in history.service.js).
+            Painting Orbo's number with the analyst's color would hide the disagreement; the
+            badge above carries the authoritative verdict, this number stays Orbo's read. */}
+        <div style={{ fontSize: "1.5em", fontWeight: 800, color: `var(--${scoreColor(scoreToKind(report.ai_score))})` }}>
           {report.ai_score ?? "—"}<span style={{ fontSize: "0.5em", color: "var(--text-dim)" }}>/100</span>
         </div>
 
@@ -152,6 +156,17 @@ const ReportCard = ({ report, showReviewStatus = false, onOpen,
                   {report.review.human_score}<span style={{ fontSize: "0.5em", color: "var(--text-dim)" }}>/100</span>
                 </div>
                 <div style={scoredByStyle}>Scored by {report.review.reviewed_by ?? "an analyst"}</div>
+              </>
+            ) : isConfirmed(report.review.review_status) ? (
+              // An analyst can CLOSE something ("confirmed malicious") without typing a number. This
+              // column used to read "Pending · Scored by Orbo (AI)" for that case — under a badge
+              // already showing the analyst's verdict. Say what actually happened instead.
+              <>
+                <div style={{ fontSize: "1.05em", fontWeight: 800,
+                  color: `var(--${scoreColor(report.kind)})` }}>Reviewed</div>
+                <div style={scoredByStyle}>
+                  Closed by {report.review.reviewed_by ?? "an analyst"}
+                </div>
               </>
             ) : (
               <>
@@ -263,6 +278,10 @@ const scoreColor = (kind) => {
   if (kind === "dangerous") return "danger";
   return "review";
 }
+
+// Did an analyst reach a CONCLUSION? "pending review" / "investigating" are work-in-progress.
+// Mirrors CONFIRMED_STATUSES in history.service.js (server) and ReportDetailModal.jsx.
+const isConfirmed = (status) => status === "confirmed malicious" || status === "confirmed safe";
 
 // Turn a 0-100 SAFETY score into a verdict "kind" so the analyst number is colored
 // the same way as the Orbo number. Mirrors scoreToKind in history.service.js.

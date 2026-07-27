@@ -4,10 +4,14 @@ import { VERDICT_STYLES } from "../config/constants.js";
 // `kind` = "safe" | "review" | "dangerous".
 const StatusBadge = ({ kind = "review" }) => {
   const s = VERDICT_STYLES[kind] ?? VERDICT_STYLES.review;
+  const Icon = s.Icon;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: s.bg,
       color: s.color, fontWeight: 700, fontSize: "0.8em", padding: "3px 10px", borderRadius: 999 }}>
-      <span aria-hidden>{s.icon}</span> {s.label}
+      {/* aria-hidden: the label right next to it already says the verdict, so announcing the
+          icon too would read it twice ("warning Suspicious"). */}
+      <Icon size={14} aria-hidden />
+      {s.label}
     </span>
   );
 }

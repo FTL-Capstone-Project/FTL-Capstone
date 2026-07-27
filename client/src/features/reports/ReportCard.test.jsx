@@ -78,3 +78,47 @@ describe("ReportCard row-actions menu", () => {
     expect(screen.queryByRole("menuitem", { name: /delete/i })).not.toBeInTheDocument();
   });
 });
+
+// The card must never contradict itself. `kind` (the badge) now follows the ANALYST when a human has
+// overridden Orbo (effectiveKind in history.service.js), so the score column has to keep up: the Orbo
+// number stays Orbo's color, and a closed-without-a-score review says "Reviewed", not "Pending".
+describe("ReportCard — Orbo's number vs the analyst's verdict", () => {
+  // Orbo says 91 (safe); the analyst confirmed it malicious, so the server sends kind:"dangerous".
+  const overridden = {
+    ...baseReport,
+    ai_score: 91,
+    kind: "dangerous",
+    review: { human_score: 8, review_status: "confirmed malicious", reviewed_by: "Priya S." },
+  };
+
+  it("the badge shows the analyst's verdict while the Orbo number keeps Orbo's own color", () => {
+    render(<ReportCard report={overridden} showReviewStatus={true} onOpen={() => {}} />);
+    // The badge (from report.kind) is the analyst's verdict.
+    expect(screen.getByText("Dangerous")).toBeInTheDocument();
+    // Orbo's 91 is colored SAFE — painting it red would hide that the two verdicts disagree.
+    const orboNumber = screen.getByText("91");
+    expect(orboNumber).toHaveStyle({ color: "var(--safe)" });
+  });
+
+  it("a review CLOSED with no score typed reads 'Reviewed', not 'Pending'", () => {
+    const closedNoScore = {
+      ...overridden,
+      review: { human_score: null, review_status: "confirmed malicious", reviewed_by: "Priya S." },
+    };
+    render(<ReportCard report={closedNoScore} showReviewStatus={true} onOpen={() => {}} />);
+    // The bug: "Pending · Scored by Orbo (AI)" under a badge already saying Dangerous.
+    expect(screen.queryByText("Pending")).not.toBeInTheDocument();
+    expect(screen.getByText("Reviewed")).toBeInTheDocument();
+    expect(screen.getByText(/Closed by Priya S\./)).toBeInTheDocument();
+  });
+
+  it("a genuinely un-reviewed item still reads 'Pending' (work-in-progress is not a verdict)", () => {
+    const stillWorking = {
+      ...baseReport,
+      review: { human_score: null, review_status: "investigating", reviewed_by: "Priya S." },
+    };
+    render(<ReportCard report={stillWorking} showReviewStatus={true} onOpen={() => {}} />);
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.queryByText("Reviewed")).not.toBeInTheDocument();
+  });
+});

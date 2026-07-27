@@ -92,3 +92,158 @@ describe("ReportDetailModal — analyst verdict form", () => {
     expect(apiPatch).not.toHaveBeenCalled();
   });
 });
+
+// The closure loop's payoff: an analyst writes an authoritative verdict, and the person who
+// reported the link SEES it — signed and dated. Before this, `human_verdict` was saved to the
+// DB and read back only to prefill the analyst's own form; the reporter never saw a word of it,
+// and the header badge still showed Orbo's guess even after a human overruled it.
+describe("ReportDetailModal — the analyst's verdict is visible and authoritative", () => {
+  // Orbo called this SAFE (91); an analyst then confirmed it malicious with a score of 8.
+  const overriddenReport = {
+    indicator_id: 11,
+    title: "Vendor invoice update",
+    url: "vendor-invoices.example",
+    ai_score: 91,
+    description: "Looks like a routine invoice notice.",
+    review: {
+      human_score: 8,
+      human_verdict: "Sender domain registered 3 days ago. Confirmed BEC attempt.",
+      review_status: "confirmed malicious",
+      reviewed_by: "Priya S.",
+      reviewed_at: "2026-07-08T10:00:00.000Z",
+    },
+  };
+
+  it("renders the analyst's notes, name and date (previously saved but never shown)", async () => {
+    apiGet.mockResolvedValue({
+      status: "done", ai_score: 91, evidence: [], review: overriddenReport.review,
+    });
+    render(<ReportDetailModal report={overriddenReport} isMember={true} onClose={() => {}} />);
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+
+    // Scope to the verdict block: "Priya S." also appears in the Analyst score card's
+    // "Scored by" line, so an unscoped query legitimately matches twice.
+    const block = screen.getByRole("region", { name: "Analyst verdict" });
+    expect(block).toHaveTextContent(/Confirmed BEC attempt/);
+    expect(block).toHaveTextContent("Priya S.");
+    expect(block).toHaveTextContent(/Jul 8, 2026/);
+    // The closure status is spelled out, not left as color alone.
+    expect(block).toHaveTextContent("Confirmed malicious");
+  });
+
+  it("the HEADER badge follows the analyst, not Orbo (regression: green 'Safe' on confirmed-malicious)", async () => {
+    apiGet.mockResolvedValue({
+      status: "done", ai_score: 91, evidence: [], review: overriddenReport.review,
+    });
+    render(<ReportDetailModal report={overriddenReport} isMember={true} onClose={() => {}} />);
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+
+    // The heading carries the verdict badge. Orbo said 91/safe; the analyst says dangerous.
+    const heading = screen.getByRole("heading", { name: /Vendor invoice update/ });
+    expect(heading).toHaveTextContent("Dangerous");
+    expect(heading).not.toHaveTextContent("Safe");
+    // ...and the disagreement is explained rather than left as two clashing verdicts.
+    expect(screen.getByText(/overrides Orbo's automated score/i)).toBeInTheDocument();
+  });
+
+  it("a confirmed status with no score typed still counts as the verdict", async () => {
+    const statusOnly = {
+      ...overriddenReport,
+      review: { human_score: null, human_verdict: null, review_status: "confirmed malicious",
+        reviewed_by: "Priya S.", reviewed_at: "2026-07-08T10:00:00.000Z" },
+    };
+    apiGet.mockResolvedValue({ status: "done", ai_score: 91, evidence: [], review: statusOnly.review });
+    render(<ReportDetailModal report={statusOnly} isMember={true} onClose={() => {}} />);
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+
+    expect(screen.getByRole("heading", { name: /Vendor invoice update/ })).toHaveTextContent("Dangerous");
+  });
+
+  it("work-in-progress review → NO verdict block, and Orbo's verdict still stands", async () => {
+    // Opening a triage ticket is not a conclusion. If this overrode, merely starting to
+    // investigate would blank out the only verdict the reporter has.
+    const pending = {
+      ...overriddenReport,
+      review: { human_score: null, human_verdict: null, review_status: "investigating",
+        reviewed_by: "Priya S.", reviewed_at: "2026-07-08T10:00:00.000Z" },
+    };
+    apiGet.mockResolvedValue({ status: "done", ai_score: 91, evidence: [], review: pending.review });
+    render(<ReportDetailModal report={pending} isMember={true} onClose={() => {}} />);
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+
+    expect(screen.queryByRole("region", { name: "Analyst verdict" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Vendor invoice update/ })).toHaveTextContent("Safe");
+  });
+
+  it("a review CLOSED with no score typed doesn't claim we're still 'awaiting' the analyst", async () => {
+    const closedNoScore = {
+      ...overriddenReport,
+      review: { human_score: null, human_verdict: "Confirmed by hand.", review_status: "confirmed malicious",
+        reviewed_by: "Priya S.", reviewed_at: "2026-07-08T10:00:00.000Z" },
+    };
+    apiGet.mockResolvedValue({ status: "done", ai_score: 91, evidence: [], review: closedNoScore.review });
+    render(<ReportDetailModal report={closedNoScore} isMember={true} onClose={() => {}} />);
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+
+    expect(screen.queryByText("Awaiting analyst review")).not.toBeInTheDocument();
+    expect(screen.getByText(/Closed by Priya S\./)).toBeInTheDocument();
+  });
+
+  it("still says 'Awaiting analyst review' when nobody has actually decided", async () => {
+    const pending = {
+      ...overriddenReport,
+      review: { human_score: null, human_verdict: null, review_status: "pending review",
+        reviewed_by: null, reviewed_at: null },
+    };
+    apiGet.mockResolvedValue({ status: "done", ai_score: 91, evidence: [], review: pending.review });
+    render(<ReportDetailModal report={pending} isMember={true} onClose={() => {}} />);
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+
+    expect(screen.getByText("Awaiting analyst review")).toBeInTheDocument();
+  });
+
+  it("individual with no review at all → no verdict block, badge is Orbo's", async () => {
+    render(<ReportDetailModal report={report} isMember={false} onClose={() => {}} />);
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+
+    expect(screen.queryByRole("region", { name: "Analyst verdict" })).not.toBeInTheDocument();
+    // report.ai_score is 22 → dangerous, straight from Orbo.
+    expect(screen.getByRole("heading", { name: /Fake PayPal/ })).toHaveTextContent("Dangerous");
+  });
+});
+
+// An email score is a worst-of across three legs (sender trust / message wording / link scans), so the
+// combined number alone doesn't say what caused it. Analysts need the decomposition before writing an
+// authoritative verdict; regular users don't (it's plumbing, and it isn't actionable for them).
+describe("ReportDetailModal — per-leg score breakdown (analysts only)", () => {
+  const emailReport = { indicator_id: 12, title: "Forwarded email", url: "mail", ai_score: 63, review: null };
+  const withLegs = { status: "done", ai_score: 63, evidence: [], review: null,
+    legs: { sender: 70, body: 63, link: null } };
+
+  it("shows the breakdown to an analyst, with 'n/a' for a leg that didn't run", async () => {
+    apiGet.mockResolvedValue(withLegs);
+    render(<ReportDetailModal report={emailReport} isMember={true} isAnalyst={true} onClose={() => {}} />);
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+
+    const line = screen.getByText(/Score breakdown/).closest("p");
+    expect(line).toHaveTextContent("sender 70");
+    expect(line).toHaveTextContent("message 63");
+    expect(line).toHaveTextContent("links n/a"); // the email had no links — not "0", which reads as danger
+  });
+
+  it("does NOT show it to a non-analyst member", async () => {
+    apiGet.mockResolvedValue(withLegs);
+    render(<ReportDetailModal report={emailReport} isMember={true} isAnalyst={false} onClose={() => {}} />);
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+
+    expect(screen.queryByText(/Score breakdown/)).not.toBeInTheDocument();
+  });
+
+  it("a URL check (no legs) shows nothing, even for an analyst", async () => {
+    apiGet.mockResolvedValue({ status: "done", ai_score: 63, evidence: [], review: null, legs: null });
+    render(<ReportDetailModal report={emailReport} isMember={true} isAnalyst={true} onClose={() => {}} />);
+    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+
+    expect(screen.queryByText(/Score breakdown/)).not.toBeInTheDocument();
+  });
+});

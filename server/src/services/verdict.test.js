@@ -196,6 +196,58 @@ describe("generateVerdict — reputation trust floor", () => {
   });
 });
 
+// The "why this score" panel shows what each signal COST ("−35 pts"). Those numbers come from the
+// rubric's own hits, so a row can never claim a cost the score didn't actually pay.
+describe("generateVerdict — evidence rows carry their real cost", () => {
+  beforeEach(() => llm.chatJSON.mockClear());
+
+  it("stamps the rubric weight on the row that explains the triggered signal", async () => {
+    // malicious urlscan (55) + a 3-day-old domain (35) → rubric 10, so the verdict stays risky and
+    // the row keeps its "dangerous" severity. DANGER_WEIGHTS.domainUnder7Days = 35 is the cost.
+    const v = await generateVerdict({
+      ...base,
+      raw: { malicious: true },
+      domain_age_days: 3,
+      evidence: [{ text: "Domain first seen 3 days ago", severity: "dangerous" }],
+    });
+    const ageRow = v.evidence_summary.find((r) => /domain first seen/i.test(r.text));
+    expect(ageRow?.weight).toBe(35);
+  });
+
+  it("leaves rows we can't tie to a triggered signal with no cost at all", async () => {
+    // The model's freeform sentence matches no hit pattern → no fabricated number.
+    llm.chatJSON.mockResolvedValueOnce({
+      score: 60, title: "Odd page", description: "Hmm.", verdict: "Something feels off here.",
+      tags: ["Review"], reasons: [{ text: "The page design looks hastily made", severity: "review" }],
+      confidence: "low",
+    });
+    const v = await generateVerdict({ ...base, raw: { malicious: true } });
+    const modelRow = v.evidence_summary.find((r) => /hastily made/i.test(r.text));
+    expect(modelRow).toBeTruthy();
+    expect(modelRow.weight).toBeUndefined();
+  });
+
+  it("never puts a cost on a reassurance row", async () => {
+    const v = await generateVerdict({ ...base, domain_age_days: 4000, evidence: [{ text: "No obvious red flags found", severity: "safe" }] });
+    expect(v.evidence_summary.every((r) => r.severity !== "safe" || r.weight === undefined)).toBe(true);
+  });
+
+  it("spends each triggered signal once, so two similar rows can't both claim it", async () => {
+    // Both rows match the domain-age pattern, but only ONE domainUnder7Days hit fired.
+    const v = await generateVerdict({
+      ...base,
+      raw: { malicious: true },
+      domain_age_days: 3,
+      evidence: [
+        { text: "Domain first seen 3 days ago", severity: "dangerous" },
+        { text: "Domain first seen very recently (registrar record)", severity: "dangerous" },
+      ],
+    });
+    const weighted = v.evidence_summary.filter((r) => /domain first seen/i.test(r.text) && r.weight != null);
+    expect(weighted).toHaveLength(1);
+  });
+});
+
 // SEC-MED: prompt-injection via contextText can't poison the global verdict. Even with the
 // mocked model "complying" (returning score 95), the deterministic rubric owns the number.
 describe("generateVerdict — injection resistance", () => {

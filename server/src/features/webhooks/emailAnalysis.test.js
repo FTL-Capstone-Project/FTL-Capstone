@@ -19,6 +19,8 @@ const {
   detectReplyToMismatch,
   crownCeilingApplies,
   reconcileLegScores,
+  reconcileEvidence,
+  buildLegsRow,
 } = await import("./emailAnalysis.js");
 
 // Helper: a body leg the way analyzeEmailBody produces it — raw score + signalMeta (drives the
@@ -117,8 +119,10 @@ describe("analyzeEmailBody", () => {
     // A SAFE marketing email — the model hallucinates the two unverifiable flags + a real one.
     chatJSON.mockResolvedValue({ signals: ["link_mismatch", "sender_mismatch", "urgency"], verdict: "Marketing reminder.", title: "Reminder" });
     const report = await analyzeEmailBody({ from: "x@y.com", subject: "reminder", body: "don't forget your appointment" });
-    // Only 'urgency' (weight 18) should score → 100 - 18 = 82, NOT tanked to ~20 by the phantom flags.
-    expect(report.ai_score).toBe(82);
+    // Only 'urgency' should score, NOT tanked to ~20 by the phantom flags. And because the phantom
+    // hard flags were dropped, nothing CORROBORATES the lone soft signal — so urgency costs its
+    // soloWeight (6), not its full 18: 100 - 6 = 94. A legit reminder with a deadline reads safe.
+    expect(report.ai_score).toBe(94);
     // The dropped flags must not appear in the evidence rows either.
     const texts = report.evidence.map((e) => e.text).join(" | ");
     expect(texts).not.toMatch(/hides its real destination|display name/i);
@@ -453,5 +457,155 @@ describe("combineEmailReports — reputation floor keeps 0 false-negatives", () 
       sender: leg(70), body: bodyLeg(65, { crownCount: 1, hardOtherCount: 0, count: 1 }), link: leg(40),
     });
     expect(r.ai_score).toBeLessThan(35);
+  });
+});
+
+// The other half of the "74/100 but the words say don't trust it" bug. Even with the score fixed, the
+// three legs each wrote their rows and headline against THEIR OWN score, before reconciliation — so a
+// leg's alarmed sentence could sit under a green badge, two legs could contradict each other, and two
+// links on one host rendered as two identical rows. The URL path has always clamped rows to the badge
+// (buildReasons in verdict.js); these tests give the email path the same guarantee.
+describe("reconcileEvidence — rows can never contradict the badge", () => {
+  it("clamps a scary row down to the badge on a safe score", () => {
+    const rows = reconcileEvidence([
+      { text: "Something alarming", severity: "dangerous" },
+      { text: "Domain matches the real company", severity: "safe" },
+    ], 91);
+    expect(rows.every((row) => row.severity === "safe")).toBe(true);
+  });
+
+  it("clamps to 'review' in the review band, but never RAISES a safe row", () => {
+    const rows = reconcileEvidence([
+      { text: "Alarming", severity: "dangerous" },
+      { text: "Reassuring", severity: "safe" },
+    ], 50);
+    expect(rows.find((row) => row.text === "Alarming").severity).toBe("review");
+    expect(rows.find((row) => row.text === "Reassuring").severity).toBe("safe");
+  });
+
+  it("leaves rows alone on a dangerous score (nothing to clamp)", () => {
+    const rows = reconcileEvidence([{ text: "Asks for your password", severity: "dangerous" }], 12);
+    expect(rows[0].severity).toBe("dangerous");
+  });
+
+  it("dedupes the same finding reported by two different legs", () => {
+    const rows = reconcileEvidence([
+      { text: "Uses urgency to rush you", severity: "review" },
+      { text: "uses urgency to rush you", severity: "review" }, // same row, different casing
+    ], 50);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("ranks worst-first, and by real cost within a severity", () => {
+    const rows = reconcileEvidence([
+      { text: "cheap concern", severity: "review", weight: 3 },
+      { text: "reassurance", severity: "safe" },
+      { text: "expensive concern", severity: "review", weight: 18 },
+    ], 50);
+    expect(rows.map((row) => row.text)).toEqual(["expensive concern", "cheap concern", "reassurance"]);
+  });
+
+  it("drops empty rows instead of rendering a blank bullet", () => {
+    expect(reconcileEvidence([{ text: "", severity: "review" }, null], 50)).toEqual([]);
+  });
+});
+
+describe("combineEmailReports — the headline must match the badge", () => {
+  it("does NOT reuse an alarmed leg's sentence when the final score lands safe", () => {
+    // This is the exact reported shape: the body leg wrote "may not be trustworthy" about its own
+    // marginal score, but sender + links are clean so the email reconciles to the safe band.
+    const r = combineEmailReports({
+      sender: leg(95),
+      body: bodyLeg(74, { crownCount: 0, hardOtherCount: 0, count: 2 }, {
+        ai_verdict: "This email raises some red flags and may not be trustworthy.",
+      }),
+      link: leg(92),
+    });
+    expect(r.ai_score).toBeGreaterThanOrEqual(70);
+    // The alarmed sentence is gone, replaced by one written from the final (safe) bucket. Note the
+    // replacement legitimately contains "red flags" in the NEGATED sense ("no scam red flags"), so
+    // assert on the leg's actual claim rather than the bare phrase.
+    expect(r.ai_verdict).not.toMatch(/raises some red flags|may not be trustworthy/i);
+    expect(r.ai_verdict).toMatch(/no scam red flags/i);
+  });
+
+  it("KEEPS the leading leg's own words when it already agrees with the final badge", () => {
+    const r = combineEmailReports({
+      sender: leg(10, { ai_verdict: "This sender is impersonating PayPal." }),
+      body: bodyLeg(100, { crownCount: 0, hardOtherCount: 0, count: 0 }),
+    });
+    expect(r.ai_verdict).toBe("This sender is impersonating PayPal.");
+  });
+
+  it("no row in the final report is scarier than the score (the reported contradiction)", () => {
+    const r = combineEmailReports({
+      sender: leg(95, { evidence: [{ text: "No urgent requests in the context", severity: "safe" }] }),
+      body: bodyLeg(91, { crownCount: 0, hardOtherCount: 0, count: 2 }, {
+        evidence: [{ text: "Uses urgency to rush you", severity: "dangerous", weight: 6 }],
+      }),
+      link: leg(92),
+    });
+    expect(r.ai_score).toBeGreaterThanOrEqual(70);
+    expect(r.evidence.every((row) => row.severity === "safe")).toBe(true);
+  });
+});
+
+describe("combineLinkReports — two links on one host are tellable apart", () => {
+  it("appends the path when a host repeats (the duplicated sendgrid rows)", () => {
+    const r = combineLinkReports([
+      { url: "https://u25487041.ct.sendgrid.net/ls/click?a=1", report: leg(74, { ai_verdict: "Tracking link." }) },
+      { url: "https://u25487041.ct.sendgrid.net/ls/click?b=2", report: leg(80, { ai_verdict: "Also tracking." }) },
+    ]);
+    const perLink = r.evidence.filter((row) => row.text.includes("sendgrid.net"));
+    expect(perLink).toHaveLength(2);
+    expect(perLink[0].text).not.toBe(perLink[1].text); // the actual bug: identical labels
+  });
+
+  it("keeps the plain host when each link is on its own host", () => {
+    const r = combineLinkReports([
+      { url: "https://example.com/a", report: leg(74, { ai_verdict: "Fine." }) },
+      { url: "https://other.com/b", report: leg(80, { ai_verdict: "Fine." }) },
+    ]);
+    const hosts = r.evidence.map((row) => row.text);
+    expect(hosts.some((t) => t.startsWith("example.com —"))).toBe(true);
+    expect(hosts.some((t) => t.startsWith("other.com —"))).toBe(true);
+  });
+});
+
+// An email score is a worst-of across three legs, so the combined number alone doesn't say WHICH
+// leg caused it. The pipeline used to compute all three and then throw the breakdown away — leaving
+// an analyst to guess whether "63/100" came from the sender, the wording, or a link before writing
+// an authoritative verdict. Now the decomposition survives.
+describe("per-leg decomposition (so an analyst can see what drove the score)", () => {
+  it("combineEmailReports returns the three EFFECTIVE leg scores", () => {
+    const r = combineEmailReports({ sender: leg(70), body: bodyLeg(91, { count: 1, crownCount: 0, hardOtherCount: 1 }), link: leg(74) });
+    expect(r.legs).toEqual({ sender: 70, body: 91, link: 74 });
+  });
+
+  it("a leg that didn't run is null, NOT 0 (0 would read as maximum danger)", () => {
+    const r = combineEmailReports({ sender: leg(70), body: null, link: null });
+    expect(r.legs).toEqual({ sender: 70, body: null, link: null });
+  });
+
+  it("reports the body's EFFECTIVE score — the value that actually fed the combine", () => {
+    // A clean body (no observed signals) is NEUTRALIZED so it can't cap a safe email. The breakdown
+    // must show that null, or an analyst would think the wording was judged and scored.
+    const r = combineEmailReports({ sender: leg(90), body: bodyLeg(65, { count: 0, crownCount: 0, hardOtherCount: 0 }), link: null });
+    expect(r.legs.body).toBe(null);
+  });
+
+  it("buildLegsRow stays a {text, severity} row so existing aiReasons readers don't break", () => {
+    // aiReasons is read as an array of {text, severity} in four places (one maps r.text). The legs
+    // ride INSIDE that array, so the row has to be a valid row too — not just a data blob.
+    const row = buildLegsRow({ sender: 70, body: 91, link: null });
+    expect(typeof row.text).toBe("string");
+    expect(row.severity).toBe("safe"); // never adds a scary bullet to the user's report
+    expect(row.kind).toBe("legs");     // the tag that lets the read path lift it back out
+    expect(row.legs).toEqual({ sender: 70, body: 91, link: null });
+  });
+
+  it("names the legs in plain English and writes 'n/a' for a leg that didn't run", () => {
+    expect(buildLegsRow({ sender: 70, body: 91, link: null }).text)
+      .toBe("Score breakdown — sender 70 · message 91 · links n/a");
   });
 });

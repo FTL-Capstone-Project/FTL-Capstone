@@ -71,3 +71,49 @@ describe("readIndicatorForClient — IDOR field gating", () => {
     expect(res.screenshot_url).toBeNull();
   });
 });
+
+// The forwarded-email pipeline's per-leg score breakdown is stored INSIDE the aiReasons array as a
+// tagged row (aiReasons is read as an array of {text, severity} in four places, so it couldn't become
+// an object). The read path has to lift that row back out — otherwise the plumbing renders as a
+// "why" bullet in every user's report.
+describe("readIndicatorForClient — the stored leg breakdown becomes `legs`, not a bullet", () => {
+  const legsRow = {
+    kind: "legs", severity: "safe",
+    text: "Score breakdown — sender 70 · message 91 · links n/a",
+    legs: { sender: 70, body: 91, link: null },
+  };
+
+  beforeEach(() => {
+    indicatorFindUnique.mockReset(); orgReviewFindUnique.mockReset(); submissionFindFirst.mockReset();
+    orgReviewFindUnique.mockResolvedValue(null);
+    submissionFindFirst.mockResolvedValue({ id: 10 });
+  });
+
+  it("splits the legs row out of evidence into its own field", async () => {
+    indicatorFindUnique.mockResolvedValue({
+      ...doneIndicator,
+      aiReasons: [{ text: "Uses urgency to rush you", severity: "review" }, legsRow],
+    });
+    const res = await readIndicatorForClient(457, { id: 2, orgId: null });
+    expect(res.legs).toEqual({ sender: 70, body: 91, link: null });
+    // The user's "why" rows must NOT include the breakdown row.
+    expect(res.evidence).toEqual([{ text: "Uses urgency to rush you", severity: "review" }]);
+  });
+
+  it("a URL check (no legs row) → legs is null and evidence is untouched", async () => {
+    indicatorFindUnique.mockResolvedValue({
+      ...doneIndicator,
+      aiReasons: [{ text: "Domain is 3 days old", severity: "dangerous" }],
+    });
+    const res = await readIndicatorForClient(457, { id: 2, orgId: null });
+    expect(res.legs).toBeNull();
+    expect(res.evidence).toHaveLength(1);
+  });
+
+  it("rows saved BEFORE this change still read fine (no legs, no crash)", async () => {
+    indicatorFindUnique.mockResolvedValue({ ...doneIndicator, aiReasons: null });
+    const res = await readIndicatorForClient(457, { id: 2, orgId: null });
+    expect(res.legs).toBeNull();
+    expect(res.evidence).toEqual([]);
+  });
+});

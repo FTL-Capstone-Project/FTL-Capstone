@@ -308,6 +308,18 @@ export const analyzeEmailBody = async ({ from = "", subject = "", body = "", sen
 const linkBucket = (score) => (score >= 70 ? "safe" : score >= 35 ? "review" : "dangerous");
 // Just the display host of a URL (drop the leading www. so the row reads cleanly).
 const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } };
+// Host for a single link; host + path when the host repeats (so N wrapped tracking links from the
+// same email service don't all render as the same label). Long paths are truncated — the row is a
+// label, not the URL itself.
+const linkLabel = (url, needsPath) => {
+  const host = hostOf(url);
+  if (!needsPath) return host;
+  try {
+    const path = new URL(url).pathname;
+    if (!path || path === "/") return host;
+    return `${host}${path.length > 24 ? `${path.slice(0, 24)}…` : path}`;
+  } catch { return host; }
+};
 
 // Merge N scanned links into ONE VerdictCard-shaped "link leg" — this is where the multi-link NUANCE
 // lives. Worst-of score (any dangerous link makes the whole link leg dangerous — a safe unsubscribe
@@ -328,8 +340,16 @@ export const combineLinkReports = (linkScans = []) => {
   const review = scored.length - safe - dangerous;
   const parts = [safe && `${safe} safe`, review && `${review} to review`, dangerous && `${dangerous} dangerous`].filter(Boolean);
   const summary = { text: `${scored.length} link${scored.length > 1 ? "s" : ""} checked: ${parts.join(", ")}`, severity: linkBucket(score) };
+  // Label each row by host, but DISAMBIGUATE when two links share one host (very common: an email
+  // service like sendgrid wraps every link, so all of them are u123.ct.sendgrid.net). Host-only
+  // labels produced two visually identical rows with different verdicts, which read as a bug. When
+  // a host repeats we append its path so the rows are tellable apart.
+  const hostCounts = scored.reduce((counts, l) => {
+    const host = hostOf(l.url);
+    return { ...counts, [host]: (counts[host] ?? 0) + 1 };
+  }, {});
   const perLink = byDanger.map((l) => ({
-    text: `${hostOf(l.url)} — ${l.report.ai_verdict ?? "checked"}`,
+    text: `${linkLabel(l.url, hostCounts[hostOf(l.url)] > 1)} — ${l.report.ai_verdict ?? "checked"}`,
     severity: linkBucket(l.report.ai_score),
   }));
 
@@ -343,6 +363,68 @@ export const combineLinkReports = (linkScans = []) => {
     // link (a single link's verdict is already the headline — no need to repeat it as a row).
     evidence: scored.length > 1 ? [summary, ...perLink].slice(0, 6) : (worst.report.evidence ?? []),
     screenshot_url: worst.report.screenshot_url ?? null,
+  };
+};
+
+// Make the "why" rows agree with the final score, then rank them so the worst is first.
+//
+// The problem this fixes: each leg writes its rows against ITS OWN score, before the legs are
+// reconciled. Concatenating them produced reports where an amber "urgency" row and a green
+// "no urgent content" row sat three lines apart, two identical rows appeared for one host, and a
+// scary row sat under a green badge. The URL path has guarded against this all along (buildReasons
+// clamps each row to a bucket ceiling in verdict.js); the email path never did.
+//
+// Three passes, in order:
+//   1. CLAMP  — no row may read scarier than the badge (safe score → no "dangerous" red dots).
+//   2. DEDUPE — same sentence twice (two legs noticing the same thing) collapses to one.
+//   3. RANK   — worst severity first, and within a severity the costliest signal first, so the
+//               top of the list is always the reason the score is what it is.
+const SEVERITY_RANK = { safe: 0, review: 1, dangerous: 2 };
+const RANK_TO_SEVERITY = ["safe", "review", "dangerous"];
+
+// Words that assert danger. If a leg's sentence contains one of these but the final score says SAFE,
+// the sentence is describing a verdict we didn't reach — so we don't show it. Mirrors the word list
+// CONTRADICTORY_TAGS uses for chips in verdict.js, applied to the headline sentence instead.
+const ALARM_WORDS = /red flag|not be trustworthy|untrustworthy|suspicious|phishing|scam|malicious|fraud|dangerous|do not (click|trust)|be wary|caution/i;
+
+export const reconcileEvidence = (rows = [], score) => {
+  const bucket = bodyBucket(score ?? 0);
+  const ceiling = SEVERITY_RANK[bucket];
+  const seen = new Set();
+  const kept = [];
+  for (const row of rows) {
+    if (!row?.text) continue;
+    const key = String(row.text).trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const raw = SEVERITY_RANK[row.severity] ?? SEVERITY_RANK.review;
+    kept.push({ ...row, severity: RANK_TO_SEVERITY[Math.min(raw, ceiling)] });
+  }
+  // Stable sort: severity desc, then weight desc (weight only exists on email-body rows).
+  return kept.sort((a, b) =>
+    (SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity]) || ((b.weight ?? 0) - (a.weight ?? 0)));
+};
+
+// Pack the three leg scores into one storable row so the decomposition ISN'T thrown away.
+//
+// Why a row and not a new column: the legs have to survive a DB round-trip, and `Indicator.aiReasons`
+// is a `Json?` that four separate read sites treat as an ARRAY of `{text, severity}` (one of them
+// does `.map((r) => r.text)`). Wrapping that array in an object would make `asArray()` return null and
+// silently blank every report's evidence. So the breakdown rides along as one extra ARRAY entry,
+// tagged `kind: "legs"` — existing readers see a normal row, and `readIndicatorForClient` lifts it out
+// into its own `legs` field so it never renders as a bullet. No migration needed.
+//
+// `null` for a leg means it didn't run (no links in the email) or was neutralized (a clean body is
+// excluded from the combine, see bodyEffective) — NOT that it scored zero, which would read as
+// maximum danger on a safety scale.
+export const buildLegsRow = (legs) => {
+  const label = (name, value) => `${name} ${value == null ? "n/a" : value}`;
+  return {
+    kind: "legs",
+    // Plain text too, so the row still makes sense to anything that only knows `{text, severity}`.
+    text: `Score breakdown — ${label("sender", legs.sender)} · ${label("message", legs.body)} · ${label("links", legs.link)}`,
+    severity: "safe",
+    legs,
   };
 };
 
@@ -383,17 +465,38 @@ export const combineEmailReports = ({ sender = null, body = null, link = null })
     link != null ? { report: link, eff: worstLink } : null,
   ].filter(Boolean);
 
-  const evidence = [
+  // Rows from all three legs, RECONCILED against the final score (see reconcileEvidence): deduped,
+  // severity-clamped so nothing reads scarier than the badge, and ranked worst-first.
+  const evidence = reconcileEvidence([
     ...(Array.isArray(sender?.evidence) ? sender.evidence : []),
     ...(Array.isArray(body?.evidence) ? body.evidence : []),
     ...(Array.isArray(link?.evidence) ? link.evidence : []),
-  ].slice(0, 10); // a multi-link email carries more rows — keep sender/body rows from being cut
+  ], score).slice(0, 10); // a multi-link email carries more rows — keep sender/body rows from being cut
 
   // Lead with the most alarming leg's verdict/title (lowest effective score; a neutral clean body,
   // eff=null, is treated as least alarming so it never leads a safe email with an "it's clean" line
   // when a more specific leg exists).
   const ordered = [...scoredLegs].sort((a, b) => (a.eff ?? 100) - (b.eff ?? 100));
   const worst = ordered[0]?.report ?? null;
+
+  // HEADLINE RECONCILIATION. The leading leg's sentence was written about ITS OWN score, before the
+  // legs were reconciled — which is how a green "Looks safe" badge ended up sitting over the words
+  // "may not be trustworthy". Two ways that happens, so we check both:
+  //   a) its BUCKET disagrees with the final bucket (it was judging a different verdict), or
+  //   b) its WORDS assert danger the final score doesn't support.
+  // (b) is the one that bit us: a body leg scoring 74 is technically in the safe band, so a bucket
+  // comparison alone sees no disagreement while the sentence still says "red flags". This is the
+  // prose analogue of cleanTags dropping a "Dangerous" chip off a safe score (verdict.js).
+  // Either way we fall back to a sentence written FROM the final bucket, so the words can't outrun
+  // the number. The model never gets to overstate the verdict; code owns it.
+  const finalBucket = bodyBucket(score);
+  const leadBucket = ordered[0] ? bodyBucket(ordered[0].eff ?? 100) : finalBucket;
+  const concernCount = evidence.filter((row) => row.severity !== "safe").length;
+  const leadWords = worst?.ai_verdict ?? "";
+  const contradicts = finalBucket === "safe" && ALARM_WORDS.test(leadWords);
+  const ai_verdict = leadWords && leadBucket === finalBucket && !contradicts
+    ? leadWords
+    : emailFallbackVerdict(finalBucket, concernCount, "");
 
   // Tags: union across legs (deduped), capped.
   const tags = [...new Set(scoredLegs.flatMap(({ report }) => (Array.isArray(report.tags) ? report.tags : [])))].slice(0, 4);
@@ -406,10 +509,16 @@ export const combineEmailReports = ({ sender = null, body = null, link = null })
 
   return {
     ai_score: score,
-    ai_verdict: worst?.ai_verdict ?? "We analyzed this forwarded email.",
+    ai_verdict: ai_verdict || "We analyzed this forwarded email.",
     ai_confidence,
-    title: worst?.title ?? "Forwarded email",
+    // The title gets the same treatment as the sentence — "Likely phishing email" over a green badge
+    // is the same contradiction in fewer words.
+    title: (worst?.title && !contradicts ? worst.title : emailFallbackTitle(finalBucket, concernCount)) || "Forwarded email",
     tags,
     evidence: evidence.length ? evidence : [{ text: "We reviewed the sender and message content.", severity: "review" }],
+    // The per-leg decomposition, so an analyst can see WHICH leg drove the verdict instead of only
+    // the combined number. `body` is the EFFECTIVE body score (post crown-jewel ceiling / neutralized
+    // when clean) — the value that actually fed the combine, not the raw one.
+    legs: { sender: senderScore, body: bodyEffective, link: worstLink },
   };
 };

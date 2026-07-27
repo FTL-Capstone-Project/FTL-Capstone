@@ -1,12 +1,18 @@
 // ── feature: report email · owner: Ozias ──
 // Pure function: a report object (the SAME shape readIndicatorForClient returns) → an email-safe
 // HTML string. It mirrors the in-app ReportDetailModal — verdict badge, safety score /100, the
-// safety-analysis text, and the severity-colored "threat vectors" (including the per-link breakdown
-// rows Feature 1 produces for a multi-link email), plus the sandbox screenshot when we have one.
+// safety-analysis text, the "Why this score" panel (including the per-link breakdown rows Feature 1
+// produces for a multi-link email) and the "What to do" steps, plus the sandbox screenshot.
 //
 // Email HTML is NOT web HTML: clients (Gmail/Outlook) strip <style> blocks, CSS variables, and
 // flexbox. So everything here is INLINE styles + <table> layout + hard-coded hex (copied from the
 // light theme in client/src/theme/tokens.css). No imports, no CSS vars — that's deliberate.
+//
+// TWO deliberate differences from the in-app panel, both forced by email clients:
+//   1. NO collapse. Gmail strips <details>, and there's no JS, so both groups render EXPANDED.
+//      Same content, same order — just no interaction.
+//   2. The severity dot is a tiny <table> cell, not a styled <span>, because border-radius on an
+//      inline element is unreliable in Outlook.
 
 // Verdict colors, hard-coded from tokens.css (email can't read our CSS variables).
 const COLORS = {
@@ -24,7 +30,11 @@ const COLORS = {
 
 // 0-100 SAFETY score → bucket, mirroring verdict.js scoreBucket (100 = safe).
 const bucketOf = (score) => (score == null ? "review" : score >= 70 ? "safe" : score >= 35 ? "review" : "dangerous");
-const LABEL = { safe: "Looks safe", review: "Worth a closer look", dangerous: "Likely dangerous" };
+// ONE verdict vocabulary across every surface. These are the same three words the in-app badge uses
+// (client/src/config/constants.js VERDICT_STYLES) — the email used to say "Worth a closer look"
+// where the app said "Suspicious" and the Reports filter said a third thing, so a user who filtered
+// by one word opened a report labelled another.
+const LABEL = { safe: "Safe", review: "Suspicious", dangerous: "Dangerous" };
 
 // Escape user/model text before dropping it into HTML (a phishing subject could contain markup).
 const esc = (s) =>
@@ -34,17 +44,56 @@ const esc = (s) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-// One severity-colored "threat vector" row (label + a qualitative bar), matching the modal.
-const threatRow = ({ text, severity }) => {
+// One evidence row: severity dot + the sentence + (only when we know it) what that signal cost.
+//
+// The old version of this row drew a bar whose width was one of three constants (92% / 58% / 28%),
+// so it LOOKED measured while carrying nothing the color didn't already say. Now the honest number
+// is printed when we have it and omitted when we don't — we never invent a cost for a sentence.
+const evidenceRow = ({ text, severity, weight }) => {
   const c = COLORS[severity] ?? COLORS.review;
-  const fill = severity === "dangerous" ? 92 : severity === "safe" ? 28 : 58;
+  // Never a cost on a reassurance row — see the note in the client's WhyThisScore.jsx: a safe-band
+  // score clamps every row to "safe", and "−6 pts" under "What checked out" contradicts the heading.
+  const showCost = typeof weight === "number" && weight > 0 && severity !== "safe";
   return `
-    <tr><td style="padding:6px 0;">
-      <div style="font-size:14px;color:${COLORS.text};margin-bottom:5px;">${esc(text)}</div>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${COLORS.border};border-radius:999px;">
-        <tr><td style="background:${c.fg};height:8px;width:${fill}%;border-radius:999px;font-size:0;line-height:0;">&nbsp;</td></tr>
+    <tr><td style="padding:5px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td width="18" valign="top" style="padding-top:6px;">
+            <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+              <td width="8" height="8" style="background:${c.fg};border-radius:4px;font-size:0;line-height:0;">&nbsp;</td>
+            </tr></table>
+          </td>
+          <td valign="top" style="font-size:14px;line-height:1.5;color:${COLORS.text};">${esc(text)}</td>
+          ${showCost ? `<td width="66" valign="top" align="right" style="font-size:12px;font-weight:700;color:${COLORS.textDim};white-space:nowrap;">&minus;${weight} pts</td>` : ""}
+        </tr>
       </table>
     </td></tr>`;
+};
+
+// A labeled group of rows. The heading is the SECONDARY encoding that makes the panel readable
+// without color: our amber and green are close enough (ΔE ~7.7 for a red/green-colorblind reader)
+// that "which of these is a problem?" can't rest on hue alone — and an email can't even be sure the
+// colors survive dark-mode mangling by the client.
+const evidenceGroup = ({ heading, rows }) => {
+  if (!rows.length) return "";
+  return `
+        <tr><td style="padding:16px 28px 0;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:${COLORS.textDim};margin-bottom:6px;">${heading} (${rows.length})</div>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows.map(evidenceRow).join("")}</table>
+        </td></tr>`;
+};
+
+// "What to do" — the same server-computed strings the in-app panel renders (services/nextSteps.js),
+// so the email and the app can never give different advice. An <ol> is safe in every mail client.
+const nextStepsBlock = (steps) => {
+  if (!steps.length) return "";
+  return `
+        <tr><td style="padding:18px 28px 0;">
+          <div style="font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:${COLORS.textDim};margin-bottom:6px;">What to do</div>
+          <ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.6;color:${COLORS.text};">
+            ${steps.map((step) => `<li style="margin-bottom:4px;">${esc(step)}</li>`).join("")}
+          </ol>
+        </td></tr>`;
 };
 
 // report → HTML string. appUrl (the client) powers the "View full report" button.
@@ -56,10 +105,19 @@ export const buildReportEmailHtml = ({ report, appUrl = "" }) => {
   const analysis = report?.ai_verdict || report?.description || "";
   const evidence = Array.isArray(report?.evidence) ? report.evidence : [];
   const screenshot = report?.screenshot_url || null;
+  const steps = Array.isArray(report?.next_steps) ? report.next_steps.filter(Boolean) : [];
 
-  const evidenceRows = evidence.length
-    ? evidence.map(threatRow).join("")
-    : threatRow({ text: "We reviewed the sender and message content.", severity: "review" });
+  // Split the one flat list the way the in-app panel does: what went WRONG vs what we checked that
+  // was FINE. Rows arrive already deduped, severity-clamped and ranked worst-first from the server
+  // (reconcileEvidence / buildReasons), so we only group them — we never re-sort.
+  const rows = evidence.filter((row) => row?.text);
+  const concerns = rows.filter((row) => row.severity !== "safe");
+  const checks = rows.filter((row) => row.severity === "safe");
+  // A report with no rows at all still needs one honest line, so the panel is never an empty box.
+  const panel = rows.length
+    ? evidenceGroup({ heading: "What raised concern", rows: concerns }) +
+      evidenceGroup({ heading: "What checked out", rows: checks })
+    : evidenceGroup({ heading: "What checked out", rows: [{ text: "We reviewed the sender and message content.", severity: "review" }] });
 
   const scoreText = score == null ? "&mdash;" : String(score);
 
@@ -101,11 +159,13 @@ export const buildReportEmailHtml = ({ report, appUrl = "" }) => {
           <p style="margin:0;font-size:14px;line-height:1.6;color:${COLORS.textDim};">${esc(analysis)}</p>
         </td></tr>` : ""}
 
-        <!-- Threat vectors (includes the per-link breakdown for multi-link emails) -->
-        <tr><td style="padding:22px 28px 4px;">
-          <h2 style="margin:0 0 6px;font-size:16px;color:${COLORS.navy};">Threat vectors</h2>
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${evidenceRows}</table>
+        <!-- Why this score: concerns, then reassurances, then what to do. Both groups are always
+             EXPANDED here (see the header note on collapse). Includes the per-link breakdown. -->
+        <tr><td style="padding:22px 28px 0;">
+          <h2 style="margin:0;font-size:16px;color:${COLORS.navy};">Why this score</h2>
         </td></tr>
+        ${panel}
+        ${nextStepsBlock(steps)}
 
         ${appUrl ? `
         <!-- CTA -->
