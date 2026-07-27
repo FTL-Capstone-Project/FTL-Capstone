@@ -101,6 +101,18 @@ const AppShell = () => {
   const searchResults = searching ? searchConversations(search) : [];
   const groups = searching ? [] : groupConversations(recents);
 
+  // This box searches the caller's local chat history. For an ANALYST it does double duty: pressing
+  // Enter also runs the term against the org's whole threat history (GET /api/search, analyst-only)
+  // by deep-linking into the triage queue, which owns that results view. Analysts asked for one
+  // search box, not two — but a member/individual has no org history to search, so they keep the
+  // chat-only behavior and Enter does nothing new.
+  const submitSearch = (event) => {
+    if (event.key !== "Enter") return;
+    const term = search.trim();
+    if (role !== "analyst" || term.length < 2) return;
+    go(`/reports?q=${encodeURIComponent(term)}`);
+  }
+
   // On mobile the sidebar is always shown "expanded" (never the icon-rail), since it's an overlay
   // drawer with room. The collapse rail is a desktop-only affordance.
   const railCollapsed = collapsed && !isMobile;
@@ -172,7 +184,8 @@ const AppShell = () => {
               borderRadius: 10, padding: "8px 12px", color: "var(--text-dim)" }}>
               <Search size={16} />
               <input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search your past chats…"
+                onKeyDown={submitSearch}
+                placeholder={role === "analyst" ? "Search chats — Enter to search reports…" : "Search your past chats…"}
                 // color:var(--text) so typed search text is visible in dark mode (else it
                 // inherits the browser default near-black and disappears on the dark sidebar).
                 style={{ border: "none", outline: "none", background: "transparent", fontSize: "0.85em", width: "100%", color: "var(--text)" }} />

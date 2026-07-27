@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 
 const apiGet = vi.fn();
 vi.mock("../../lib/api.js", () => ({ api: { get: (...a) => apiGet(...a) } }));
@@ -11,14 +12,24 @@ vi.mock("./ReportDetailModal.jsx", () => ({ default: () => <div data-testid="mod
 
 const { default: TriageQueue } = await import("./TriageQueue.jsx");
 
-// TriageQueue makes TWO api.get calls: the history queue and the campaigns list.
-// This helper routes each URL to the right canned response.
-const mockApi = ({ reports = [], campaigns = [] }) => {
+// TriageQueue makes TWO api.get calls on mount (the history queue and the campaigns list) and a
+// THIRD when the analyst searches. This helper routes each URL to the right canned response.
+const mockApi = ({ reports = [], campaigns = [], searchResults = [], truncated = false }) => {
   apiGet.mockImplementation((path) => {
     if (path.startsWith("/api/campaigns")) return Promise.resolve({ campaigns });
+    if (path.startsWith("/api/search")) return Promise.resolve({ reports: searchResults, truncated });
     return Promise.resolve({ reports });
   });
 }
+
+// The queue reads ?q= (so the sidebar search bar can deep-link into results), which means it needs
+// router context. `at` seeds the URL for the deep-link tests.
+const renderQueue = (at = "/reports") =>
+  render(
+    <MemoryRouter initialEntries={[at]}>
+      <TriageQueue />
+    </MemoryRouter>
+  );
 
 // Four org reports across review states, in arbitrary source order so the sort has work to do.
 const rows = [
@@ -39,12 +50,12 @@ const renderedTitles = () =>
 
 describe("TriageQueue", () => {
   it("requests the analyst org queue (org=1&all=1)", async () => {
-    render(<TriageQueue />);
+    renderQueue();
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/api/history?org=1&all=1", expect.any(Object)));
   });
 
   it("priority-orders: open items first, most dangerous first, within groups", async () => {
-    render(<TriageQueue />);
+    renderQueue();
     await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 }).length).toBe(4));
 
     // Open group first (Microsoft score 31 before FedEx score 54 — more dangerous first),
@@ -59,7 +70,7 @@ describe("TriageQueue", () => {
 
   it("the pending filter narrows the list to just open items", async () => {
     const user = userEvent.setup();
-    render(<TriageQueue />);
+    renderQueue();
     await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 }).length).toBe(4));
 
     await user.click(screen.getByRole("button", { name: /pending review/i }));
@@ -78,7 +89,7 @@ describe("TriageQueue", () => {
     mockApi({ reports: campaignRows, campaigns: [{ id: 1, name: "Bank impersonation" }] });
 
     const user = userEvent.setup();
-    render(<TriageQueue />);
+    renderQueue();
 
     // The campaign header shows, collapsed → its 2 reports' titles are NOT in the DOM yet.
     await waitFor(() => expect(screen.getByText("Bank impersonation")).toBeInTheDocument());
@@ -93,5 +104,91 @@ describe("TriageQueue", () => {
     await user.click(screen.getByRole("button", { name: /bank impersonation/i }));
     expect(screen.getByText("PayPal (confirmed)")).toBeInTheDocument();
     expect(screen.getByText("Microsoft (investigating)")).toBeInTheDocument();
+  });
+});
+
+// ── keyword search over the org's threat history (David) ──────────────────────
+// The queue only ever showed the newest reports, so "have we seen this domain before?" meant
+// scrolling. These cover the search box + the ?q= deep link the sidebar bar uses.
+describe("TriageQueue — search", () => {
+  const searchBox = () => screen.getByLabelText(/search your organization's threat history/i);
+  const hit = { indicator_id: 9, title: "Old PayPal report", ai_score: 12, created_at: "2026-06-01", review: null };
+
+  it("does NOT search on a single character (too broad — the server rejects it too)", async () => {
+    const user = userEvent.setup();
+    renderQueue();
+    await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 }).length).toBe(4));
+
+    await user.type(searchBox(), "p");
+    // Give the debounce time to fire if it were going to.
+    await new Promise((r) => setTimeout(r, 400));
+    expect(apiGet).not.toHaveBeenCalledWith(expect.stringContaining("/api/search"), expect.any(Object));
+    expect(renderedTitles()).toHaveLength(4); // still the queue
+  });
+
+  it("searches on 2+ characters and replaces the queue with the results", async () => {
+    mockApi({ reports: rows, campaigns: [], searchResults: [hit] });
+    const user = userEvent.setup();
+    renderQueue();
+    await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 }).length).toBe(4));
+
+    await user.type(searchBox(), "paypal");
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/api/search?q=paypal", expect.any(Object)));
+    // The result replaces the queue rows — a search result IS a report card.
+    await waitFor(() => expect(renderedTitles()).toEqual(["Old PayPal report"]));
+    expect(screen.getByText(/1 result for "paypal"/i)).toBeInTheDocument();
+  });
+
+  it("URL-encodes the term so a slash or space can't break the query string", async () => {
+    mockApi({ reports: rows, campaigns: [], searchResults: [] });
+    const user = userEvent.setup();
+    renderQueue();
+    await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 }).length).toBe(4));
+
+    await user.type(searchBox(), "a b/c");
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/api/search?q=a%20b%2Fc", expect.any(Object)));
+  });
+
+  it("says so plainly when nothing matches", async () => {
+    mockApi({ reports: rows, campaigns: [], searchResults: [] });
+    const user = userEvent.setup();
+    renderQueue();
+    await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 }).length).toBe(4));
+
+    await user.type(searchBox(), "zzzz");
+
+    await waitFor(() => expect(screen.getByText(/nothing in your organization's history matches/i)).toBeInTheDocument());
+  });
+
+  it("clearing the search returns to the queue", async () => {
+    mockApi({ reports: rows, campaigns: [], searchResults: [hit] });
+    const user = userEvent.setup();
+    renderQueue();
+    await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 }).length).toBe(4));
+
+    await user.type(searchBox(), "paypal");
+    await waitFor(() => expect(renderedTitles()).toEqual(["Old PayPal report"]));
+
+    await user.click(screen.getByRole("button", { name: /back to queue/i }));
+
+    await waitFor(() => expect(renderedTitles()).toHaveLength(4)); // the full queue is back
+  });
+
+  it("runs the search straight away when deep-linked with ?q= (the sidebar search bar)", async () => {
+    mockApi({ reports: rows, campaigns: [], searchResults: [hit] });
+    renderQueue("/reports?q=paypal");
+
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/api/search?q=paypal", expect.any(Object)));
+    await waitFor(() => expect(renderedTitles()).toEqual(["Old PayPal report"]));
+    expect(searchBox()).toHaveValue("paypal"); // the box reflects the deep-linked term
+  });
+
+  it("warns that results were capped instead of implying the list is complete", async () => {
+    mockApi({ reports: rows, campaigns: [], searchResults: [hit], truncated: true });
+    renderQueue("/reports?q=paypal");
+
+    await waitFor(() => expect(screen.getByText(/narrow your search to see more/i)).toBeInTheDocument());
   });
 });
