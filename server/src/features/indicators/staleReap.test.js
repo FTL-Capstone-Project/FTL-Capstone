@@ -15,6 +15,9 @@ vi.mock("../../db.js", () => ({
     },
     orgReview: { findUnique: (...a) => orgReviewFindUnique(...a) },
     submission: { findFirst: (...a) => submissionFindFirst(...a) },
+    // A finished verdict also reports whether the caller already cast a community "Mark safe"
+    // vote; irrelevant to the stale-reap logic, so it always answers "no vote".
+    userTrust: { findUnique: async () => null },
   },
 }));
 vi.mock("../../services/urlscan.js", () => ({ scanUrl: vi.fn() }));

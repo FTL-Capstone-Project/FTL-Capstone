@@ -49,6 +49,7 @@ model User {
   submissions   Submission[]
   notifications Notification[]
   reviews       OrgReview[]    @relation("ReviewedBy") // reviews this analyst authored
+  trustVotes    UserTrust[]    // community "Mark safe" votes this user has cast
 
   @@index([orgId])
   @@index([email])
@@ -110,6 +111,11 @@ model Indicator {
   // so this migration can't disturb existing rows.
   globalReviewStatus String? // null | pending review | confirmed safe | confirmed dangerous
   reportedCount      Int     @default(0)
+  // Community "Mark safe" votes — the inverse of reportedCount. A user who checked a link and
+  // believes it's actually fine can vouch for it, which is a signal that a review/dangerous verdict
+  // may be a false positive. This is a COUNTER ONLY: it never edits aiScore (a vote brigade must not
+  // be able to turn a phishing page green). UserTrust holds who voted, so one person can't stuff it.
+  trustVotes      Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -117,6 +123,7 @@ model Indicator {
   orgReviews    OrgReview[]
   notifications Notification[]
   reportReasons ReportReason[]
+  trusts        UserTrust[]
 
   @@index([domain])
   @@index([status])
@@ -135,6 +142,25 @@ model ReportReason {
   indicator Indicator @relation(fields: [indicatorId], references: [id])
 
   @@index([indicatorId])
+}
+
+// One user's community "Mark safe" vote on an indicator. Exists purely so a single person can't
+// inflate trustVotes: the @@unique below makes a second vote from the same user a constraint
+// violation the route turns into a friendly "you already vouched for this" instead of a 500.
+// userId is NOT nullable here (unlike ReportReason) — an anonymous trust vote would be
+// unlimited-stuffable, which defeats the point of the table.
+model UserTrust {
+  id          Int      @id @default(autoincrement())
+  indicatorId Int
+  userId      Int
+  createdAt   DateTime @default(now())
+
+  indicator Indicator @relation(fields: [indicatorId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([indicatorId, userId]) // one vote per person per indicator
+  @@index([indicatorId])
+  @@index([userId])
 }
 
 // PER-ORG overlay — each org's private authoritative verdict on a global indicator.

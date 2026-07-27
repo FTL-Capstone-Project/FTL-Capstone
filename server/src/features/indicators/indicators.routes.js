@@ -5,7 +5,7 @@ import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireAnalyst } from "../../middleware/requireAnalyst.js";
 import { prisma } from "../../db.js";
-import { readIndicatorForClient, reportIndicator, reviewIndicator } from "./indicators.service.js";
+import { readIndicatorForClient, reportIndicator, reviewIndicator, trustIndicator } from "./indicators.service.js";
 
 export const indicatorsRouter = Router();
 
@@ -47,6 +47,30 @@ indicatorsRouter.post("/:id/report", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("[indicators] report failed:", e.message);
     return res.status(500).json({ error: "Couldn't submit your report just now." });
+  }
+});
+
+// POST /api/indicators/:id/trust — the community "Mark safe" vote on the verdict card. A user who
+// checked this link and believes it's genuinely fine vouches for it. Any signed-in user may vote,
+// ONCE (enforced by UserTrust's unique constraint, not by trusting the client).
+//
+// This never changes the AI verdict or score — it's a counter that flags a possible false positive.
+// Voting twice is idempotent rather than an error, so a double-click or a stale button can't
+// double-count and doesn't need to surface a failure to the user.
+indicatorsRouter.post("/:id/trust", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "Bad id" });
+
+  try {
+    const result = await trustIndicator(id, { userId: req.user?.id ?? null });
+    if (!result) return res.status(404).json({ error: "Not found" });
+    // No resolvable user id (shouldn't happen behind requireAuth, but an anonymous vote can't be
+    // deduped, so we refuse rather than accept a stuffable one).
+    if (result.unauthenticated) return res.status(401).json({ error: "Sign in to vouch for a link." });
+    return res.json(result);
+  } catch (e) {
+    console.error("[indicators] trust failed:", e.message);
+    return res.status(500).json({ error: "Couldn't record your vote just now." });
   }
 });
 
