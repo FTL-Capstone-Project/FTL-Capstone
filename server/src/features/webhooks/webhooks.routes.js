@@ -14,7 +14,7 @@ import { applyClerkEvent, findUserByEmail, findUserByToken } from "../users/user
 import { submitEmail } from "../indicators/indicators.service.js";
 import { createNotification } from "../notifications/notifications.service.js";
 import { normalizeUrl } from "../../services/canonicalize.js";
-import { extractEmailAddress, extractPlusToken, extractAllUrls } from "./inboundEmail.js";
+import { extractEmailAddress, extractPlusToken, extractAllUrls, parseAuthResults } from "./inboundEmail.js";
 
 export const webhooksRouter = Router();
 
@@ -84,6 +84,21 @@ const extractEmailLinks = (subject, body) => {
   return rawUrls;
 };
 
+// Is this forward's sender PROVABLY forged? A `From` header is trivially spoofable, so we must not
+// treat it as identity when the original mail provider's own checks say it was faked: a DKIM or DMARC
+// *fail* means the sending domain almost certainly didn't send it. Mirrors assessAuthResults() in
+// emailAnalysis.js on purpose — if the scoring calls an email forged, identity must agree.
+//
+// Two deliberate choices:
+//   • SPF is IGNORED. It almost always fails on a legitimately FORWARDED email (the forwarder isn't in
+//     the original domain's SPF record), so gating on it would reject nearly every real forward.
+//   • Absent/unknown results are NOT forgery. A plain-text relay sends no headers at all, so we only
+//     act on POSITIVE evidence — otherwise we'd silently stop attributing every honest forward.
+const isSenderForged = (headers) => {
+  const { dkim, dmarc } = parseAuthResults(headers);
+  return dmarc === "fail" || dkim === "fail";
+}
+
 // Turn ONE forwarded-email payload into a reviewable email Indicator: resolve the sender to a real
 // user, extract its links, kick the background analysis via submitEmail(), and fire the on-receipt
 // notification. Shared by the single-email route AND the batch route so their behavior can't drift.
@@ -99,11 +114,22 @@ const intakeForwardedEmail = async ({ from, to, subject, body, html, headers, re
   // Resolve the sender to a real user. Plus-token in `to` wins (it beats a spoofable From), else the
   // From address. Unknown sender → "ignored": keeps the endpoint from being abused as an open scanner
   // and never reveals which addresses are registered.
+  //
+  // SECURITY: the shared x-orbis-token only proves the RELAY is ours — it says nothing about who wrote
+  // the email. Anyone can mail our inbox with a forged "From: victim@acme.com", and the relay would
+  // faithfully forward it, so trusting `from` alone = creating submissions as an arbitrary victim.
+  // When the provider's own auth results prove the sender was forged we refuse the From fallback (the
+  // plus-token path is unaffected — a matched token is real identity, not a claim).
   const token = extractPlusToken(to);
+  const forged = isSenderForged(headers);
   const user =
     (await findUserByToken(prisma, token)) ||
-    (await findUserByEmail(prisma, extractEmailAddress(from)));
-  if (!user) return { status: "ignored" };
+    (forged ? null : await findUserByEmail(prisma, extractEmailAddress(from)));
+  if (!user) {
+    // Never a silent drop: say WHY we refused, so a rejected forward is visible in the logs.
+    if (forged) console.warn("⚠ inbound-email: refusing to attribute a forwarded email whose DKIM/DMARC failed (forged sender)");
+    return { status: "ignored" };
+  }
 
   const rawUrls = extractEmailLinks(subject, body);
 

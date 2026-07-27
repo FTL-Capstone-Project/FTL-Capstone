@@ -121,18 +121,22 @@ describe("POST /api/webhooks/inbound-email", () => {
 
   it("passes optional richer fields (html/headers/replyTo/threadId) through to submitEmail", async () => {
     findUserByEmail.mockResolvedValue(orgMember);
+    // The headers value here is just a PASS-THROUGH fixture — this test asks "do the four optional
+    // fields reach submitEmail?", nothing about auth. It says dmarc=pass because a *failing* value
+    // would now make the route refuse the sender as forged (see the forged-sender describe below),
+    // so the email would never reach submitEmail and this test would be checking the wrong thing.
     await post({
       from: "david@acme.com",
       body: "text",
       html: "<a href='https://evil.ru'>www.paypal.com</a>",
-      headers: "dmarc=fail",
+      headers: "Authentication-Results: dkim=pass; dmarc=pass",
       replyTo: "attacker@evil.ru",
       threadId: "gmail-thread-abc",
     });
     expect(submitEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         html: "<a href='https://evil.ru'>www.paypal.com</a>",
-        headers: "dmarc=fail",
+        headers: "Authentication-Results: dkim=pass; dmarc=pass",
         replyTo: "attacker@evil.ru",
         threadId: "gmail-thread-abc",
       })
@@ -161,6 +165,87 @@ describe("POST /api/webhooks/inbound-email", () => {
     expect(findUserByToken).toHaveBeenCalledWith({}, "david");
     // From lookup is never reached because the token matched.
     expect(findUserByEmail).not.toHaveBeenCalled();
+    expect(submitEmail).toHaveBeenCalledWith(expect.objectContaining({ user: orgMember }));
+  });
+});
+
+// ── the From header is a CLAIM, not identity ──
+// The x-orbis-token proves the RELAY is ours; it says nothing about who wrote the email. Anyone can
+// mail our inbox with a forged "From: victim@acme.com" and the relay forwards it with a valid token —
+// so if we trusted `from` alone, anyone could create submissions as an arbitrary victim. When the mail
+// provider's OWN auth results prove the sender was forged, we refuse to attribute it.
+// The balance being tested: block on PROOF of forgery, never on a mere absence of proof.
+describe("POST /api/webhooks/inbound-email — a forged sender is not identity", () => {
+  beforeEach(() => {
+    // Full reset, not just findUserByEmail: mock state does NOT leak out of a sibling describe on its
+    // own, and findUserByToken is mocked past its real `if (!token) return null` guard — so a stale
+    // mockResolvedValue would resolve a user for a token-less email and mask the check under test.
+    findUserByEmail.mockReset();
+    findUserByToken.mockReset();
+    submitEmail.mockReset();
+    createNotification.mockReset();
+    env.inboundEmail.token = "devsecret";
+    env.inboundEmail.tokens = {};
+    submitEmail.mockResolvedValue({ submissionId: 1, indicatorId: 2, escalated: false });
+    createNotification.mockResolvedValue({});
+    findUserByToken.mockResolvedValue(null);
+    // This sender WOULD match a real user — the auth results are the only reason we refuse.
+    findUserByEmail.mockResolvedValue(orgMember);
+  });
+
+  it("DMARC fail → 202 ignored, and NOTHING is written (no submission, no notification)", async () => {
+    const res = await post({
+      from: "David M. <david@acme.com>",
+      subject: "Fwd: account locked",
+      body: "verify https://paypa1-secure.com/verify",
+      headers: "Authentication-Results: mx.google.com; dkim=pass; spf=pass; dmarc=fail",
+    });
+    expect(res.status).toBe(202);
+    expect(res.body.status).toBe("ignored");
+    // The whole point: refused BEFORE any DB write, so nothing lands on the victim's account.
+    expect(submitEmail).not.toHaveBeenCalled();
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  it("DKIM fail → 202 ignored (a broken signature means the sender may be forged)", async () => {
+    const res = await post({
+      from: "david@acme.com",
+      body: "https://x.com",
+      headers: "Authentication-Results: mx.google.com; dkim=fail; dmarc=pass",
+    });
+    expect(res.status).toBe(202);
+    expect(submitEmail).not.toHaveBeenCalled();
+  });
+
+  it("SPF fail ALONE is still accepted — SPF breaks on every legitimate forward", async () => {
+    // The false-positive we must not create: forwarding through Gmail routinely fails SPF because the
+    // forwarder isn't in the original domain's SPF record. Blocking on it would reject honest forwards.
+    const res = await post({
+      from: "david@acme.com",
+      body: "https://x.com",
+      headers: "Authentication-Results: mx.google.com; dkim=pass; spf=fail; dmarc=pass",
+    });
+    expect(res.status).toBe(201);
+    expect(submitEmail).toHaveBeenCalledWith(expect.objectContaining({ user: orgMember }));
+  });
+
+  it("a matched plus-token still wins over a forged From (token is identity, From is a claim)", async () => {
+    findUserByToken.mockResolvedValue(orgMember);
+    const res = await post({
+      from: "spoofed@acme.com",
+      to: "orbischecks+david@gmail.com",
+      body: "https://x.com",
+      headers: "Authentication-Results: dmarc=fail; dkim=fail",
+    });
+    expect(res.status).toBe(201);
+    // We never fall back to the (forged) From, because the token already resolved a real user.
+    expect(findUserByEmail).not.toHaveBeenCalled();
+    expect(submitEmail).toHaveBeenCalledWith(expect.objectContaining({ user: orgMember }));
+  });
+
+  it("NO headers at all → unchanged 201 (a thin relay sends none; absence of proof isn't forgery)", async () => {
+    const res = await post({ from: "david@acme.com", body: "https://x.com" });
+    expect(res.status).toBe(201);
     expect(submitEmail).toHaveBeenCalledWith(expect.objectContaining({ user: orgMember }));
   });
 });

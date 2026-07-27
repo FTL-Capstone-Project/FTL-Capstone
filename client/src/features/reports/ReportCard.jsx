@@ -6,9 +6,15 @@ import StatusBadge from "../../components/StatusBadge.jsx";
 // stray ")" / quote / newline in a URL could break out of the url() and inject CSS — so we
 // only allow http(s), then encode any CSS-significant chars and wrap in quotes. Returns a full
 // `url("...")` string, or null if the URL isn't a safe http(s) URL.
-const cssUrl = (raw) => {
+// Exported so the escaping can be unit-tested directly — this is a security property, and a test
+// that reads a rendered style string can't prove much about what was rejected.
+export const cssUrl = (raw) => {
   if (typeof raw !== "string" || !/^https?:\/\//i.test(raw)) return null;
-  const safe = raw.replace(/["'()\\\s]/g, encodeURIComponent);
+  // Percent-encode by hand rather than with encodeURIComponent: that function deliberately leaves
+  // ( ) and ' alone (they're "unreserved marks" in a URL), which are exactly the characters that
+  // matter here. So the quoted wrapper below was doing ALL the work on its own — this makes the
+  // escaping real, so the value stays inert even if the quoting style ever changes.
+  const safe = raw.replace(/["'()\\\s]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
   return `url("${safe}")`;
 };
 

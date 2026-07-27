@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const { default: ReportCard } = await import("./ReportCard.jsx");
+const { default: ReportCard, cssUrl } = await import("./ReportCard.jsx");
 
 const baseReport = {
   indicator_id: 7,
@@ -120,5 +120,62 @@ describe("ReportCard — Orbo's number vs the analyst's verdict", () => {
     render(<ReportCard report={stillWorking} showReviewStatus={true} onOpen={() => {}} />);
     expect(screen.getByText("Pending")).toBeInTheDocument();
     expect(screen.queryByText("Reviewed")).not.toBeInTheDocument();
+  });
+});
+
+// The thumbnail is the one place we drop server data into a CSS *style string*, and React does NOT
+// escape inside a style value the way it escapes text children. A screenshot_url containing ")" could
+// otherwise close the url() early and append attacker-chosen CSS. Today the value comes from urlscan
+// (not user text), so this is hardening — these tests exist so a future refactor can't quietly undo it.
+describe("ReportCard — the screenshot URL can't break out of the CSS url()", () => {
+  it("keeps a normal https URL intact", () => {
+    expect(cssUrl("https://urlscan.io/screenshots/abc.png")).toBe('url("https://urlscan.io/screenshots/abc.png")');
+  });
+
+  it("encodes a ')' so it can't close the url() early", () => {
+    const out = cssUrl("https://urlscan.io/a.png);background-image:url(evil");
+    // The ")" became %29, so the ONLY ")" left is the one that closes our own url(...).
+    expect(out).toContain("%29");
+    expect(out.indexOf(")")).toBe(out.length - 1);
+  });
+
+  it("encodes quotes and whitespace (can't escape the quoted string or inject a new declaration)", () => {
+    const out = cssUrl('https://urlscan.io/a.png";background:red;x="');
+    expect(out).not.toMatch(/"[^"]*"[^"]*"/);  // still exactly one quoted run
+    expect(out).toContain("%22");
+    expect(cssUrl("https://urlscan.io/a b.png")).toContain("%20");
+  });
+
+  it("rejects any non-http(s) scheme", () => {
+    // javascript: can't execute in a CSS url(), but there's no reason to emit it at all.
+    expect(cssUrl("javascript:alert(1)")).toBeNull();
+    expect(cssUrl("data:image/svg+xml,<svg onload=alert(1)>")).toBeNull();
+    expect(cssUrl("/relative/path.png")).toBeNull();
+  });
+
+  it("rejects a missing or non-string value (older rows have no screenshot)", () => {
+    expect(cssUrl(null)).toBeNull();
+    expect(cssUrl(undefined)).toBeNull();
+    expect(cssUrl({ toString: () => "https://evil" })).toBeNull();
+  });
+
+  it("renders the card with a hostile screenshot_url without injecting style or breaking layout", () => {
+    const hostile = { ...baseReport, screenshot_url: "https://urlscan.io/a.png);background-image:url(evil" };
+    const { container } = render(<ReportCard report={hostile} onOpen={() => {}} />);
+
+    // The card still renders normally (title present, thumbnail div still there).
+    expect(screen.getByRole("heading", { name: /Fake PayPal login/i })).toBeInTheDocument();
+    const thumb = container.querySelector("article > div");
+    // No second background-image declaration snuck in, and the payload stayed encoded.
+    expect(thumb.getAttribute("style")).not.toContain("url(evil");
+    expect(thumb.style.backgroundImage).not.toContain("evil)");
+  });
+
+  it("falls back to the grey placeholder when the URL is unsafe (no half-built background)", () => {
+    const bad = { ...baseReport, screenshot_url: "javascript:alert(1)" };
+    const { container } = render(<ReportCard report={bad} onOpen={() => {}} />);
+    const thumb = container.querySelector("article > div");
+    expect(thumb.getAttribute("style")).toContain("var(--border)");
+    expect(thumb.getAttribute("style")).not.toContain("javascript:");
   });
 });
