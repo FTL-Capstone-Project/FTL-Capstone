@@ -142,11 +142,13 @@ required 3 screens are wireframed.
 | Ask Orbo (chat home) | analyst | Natural-language entry to the "ask-the-data" AI feature | `NlpQueryBar`, `OrboAvatar`, `PromptChips` | ✅ drawn |
 | Ask Orbo → visualization | analyst | AI answer rendered as a chart (weekly report, heatmap, trends, score distribution, **campaigns**) | `NlpQueryBar`, `Chart`, `ResultTable` | ✅ drawn (6 variants) |
 
-**Campaign view - reconciled.** Campaigns surface in **two** places, both wireframed: (1) as a **grouped view
+**Campaign view - reconciled.** Campaigns surface in **two** wireframed places: (1) as a **grouped view
 in the analyst Reports triage queue** (`CampaignGroupRow` - 20 duplicate reports collapse into one row with a
-count), and (2) as an **Ask Orbo chart** (`analyst-orbo-campaigns`). The earlier standalone "Campaign View"
-detail *page* is **deferred** - the grouped queue row + `GET /api/campaigns/:id` behind the report modal cover
-the MVP need without a separate page. (Decisions Log.)
+count), and (2) as an **Ask Orbo chart** (`analyst-orbo-campaigns`). The standalone "Campaign View" detail
+*page* was originally **deferred**, then **un-deferred in Sprint 2** and built: `CampaignDetail` at
+`/reports/campaigns/:campaignId`, reached by clicking a campaign's **name** in the triage queue (the chevron
+still expands the group in place). It has **no wireframe of its own** - it reuses the analyst Reports card
+layout (`ReportCard` + the report modal) so nothing new was designed. (Decisions Log.)
 
 **Reports page, tailored per role (design decision).** The three reports variants are intentionally different,
 not one layout with columns toggled:
@@ -476,7 +478,8 @@ screen of its own - its results appear on the existing Reports page, so nothing 
 | **Inbound-email provider: ~~Azure~~ → simulate-the-webhook for demo; SendGrid Inbound Parse as the real path** (Jul 13) | Azure email is send-only (can't receive to a webhook); the pipeline after the webhook is all our own code | Azure (send-only, ✗); Cloudflare Email Workers (needs domain on Cloudflare + you write the parse Worker); Mailparser (ugly address, 3rd-party) | Demo path costs $0 and needs no domain; real path (SendGrid) needs a team-owned domain — use a free student domain to avoid paying. See §5. |
 | **Auto-escalate every org-member submission to their analyst** (web chat *or* Orbo email) | Members worry about scams but "report to security" is friction; the act of submitting *is* the report | Require an explicit "send to team" click | Analysts see more items (fine - they triage by priority); members get closure with zero extra steps (stories #6, #7) |
 | **Reports page tailored per role** (individual = minimal; member = personal + closure status; analyst = grouped triage queue) | One shared layout under- and over-served different roles | One unified reports table for all | 3 view variants to build; each role sees exactly what's useful (stories #7, #9, #12) |
-| **Campaign view = grouped queue row + Ask Orbo chart**; standalone campaign *page* deferred | Wireframes surface campaigns in the triage queue and in chat, not a dedicated page | Build a separate campaign detail page for MVP | Slightly less depth per campaign; matches mentors' build order (clustering last) |
+| ~~**Campaign view = grouped queue row + Ask Orbo chart**; standalone campaign *page* deferred~~ **(superseded below)** | Wireframes surface campaigns in the triage queue and in chat, not a dedicated page | Build a separate campaign detail page for MVP | Slightly less depth per campaign; matches mentors' build order (clustering last) |
+| **Campaign detail page un-deferred** (Sprint 2) - `GET /api/campaigns/:id` + a `CampaignDetail` page at `/reports/campaigns/:campaignId` | The grouped queue row alone gave an analyst no way to *open* a campaign, and the endpoint was already specified in §6; built by Ozias off the triage queue he owns | Keep it deferred; surface campaign depth inside the report modal only | Reverses the deferral above; adds a page with no wireframe (reuses the analyst Reports card layout); clustering is still David's and still open (§ Open Questions) |
 | **Ask Orbo ships 1-2 chart variants at MVP** (6 are wireframed) | Six visualizations is the full vision, not the MVP; mentors warned against "boiling the ocean" | Build all 6 | Some charts are fast-follow; keeps Sprint-2 MVP achievable |
 | **Responsive everywhere; deploy on free tiers; seed stand-in data** | Personas are phone-first; the app must be live and populated for the demo | Desktop-only MVP; skip deploy until later; empty dashboard | One responsive build (no separate mobile app); a bit of deploy + seed-script work up front; demo looks real and works on a phone |
 | **Add Google Safe Browsing as a free blacklist signal** (urlscan = sandbox/screenshot/evidence; Safe Browsing = known-bad blacklist; Claude = final verdict) | urlscan's free tier gives evidence + screenshot but its reputation/verdict data is largely Pro-gated; we still want a real "known-bad" check | urlscan-only (no blacklist); VirusTotal (4 req/min, no commercial use); PhishTank (phishing-only) | One extra free API call per new URL; big accuracy + demo payoff. **Caveat:** Safe Browsing is *non-commercial use only* - a real product would switch to Google Web Risk. Stored on the global indicator, so checked once and shared. |

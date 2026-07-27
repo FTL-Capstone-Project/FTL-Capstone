@@ -13,6 +13,7 @@ import SsoCallback from "./features/auth/SsoCallback.jsx";
 import ExtensionInstall from "./features/auth/ExtensionInstall.jsx";
 import Home from "./features/check-link/Home.jsx";
 import Reports from "./features/reports/Reports.jsx";
+import CampaignDetail from "./features/reports/CampaignDetail.jsx";
 import Dashboard from "./features/dashboard/Dashboard.jsx";
 import Insights from "./features/insights/Insights.jsx";
 import Settings from "./features/settings/Settings.jsx";
@@ -53,6 +54,9 @@ const App = () => {
         <Route path="/home" element={<Navigate to="/ask-orbo" replace />} />
         <Route path="/check/:indicatorId" element={<Navigate to="/ask-orbo" replace />} />
         <Route path="/reports" element={<Reports />} />
+        {/* One campaign, opened from a triage-queue campaign row. Nested under /reports on
+            purpose: the sidebar highlights by path prefix, so "Reports" stays lit here. */}
+        <Route path="/reports/campaigns/:campaignId" element={<CampaignDetail />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/insights" element={<Insights />} />{/* AI Feature B: NL → chart */}
         <Route path="/settings" element={<Settings />} />

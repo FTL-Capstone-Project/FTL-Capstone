@@ -252,6 +252,7 @@ const TriageQueue = () => {
                   <CampaignGroupRow
                     key={`campaign-${item.campaignId}`}
                     name={item.name}
+                    campaignId={item.campaignId}
                     reports={item.reports}
                     onOpen={(r) => setSelected(r)}
                   />
