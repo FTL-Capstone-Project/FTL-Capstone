@@ -85,9 +85,15 @@ export function createApp() {
     app.use(clerkMiddleware());
   }
 
-  // Health check (public).
+  // Health check (public). `commit` is the deployed git sha (Render sets RENDER_GIT_COMMIT), so we
+  // can confirm a push actually redeployed this service — every other route is behind requireAuth,
+  // which 401s before any feature code runs, making the API's version otherwise unknowable.
   app.get("/api/health", (_req, res) =>
-    res.json({ ok: true, clerk: env.clerkEnabled ? "live" : "dev-stub" })
+    res.json({
+      ok: true,
+      clerk: env.clerkEnabled ? "live" : "dev-stub",
+      commit: env.gitCommit,
+    })
   );
 
   // 5) Feature routers.

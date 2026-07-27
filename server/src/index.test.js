@@ -10,6 +10,13 @@ describe("GET /api/health", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, clerk: "dev-stub" });
   });
+
+  it("reports the deployed commit so we can verify a redeploy from outside", async () => {
+    // Off Render there's no RENDER_GIT_COMMIT, so it falls back to "local". In prod this is the
+    // real sha — the only way to check which server code is live, since every other route 401s.
+    const res = await request(app).get("/api/health");
+    expect(res.body.commit).toBe("local");
+  });
 });
 
 describe("POST /api/webhooks/clerk", () => {

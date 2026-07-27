@@ -71,6 +71,13 @@ export const env = {
   get isProd() {
     return process.env.NODE_ENV === "production";
   },
+  // Which commit is actually running. Render injects RENDER_GIT_COMMIT automatically on every
+  // build, so /api/health can report it and we can prove a push really redeployed — without
+  // logging in or opening the dashboard. "local" when running outside Render. Safe to expose:
+  // a commit sha of a repo we control is not a secret, and it's the standard build-stamp trick.
+  get gitCommit() {
+    return process.env.RENDER_GIT_COMMIT || "local";
+  },
   // The dev-stub (fake user when Clerk keys are absent) is a SECURITY-SENSITIVE
   // fallback: it logs everyone in as one identity. It must be EXPLICITLY opted into
   // and NEVER activate by accident. We do NOT infer this from NODE_ENV (which nothing
