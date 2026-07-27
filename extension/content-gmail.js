@@ -49,25 +49,35 @@ const shouldScreen = (a) => {
   } catch { return false; }
 };
 
-// POST helper to a prescreen endpoint with auth → { level, score, reasons }.
-const post = async (path, payload) => {
+// POST helper to a prescreen endpoint with auth → { level, score, reasons }. `timeoutMs` aborts a
+// request that hangs (the deep email check sandbox-scans links, so it needs a long ceiling — a
+// server-side budget stops well before this, but we guard the client too).
+const post = async (path, payload, timeoutMs = 30_000) => {
   const { apiUrl, token } = await getConfig();
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${apiUrl}${path}`, { method: "POST", headers, body: JSON.stringify(payload) });
-  if (!res.ok) throw Object.assign(new Error("prescreen failed"), { status: res.status });
-  return res.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${apiUrl}${path}`, { method: "POST", headers, body: JSON.stringify(payload), signal: controller.signal });
+    if (!res.ok) throw Object.assign(new Error("prescreen failed"), { status: res.status });
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 // INSTANT structural pre-check (deterministic; used by the click-guard) → { level, score, reasons }.
 const prescreen = ({ sender, urls }) => post("/api/prescreen", { sender, urls });
 
-// CONTENT-AWARE email check (reads sender + subject + body via the LLM) for the auto-scan badge.
-// If the server has no LLM key (503) or can't analyze (422), fall back to the instant structural
-// check so the badge still shows something rather than nothing.
+// CONTENT-AWARE email check (reads sender + subject + body via the LLM AND sandbox-scans the links)
+// for the auto-scan badge. The link sandbox is the slow leg (a fresh scan is ~10-45s), so we give
+// this a long timeout (75s — just past the server's 60s link budget). If the server has no LLM key
+// (503) or can't analyze (422), fall back to the instant structural check so the badge still shows
+// something rather than nothing.
 const analyzeEmail = async ({ sender, subject, body, urls }) => {
   try {
-    return await post("/api/prescreen/email", { sender, subject, body });
+    return await post("/api/prescreen/email", { sender, subject, body, urls }, 75_000);
   } catch (err) {
     if (err.status === 503 || err.status === 422) {
       log("content analysis unavailable (", err.status, ") → falling back to instant check");
@@ -90,9 +100,11 @@ const asset = (name) => chrome.runtime.getURL(`assets/${name}`);
 let emailBadge = null;
 const removeEmailBadge = () => { emailBadge?.remove(); emailBadge = null; };
 
-// A brief "Orbo is reading this email" state while the content analysis runs (it's an LLM call,
-// ~1-3s). Uses the thinking pose. Replaced by showEmailBadge when the verdict lands.
-const showEmailChecking = () => {
+// A "checking" state while the content analysis runs. When the email has links, Orbo sandbox-scans
+// each one (~10-45s per fresh link), so we say so + note it can take a bit — otherwise the badge
+// looks frozen. Link-less emails resolve in ~1-3s (sender + body only). Uses the thinking pose;
+// replaced by showEmailBadge when the verdict lands.
+const showEmailChecking = (linkCount = 0) => {
   removeEmailBadge();
   const el = document.createElement("div");
   el.setAttribute("data-orbis-email-badge", "1");
@@ -100,12 +112,19 @@ const showEmailChecking = () => {
     position: "fixed", top: "72px", right: "20px", zIndex: "2147483646",
     display: "flex", alignItems: "center", gap: "10px",
     background: "#fff", color: "#1A2233", border: "1.5px solid #E2E6EC", borderRadius: "16px",
-    boxShadow: "0 10px 30px rgba(10,37,64,0.18)", padding: "11px 14px",
+    boxShadow: "0 10px 30px rgba(10,37,64,0.18)", padding: "11px 14px", maxWidth: "300px",
     font: "13px -apple-system,Segoe UI,Roboto,sans-serif",
   });
+  const deep = linkCount > 0;
+  const headline = deep
+    ? `Orbo is deep-scanning ${linkCount} link${linkCount > 1 ? "s" : ""}…`
+    : "Orbo is checking this email…";
+  const sub = deep
+    ? `<div style="font-size:11px;color:#5A6675;margin-top:2px">Opening each link in a safe sandbox — this can take up to a minute.</div>`
+    : "";
   el.innerHTML = `
     <img src="${asset("orbo-thinking.png")}" alt="" width="30" height="30" style="flex-shrink:0" />
-    <div style="font-weight:700">Orbo is checking this email…</div>`;
+    <div><div style="font-weight:700">${headline}</div>${sub}</div>`;
   document.body.appendChild(el);
   emailBadge = el;
 };
@@ -201,19 +220,24 @@ const scanOpenEmail = async () => {
   const key = `${found.sender || ""}|${found.subject || ""}|${found.urls.join(",")}`;
   if (key === lastScanKey) return; // same email already scanned
   lastScanKey = key;
-  // Content analysis calls the LLM (~1-3s), so show a "checking" badge first so the user knows it's
-  // working — this is Orbo actually READING the email, not the instant structural glance.
-  showEmailChecking();
+  // Content analysis calls the LLM (~1-3s) AND sandbox-scans each link (~10-45s per fresh link), so
+  // show a "checking" badge first — telling the user when it's the slow deep link scan so a 30-45s
+  // wait doesn't look frozen. This is Orbo actually READING the email + opening its links safely.
+  showEmailChecking(found.urls.length);
   try {
     const verdict = await analyzeEmail(found);
+    // The deep scan can take up to a minute — the user may have opened a DIFFERENT email by the time
+    // it resolves. If lastScanKey moved on, this result is stale: drop it so we don't overwrite the
+    // newer email's badge (or "checking" state) with an old verdict.
+    if (key !== lastScanKey) { log("stale verdict for a since-closed email — ignoring"); return; }
     log("verdict:", verdict.level, verdict.score);
     showEmailBadge(verdict); // shown for every result (safe reassures; warning/danger warns)
   } catch (err) {
     // Auto-scan is best-effort + silent on failure: a passive feature must never nag with errors.
     // (Turn on debug to see WHY — most often: no token set, or CORS/API not reachable.)
     log("email analysis failed:", err.status || "", err.message);
-    removeEmailBadge();
-    lastScanKey = "";
+    // Only clear the badge/key if THIS scan is still the current one (else we'd wipe a newer email's).
+    if (key === lastScanKey) { removeEmailBadge(); lastScanKey = ""; }
   }
 };
 

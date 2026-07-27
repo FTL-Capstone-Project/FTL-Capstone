@@ -2,24 +2,31 @@
 
 Orbo watches your inbox for phishing. Three surfaces, all reusing the existing Orbis API:
 
-1. **Auto-scan on open (Gmail):** open an email and Orbo instantly checks the **sender + every
+1. **Auto-scan on open (Gmail):** open an email and Orbo checks the **sender + wording + every
    link** and shows a fixed **safe / warning / danger** badge in the top-right — no clicking. This
-   guards the "just clicking a link" phishing case: you see the risk before you touch anything.
+   guards the "just clicking a link" phishing case: you see the risk before you touch anything. If
+   the email has links, Orbo **sandbox-scans each one** (urlscan + Safe Browsing), so the badge
+   waits (a "deep-scanning links…" state, ~10-45s per fresh link) to catch a benign-looking email
+   that hides a malicious link. Link-less emails resolve in ~1-3s (sender + wording only).
 2. **Click guard (Gmail):** if you click a link, Orbo re-checks it and blocks navigation behind a
    warning if it's risky.
 3. **Right-click anywhere:** select a link or **sender email** → **"Check with Orbis"** → a popup
    runs the check (links use the full sandbox scan; emails get an instant sender report).
 
-The auto-scan + click guard use the INSTANT deterministic pre-check (`/api/prescreen`, ~80ms — no
-sandbox); the right-click popup uses `/api/submissions` (links) or `/api/ask-orbo/sender-report`
-(emails). No new backend logic — thin client over existing endpoints.
+The auto-scan uses the CONTENT-AWARE check (`/api/prescreen/email` — sender trust + body LLM +
+sandbox-scan every link, combined worst-of; it persists nothing). The click guard uses the INSTANT
+deterministic pre-check (`/api/prescreen`, ~80ms — no sandbox). The right-click popup uses
+`/api/submissions` (links) or `/api/ask-orbo/sender-report` (emails). The email endpoint reuses the
+SAME three legs as the forwarded-email pipeline — thin client over shared analysis.
 
 ## Privacy
 
-The Gmail **auto-scan** sends the **sender + subject + body text** of the open email to
-`/api/prescreen/email` so Orbo can actually READ it for scam signals (the earlier link-only check
-couldn't judge a scam whose danger was in the words, so it under-rated them). The body is capped in
-length and **not stored** server-side — it's read to produce the verdict and discarded. If the
+The Gmail **auto-scan** sends the **sender + subject + body text + link URLs** of the open email to
+`/api/prescreen/email` so Orbo can actually READ it for scam signals AND sandbox-scan its links (the
+earlier link-only check couldn't judge a scam whose danger was in the words; the words-only check
+couldn't catch a malicious link under benign wording — now it does both). The body is capped in
+length and **not stored** server-side — it's read to produce the verdict and discarded, and the
+auto-scan persists **no** Indicator (opening an email must not flood Reports/analyst triage). If the
 server has no LLM key, the badge falls back to the instant structural check (sender + links only).
 
 The **click-guard** (when you click a link) still uses the instant structural check
