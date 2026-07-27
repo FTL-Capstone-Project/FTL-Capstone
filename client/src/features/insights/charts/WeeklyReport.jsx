@@ -14,6 +14,7 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { VERDICT_COLOR, defaultAxisProps, defaultTooltipStyle } from "../../../lib/chartConfig.js";
+import EmptyChart from "./EmptyChart.jsx";
 
 // Rising threat volume is bad news, so up = danger red, down = safe green (see TrendChart).
 const DIRECTION_STYLE = {
@@ -42,11 +43,7 @@ const WeeklyReport = ({ data, chartSpec }) => {
   const { subtitle } = chartSpec;
 
   if (totals.total === 0) {
-    return (
-      <p style={{ color: "var(--text-dim)" }}>
-        No submissions in the last 7 days, so there's nothing to report yet.
-      </p>
-    );
+    return <EmptyChart message="No submissions in the last 7 days, so there's nothing to report yet." />;
   }
 
   return (

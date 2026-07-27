@@ -171,6 +171,59 @@ describe("Insights — empty states and errors still behave", () => {
     expect(await screen.findByText(/No submissions match that question yet/i)).toBeTruthy();
   });
 
+  // Each of these used to render its FRAME with no content — an all-grey heatmap grid, or empty
+  // axes plus a legend of "0 submissions · 0%" — which reads as broken rather than "no data".
+  it("shows an empty message for a heatmap with no activity, not a grid of grey boxes", async () => {
+    await ask({
+      data: [{ day: 0, slot: 0, value: 0 }, { day: 3, slot: 5, value: 0 }],
+      chartSpec: {
+        type: "heatmap", title: "Submission Activity Heatmap",
+        days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        slots: ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"],
+        max: 0, empty: true,
+      },
+    });
+    expect(await screen.findByText(/no activity pattern to show yet/i)).toBeTruthy();
+    // The grid itself must be gone, not merely empty.
+    expect(screen.queryByText("Mon")).toBeNull();
+  });
+
+  it("shows an empty message for a trend with no series, not bare axes", async () => {
+    await ask({ data: [], chartSpec: { type: "trend", title: "90-Day Threat Trend", series: [], deltas: [], empty: true } });
+    expect(await screen.findByText(/no trend to chart yet/i)).toBeTruthy();
+    expect(screen.queryByTestId("linechart")).toBeNull();
+  });
+
+  it("shows an empty message for a histogram where every bucket is zero", async () => {
+    await ask({
+      data: [{ label: "0–9", value: 0, band: "dangerous" }, { label: "90–99", value: 0, band: "safe" }],
+      chartSpec: {
+        type: "histogram", title: "Orbis Score Distribution",
+        bands: [{ band: "safe", label: "Safe (70–100)", count: 0, pct: 0 }], empty: true,
+      },
+    });
+    expect(await screen.findByText(/no score distribution to show/i)).toBeTruthy();
+    expect(screen.queryByTestId("barchart")).toBeNull();
+  });
+
+  it("shows an empty message for a table with no campaigns", async () => {
+    await ask({ data: [], chartSpec: { type: "table", title: "Active Threat Campaigns", empty: true } });
+    expect(await screen.findByText(/No campaigns detected/i)).toBeTruthy();
+  });
+
+  // A count of zero is a REAL answer ("no dangerous links this week" = good news), so the big 0
+  // stays. Two separate tests because each ask() renders its own <Insights />.
+  it("still shows a real zero count when the org HAS data", async () => {
+    await ask({ data: [{ label: "Total", value: 0 }], chartSpec: { type: "count", title: "Dangerous links this week" } });
+    expect(await screen.findByText("0")).toBeTruthy();
+  });
+
+  it("shows an empty state instead of a big 0 when the org has no submissions at all", async () => {
+    await ask({ data: [{ label: "Total", value: 0 }], chartSpec: { type: "count", title: "Dangerous links this week", empty: true } });
+    expect(await screen.findByText(/nothing to count/i)).toBeTruthy();
+    expect(screen.queryByText("0")).toBeNull();
+  });
+
   it("still renders the generic count answer (David's original path is untouched)", async () => {
     await ask({ data: [{ label: "Total", value: 42 }], chartSpec: { type: "count", title: "Blacklisted domains" } });
     expect(await screen.findByText("42")).toBeTruthy();

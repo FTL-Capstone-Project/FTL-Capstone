@@ -12,9 +12,16 @@
 // legend labels the real thresholds.
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { VERDICT_COLOR, defaultAxisProps, defaultTooltipStyle } from "../../../lib/chartConfig.js";
+import EmptyChart from "./EmptyChart.jsx";
 
 const ScoreHistogram = ({ data, chartSpec }) => {
   const { bands, subtitle } = chartSpec;
+
+  // All ten buckets always come back, so "no data" means every bucket is zero — otherwise the
+  // analyst sees a flat axis plus a legend reading "0 submissions · 0%" three times over.
+  if (chartSpec.empty || !data.some((bucket) => bucket.value > 0)) {
+    return <EmptyChart message="No scored submissions yet, so there's no score distribution to show." />;
+  }
 
   return (
     <div>

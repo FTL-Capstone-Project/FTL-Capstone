@@ -8,6 +8,7 @@
 // Same field names the triage queue already renders (both come from listCampaigns on the server),
 // so there's nothing to reconcile between the two screens.
 import { VERDICT_COLOR } from "../../../lib/chartConfig.js";
+import EmptyChart from "./EmptyChart.jsx";
 
 // A campaign's status badge colour follows its verdict band: Active(dangerous) → Monitoring →
 // Contained(safe). Derived server-side so the label and the colour can't disagree.
@@ -25,7 +26,7 @@ const CampaignTable = ({ data, chartSpec }) => {
   const mostItems = Math.max(1, ...data.map((c) => c.indicatorCount)); // bar strip scale
 
   if (data.length === 0) {
-    return <p style={{ color: "var(--text-dim)" }}>No campaigns detected for your organization yet.</p>;
+    return <EmptyChart message="No campaigns detected for your organization yet." />;
   }
 
   return (

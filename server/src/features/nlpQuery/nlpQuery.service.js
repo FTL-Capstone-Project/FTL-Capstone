@@ -68,14 +68,56 @@ const REPORT_KEYWORDS = {
   distribution: [["distribution"], ["histogram"], ["score", "spread"], ["score", "breakdown"]],
 };
 
-// Try to map a question straight to a named report (no LLM). Returns a validated spec or null.
+// ── Small date helper (UTC, no external dep) ──
+// UTC everywhere, matching dashboard.service.js. Defined up here because arrow consts aren't
+// hoisted and the keyword matcher below calls it. The heatmap surfaces the UTC caveat in its
+// subtitle so an analyst in another timezone isn't misled by the hour labels.
+const startOfUtcDay = (daysBack = 0) => {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - daysBack);
+  return d;
+};
+
+// The GENERIC (non-report) prompt chips deserve the same no-LLM treatment. Every string the
+// Insights page offers as a chip must answer without depending on the model: the chip is a
+// promise the UI makes, and "How many dangerous links this week?" used to be the only one that
+// could fail — the LLM sometimes answered {"unmappable":true} or a spec that failed validation,
+// which surfaced as the "try rephrasing" fallback suggesting the very question just asked.
+// Each entry maps keyword sets → the already-validated spec shape validateSpec() produces.
+const COUNT_BUCKETS = { dangerous: "dangerous", suspicious: "review", safe: "safe" };
+const THIS_WEEK_WORDS = [["this", "week"], ["last", "7", "days"], ["past", "week"], ["7", "days"]];
+
+// "how many <bucket> links this week" → a count filtered to that verdict + the last 7 days.
+const matchBucketCount = (text) => {
+  // "how many" (or "count") + a verdict word is the shape we recognise. Anything more
+  // specific still falls through to the LLM, which can express filters we don't hardcode.
+  const asksHowMany = text.includes("how many") || text.includes("count of") || text.startsWith("count ");
+  if (!asksHowMany) return null;
+
+  const bucketWord = Object.keys(COUNT_BUCKETS).find((word) => text.includes(word));
+  if (!bucketWord) return null;
+
+  const scopedToWeek = THIS_WEEK_WORDS.some((set) => set.every((word) => text.includes(word)));
+  const filters = [];
+  let title = `${bucketWord[0].toUpperCase()}${bucketWord.slice(1)} links`;
+  if (scopedToWeek) {
+    // Same 7-day window the weekly report uses, so the two screens can't disagree.
+    filters.push({ column: "createdAt", op: "gte", value: startOfUtcDay(6) });
+    title += " this week";
+  }
+  return { chart: "count", groupBy: null, filters, verdictBucket: COUNT_BUCKETS[bucketWord], title };
+};
+
+// Try to map a question straight to an answer with NO LLM call. Returns a validated spec or null.
+// Two families: the 5 named reports, and the generic "how many X" counts above.
 export const matchReport = (question) => {
   const text = String(question ?? "").toLowerCase();
   for (const [report, keywordSets] of Object.entries(REPORT_KEYWORDS)) {
     const hit = keywordSets.some((set) => set.every((word) => text.includes(word)));
     if (hit) return { report, chart: REPORTS[report].chart, title: REPORTS[report].title };
   }
-  return null;
+  return matchBucketCount(text);
 };
 
 // Group-by dimensions the analyst can slice by (safe columns only).
@@ -188,16 +230,6 @@ const emptyResult = (spec) => {
   }
   if (spec.chart === "count") return { data: [{ label: "Total", value: 0 }], chartSpec: { type: "count", title: spec.title, empty: true } };
   return { data: [], chartSpec: { type: spec.chart, title: spec.title, empty: true } };
-};
-
-// ── Small date + maths helpers (UTC, no external dep) ──
-// UTC everywhere, matching dashboard.service.js. The heatmap surfaces this in its subtitle so an
-// analyst in another timezone isn't misled by the hour labels.
-const startOfUtcDay = (daysBack = 0) => {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  d.setUTCDate(d.getUTCDate() - daysBack);
-  return d;
 };
 
 // Percent change current-vs-previous. Same rubric as dashboard.service.js's trend() so the two

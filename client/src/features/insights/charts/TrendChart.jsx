@@ -13,6 +13,7 @@
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { CHART_COLORS, defaultAxisProps, defaultTooltipStyle } from "../../../lib/chartConfig.js";
+import EmptyChart from "./EmptyChart.jsx";
 
 // An "up" trend in threat volume is BAD news, so rising = danger red and falling = safe green.
 // (The opposite of a finance chart — worth being explicit about.)
@@ -40,6 +41,13 @@ const DeltaChip = ({ delta }) => {
 
 const TrendChart = ({ data, chartSpec }) => {
   const { series, deltas, subtitle } = chartSpec;
+
+  // With no tagged submissions there are no series, so Recharts would draw empty axes and an
+  // empty legend. `series` being empty is the real signal — data buckets can exist while every
+  // count is zero.
+  if (chartSpec.empty || !series?.length || data.length === 0) {
+    return <EmptyChart message="No tagged submissions in the last 90 days, so there's no trend to chart yet." />;
+  }
 
   return (
     <div>

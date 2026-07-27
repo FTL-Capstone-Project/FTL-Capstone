@@ -142,6 +142,42 @@ describe("matchReport — the no-LLM fast path for the 5 wireframed reports", ()
     expect(matchReport("")).toBeNull();
     expect(matchReport(undefined)).toBeNull();
   });
+
+  // The Insights page advertises "How many dangerous links this week?" as a prompt chip, so it
+  // must NEVER depend on the LLM answering well — it used to fall through and could come back as
+  // the "try rephrasing" fallback (which absurdly suggested the very question just asked).
+  it("answers the 'how many <verdict> links this week' chip with no LLM call", () => {
+    const spec = matchReport("How many dangerous links this week?");
+    expect(spec.chart).toBe("count");
+    expect(spec.verdictBucket).toBe("dangerous");
+    expect(spec.title).toBe("Dangerous links this week");
+    // A createdAt >= filter scopes it to the last 7 days, same window as the weekly report.
+    expect(spec.filters).toHaveLength(1);
+    expect(spec.filters[0]).toMatchObject({ column: "createdAt", op: "gte" });
+    expect(spec.filters[0].value).toBeInstanceOf(Date);
+  });
+
+  it("maps each verdict word to the right internal bucket", () => {
+    expect(matchReport("how many safe links this week").verdictBucket).toBe("safe");
+    // "suspicious" is the UI's wording for the internal "review" band.
+    expect(matchReport("how many suspicious links this week").verdictBucket).toBe("review");
+  });
+
+  it("drops the date filter when the question isn't scoped to a week", () => {
+    const spec = matchReport("how many dangerous links");
+    expect(spec.filters).toEqual([]);
+    expect(spec.title).toBe("Dangerous links");
+  });
+
+  it("still prefers a named report when the question mentions both", () => {
+    // "weekly report" wins over the "how many" count path — reports are checked first.
+    expect(matchReport("how many dangerous links are in the weekly report").report).toBe("weekly");
+  });
+
+  it("leaves questions with filters it can't express to the LLM", () => {
+    // No verdict word → not a bucket count, so the model still gets its chance.
+    expect(matchReport("how many links did marcus submit")).toBeNull();
+  });
 });
 
 describe("named reports — the whitelist holds", () => {

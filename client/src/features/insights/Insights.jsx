@@ -12,6 +12,7 @@ import TrendChart from "./charts/TrendChart.jsx";
 import CampaignTable from "./charts/CampaignTable.jsx";
 import ScoreHistogram from "./charts/ScoreHistogram.jsx";
 import WeeklyReport from "./charts/WeeklyReport.jsx";
+import EmptyChart from "./charts/EmptyChart.jsx";
 
 // ── feature: insights · owner: David · charts 3–6 built by Ozias ──
 // AI Feature B frontend. An analyst asks the threat history in plain English; the server
@@ -47,11 +48,17 @@ const Chart = ({ data, chartSpec }) => {
   // ── the generic charts ──
   // An org with no data yet: say so rather than rendering empty axes.
   if (chartSpec.type !== "count" && data.length === 0) {
-    return <p style={{ color: "var(--text-dim)" }}>No submissions match that question yet.</p>;
+    return <EmptyChart message="No submissions match that question yet." />;
   }
 
   if (chartSpec.type === "count") {
     const total = data[0]?.value ?? 0;
+    // A count of zero is a real answer ("no dangerous links this week" is good news), so we show
+    // the 0 rather than an empty state. But chartSpec.empty means the ORG has no submissions at
+    // all — a big "0" there reads like a computed result when really there's nothing to compute.
+    if (chartSpec.empty) {
+      return <EmptyChart message="No submissions in your organization yet, so there's nothing to count." />;
+    }
     return (
       <div style={{ textAlign: "center", padding: "32px 0" }}>
         <div style={{ fontSize: 56, fontWeight: 800, color: "var(--primary)" }}>{total}</div>

@@ -8,6 +8,8 @@
 //   chartSpec = { days: ["Mon",…], slots: ["12am",…], max, subtitle }
 // The server always sends every cell, so we never have to guess at gaps.
 
+import EmptyChart from "./EmptyChart.jsx";
+
 // Colour ramp: one hue (danger red, like the wireframe) at five opacities. We scale each cell
 // against the busiest cell (chartSpec.max) so the ramp always uses its full range.
 const STEPS = [0.12, 0.3, 0.5, 0.75, 1];
@@ -38,6 +40,13 @@ const Cell = ({ value, max }) => {
 
 const HeatmapChart = ({ data, chartSpec }) => {
   const { days, slots, max, subtitle } = chartSpec;
+
+  // No activity at all → say so. The server still sends all 56 cells even when every count is
+  // zero, so without this the analyst gets a full grid of uniformly grey boxes, which looks
+  // like a rendering bug rather than "nothing was submitted".
+  if (chartSpec.empty || !data.some((cell) => cell.value > 0)) {
+    return <EmptyChart message="No submissions in the last 30 days, so there's no activity pattern to show yet." />;
+  }
 
   // Index the flat cell list by "day:slot" so each grid position is a direct lookup.
   const byCell = new Map(data.map((c) => [`${c.day}:${c.slot}`, c.value]));
