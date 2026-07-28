@@ -24,6 +24,17 @@ a:hover { text-decoration: underline; }
   .report-card__score { text-align: left; }
 }
 
+/* ── Dashboard responsive grids ──
+   The dashboards laid out their main column + right rail as an inline "minmax(0,1fr) 300px" and
+   their chart rows as "1fr 1fr", with NO responsive fallback — so on a phone the 300px rail and the
+   side-by-side charts got crushed into unreadable slivers. These two classes carry the desktop
+   layout AND stack to a single column under 768px. Applied in place of the inline templates. */
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
+.dash-two-col   { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 768px) {
+  .dashboard-grid, .dash-two-col { grid-template-columns: 1fr; }
+}
+
 /* Whole report card is clickable, but only the title <button> is a real control
    (keeps the <h3> in the heading outline for screen readers). The button's ::after
    stretches over the entire card so a click anywhere opens the modal. */

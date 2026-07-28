@@ -39,6 +39,10 @@ const TriageQueue = () => {
   const [campaigns, setCampaigns] = useState([]); // for grouping rows by campaign (G1·06)
   const [filter, setFilter] = useState(Filters.ALL); // "all" | "pending"
   const [selected, setSelected] = useState(null);     // open report (null = closed)
+  // Queue load status — so a failed fetch shows an error+retry, not "No reports in your org yet"
+  // (which would tell an analyst with a real backlog that their queue is empty). Start true.
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   // ── search state ───────────────────────────────────────────────────────────
   // Seeded from ?q= so the sidebar search bar can deep-link an analyst straight into results, and
@@ -56,11 +60,14 @@ const TriageQueue = () => {
 
   // Load the full org queue for this analyst. all=1 asks the backend to skip the
   // shared-only privacy gate so pending/investigating items are included.
-  useEffect(() => {
+  const loadQueue = () => {
+    setLoading(true); setLoadError(false);
     api.get("/api/history?org=1&all=1", { getToken })
       .then((data) => setReports(data.reports ?? []))
-      .catch(() => setReports([]));
-  }, [getToken]);
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => { loadQueue(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [getToken]);
 
   // Load this org's campaigns so related reports can cluster under a campaign header.
   // Graceful fallback: if the endpoint is unavailable, we just render rows ungrouped.
@@ -239,8 +246,20 @@ const TriageQueue = () => {
             })}
           </div>
 
-          {/* The queue. Empty states depend on which filter is active. */}
-          {reports.length === 0 ? (
+          {/* The queue. Loading / error FIRST, so a failed fetch never reads as "queue is empty"
+              to an analyst who actually has a backlog. */}
+          {loading ? (
+            <p style={{ color: "var(--text-dim)" }}>Loading the queue…</p>
+          ) : loadError ? (
+            <p style={{ color: "var(--text-dim)" }}>
+              Couldn't load the triage queue just now.{" "}
+              <button onClick={loadQueue}
+                style={{ background: "none", border: "none", padding: 0, color: "var(--primary)",
+                  fontWeight: 700, cursor: "pointer", font: "inherit" }}>
+                Try again
+              </button>
+            </p>
+          ) : reports.length === 0 ? (
             <p style={{ color: "var(--text-dim)" }}>
               No reports in your organization yet.
             </p>

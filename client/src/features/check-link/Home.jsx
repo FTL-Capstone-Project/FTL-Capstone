@@ -170,10 +170,17 @@ const Home = () => {
       lastIndicatorId.current = indicatorId;
       add({ role: "orbo", kind: "verdict", indicatorId });
     } catch (err) {
+      // Surface the server's own message for any 4xx — our 4xx bodies are already user-safe, and this
+      // is the CORE action, so "that doesn't look checkable" (400) and "you're checking a lot, give it
+      // a few seconds" (429, the submissions rate limiter) each deserve their real message instead of
+      // the generic "something went wrong". Only 5xx/network fall back to the generic line.
+      const clientError = err.status >= 400 && err.status < 500 && err.body?.error;
       add({ role: "orbo", kind: "text", pose: "caution",
-        text: err.status === 400
-          ? (err.body?.error ?? "That doesn't look like something I can check.")
-          : "Something went wrong reaching me just now. Please try again." });
+        text: clientError
+          ? err.body.error
+          : (err.status === 400
+              ? "That doesn't look like something I can check."
+              : "Something went wrong reaching me just now. Please try again.") });
     } finally {
       setBusy(false);
     }

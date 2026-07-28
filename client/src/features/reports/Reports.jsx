@@ -62,6 +62,11 @@ const MyChecks = ({ role }) => {
   const [showArchived, setShowArchived] = useState(false); // My History sub-view: active vs archived
   const [selected, setSelected] = useState(null); // the report whose detail modal is open (null = closed)
   const [pendingDelete, setPendingDelete] = useState(null); // report awaiting the "are you sure?" confirm
+  // Load status for the CURRENTLY-shown list. Without this a failed fetch was indistinguishable from
+  // "you have no reports" — a user with real history whose request errored got told to go start over.
+  // Start true so the first paint shows "Loading…", not an empty-state flash.
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   // Members see the closure chip + Team History toggle; solo individuals don't.
   // (Analysts never reach here — they get TriageQueue above.) FRONTEND role = what
@@ -70,26 +75,32 @@ const MyChecks = ({ role }) => {
 
   // Always load my own ACTIVE reports (the default "My History" view).
   useEffect(() => {
+    setLoading(true); setLoadError(false);
     api.get("/api/history?mine=1", { getToken })
       .then((data) => setReports(data.reports ?? []))
-      .catch(() => setReports([]));
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
   }, [getToken]);
 
   // Load my ARCHIVED reports only when I actually open the archived sub-view (lazy, like Team History).
   useEffect(() => {
     if (scope !== "mine" || !showArchived) return;
+    setLoading(true); setLoadError(false);
     api.get("/api/history?mine=1&archived=1", { getToken })
       .then((data) => setArchivedReports(data.reports ?? []))
-      .catch(() => setArchivedReports([]));
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
   }, [scope, showArchived, getToken]);
 
   // Load the org-wide reports only for org members, and only when they actually
   // open the Team History tab (don't fetch data the user may never look at).
   useEffect(() => {
     if (!isMember || scope !== "team") return;
+    setLoading(true); setLoadError(false);
     api.get("/api/history?org=1", { getToken })
       .then((data) => setTeamReports(data.reports ?? []))
-      .catch(() => setTeamReports([]));
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
   }, [isMember, scope, getToken]);
 
   // Archive one of MY reports: hide it locally right away (optimistic), then persist. On failure,
@@ -144,6 +155,18 @@ const MyChecks = ({ role }) => {
     api.get("/api/history?mine=1", { getToken }).then((d) => setReports(d.reports ?? [])).catch(() => {});
   const reloadArchived = () =>
     api.get("/api/history?mine=1&archived=1", { getToken }).then((d) => setArchivedReports(d.reports ?? [])).catch(() => {});
+
+  // Re-fetch whichever list is currently showing — backs the "Try again" button on the error state.
+  const reloadActive = () => {
+    const url = scope === "team" ? "/api/history?org=1"
+      : showArchived ? "/api/history?mine=1&archived=1" : "/api/history?mine=1";
+    const set = scope === "team" ? setTeamReports : showArchived ? setArchivedReports : setReports;
+    setLoading(true); setLoadError(false);
+    api.get(url, { getToken })
+      .then((d) => set(d.reports ?? []))
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
+  };
 
   // Which dataset is active: Team History, my archived list, or my active list. Then apply the
   // selected filter on top of whichever is showing. "Forwarded" filters by report SOURCE (how it
@@ -249,9 +272,20 @@ const MyChecks = ({ role }) => {
         </label>
       </div>
 
-      {/* The list. Three states: no reports at all, none match the filter, or show them.
-          The "empty" message depends on which tab you're viewing. */}
-      {activeReports.length === 0 ? (
+      {/* The list. Loading / error come FIRST, so a slow or failed fetch is never mistaken for
+          "you have no reports" (which used to tell a user with real history to go start over). */}
+      {loading ? (
+        <p style={{ color: "var(--text-dim)" }}>Loading your checks…</p>
+      ) : loadError ? (
+        <p style={{ color: "var(--text-dim)" }}>
+          Couldn't load your reports just now.{" "}
+          <button onClick={reloadActive}
+            style={{ background: "none", border: "none", padding: 0, color: "var(--primary)",
+              fontWeight: 700, cursor: "pointer", font: "inherit" }}>
+            Try again
+          </button>
+        </p>
+      ) : activeReports.length === 0 ? (
         <p style={{ color: "var(--text-dim)" }}>
           {scope === "team"
             ? "No team checks yet — your organization's reports will show up here."

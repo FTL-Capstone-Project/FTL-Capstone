@@ -94,7 +94,7 @@ const AnalystDashboard = () => {
       <h1 style={{ color: "var(--navy)", margin: "0 0 20px" }}>Analyst Dashboard</h1>
 
       {/* Two columns: main content + right activity rail (rail drops below on narrow screens). */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: 24, alignItems: "start" }}>
+      <div className="dashboard-grid">
         <div style={{ display: "grid", gap: 20 }}>
           {/* ── Stat tiles ── */}
           <div
@@ -139,7 +139,7 @@ const AnalystDashboard = () => {
               Recharts ResponsiveContainer reports one, so a 1fr column can't shrink, the row grows
               wider than <main>, and the whole page scrolls sideways. minmax(0, …) drops the floor
               to 0 so the columns fit (same fix as the outer minmax(0, 1fr) 300px grid). */}
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
+          <div className="dash-two-col">
             {/* 30-day submission trend (matches the personal dashboard's window). */}
             <Card title="Submission Trend" sub="Past 30 days">
               {trend.every((d) => d.count === 0) ? (
@@ -192,7 +192,7 @@ const AnalystDashboard = () => {
           </div>
 
           {/* ── Threat intel row: what categories + which hosts are being weaponized ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
+          <div className="dash-two-col">
             {threatTypes.length > 0 ? (
               <ThreatTypesChart
                 types={threatTypes}
@@ -233,7 +233,7 @@ const AnalystDashboard = () => {
           </div>
 
           {/* ── Analyst analytics row: review health (text) + AI-confidence mix ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
+          <div className="dash-two-col">
             <ReviewInsights
               calibration={scoreCalibration}
               turnaroundDays={avgTurnaroundDays}
@@ -243,7 +243,7 @@ const AnalystDashboard = () => {
           </div>
 
           {/* ── Coverage row: who's reporting + org-wide deterministic signals & channels ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
+          <div className="dash-two-col">
             <TopReporters reporters={topReporters} />
             <SafetySignals redFlags={redFlags} channels={channels} />
           </div>

@@ -192,3 +192,34 @@ describe("TriageQueue — search", () => {
     await waitFor(() => expect(screen.getByText(/narrow your search to see more/i)).toBeInTheDocument());
   });
 });
+
+describe("TriageQueue — load states", () => {
+  it("a FAILED queue fetch shows an error + Try again, NOT the empty-queue message", async () => {
+    // The bug this guards: a failed fetch used to fall through to "No reports in your organization
+    // yet", telling an analyst with a real backlog their queue was empty. It must read as an error.
+    apiGet.mockImplementation((path) => {
+      if (path.startsWith("/api/campaigns")) return Promise.resolve({ campaigns: [] });
+      return Promise.reject(new Error("network down"));
+    });
+    renderQueue();
+
+    await waitFor(() => expect(screen.getByText(/couldn't load the triage queue/i)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no reports in your organization yet/i)).not.toBeInTheDocument();
+  });
+
+  it("Try again re-fetches and renders the queue on recovery", async () => {
+    let calls = 0;
+    apiGet.mockImplementation((path) => {
+      if (path.startsWith("/api/campaigns")) return Promise.resolve({ campaigns: [] });
+      calls += 1;
+      return calls === 1 ? Promise.reject(new Error("blip")) : Promise.resolve({ reports: rows });
+    });
+    const user = userEvent.setup();
+    renderQueue();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+    await waitFor(() => expect(screen.getAllByRole("heading", { level: 3 }).length).toBe(4));
+  });
+});

@@ -42,7 +42,7 @@ In the Render dashboard, on each service → **Environment**:
 | `CLERK_SECRET_KEY` | `sk_...` |
 | `CLERK_PUBLISHABLE_KEY` | `pk_...` |
 | `CLERK_WEBHOOK_SECRET` | `whsec_...` (from the Clerk webhook endpoint) |
-| `ANTHROPIC_API_KEY` | LLM gateway key |
+| `OPENAI_API_KEY` | LLM key (`sk-proj-...`) — verdicts, Ask Orbo, vision, NLP. `ANTHROPIC_API_KEY` still accepted as a legacy fallback. |
 | `URLSCAN_API_KEY` | urlscan.io key (optional; stubs without it) |
 | `GOOGLE_SAFE_BROWSING_KEY` | Safe Browsing key (optional) |
 | `INBOUND_EMAIL_TOKEN` | shared secret for the email-forwarding relay (see Step 7); `/inbound-email` 503s until set |

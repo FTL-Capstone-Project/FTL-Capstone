@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { SignedIn, SignedOut } from "@clerk/clerk-react";
 import ProtectedRoute from "./features/auth/ProtectedRoute.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import AppShell from "./components/AppShell.jsx";
 import ComingSoon from "./components/ComingSoon.jsx";
 
@@ -28,6 +29,9 @@ import Settings from "./features/settings/Settings.jsx";
 // is bounced into the app (<PublicOnly>). /ask-orbo is the canonical chat Home.
 const App = () => {
   return (
+    // One boundary around all routes: a render-time throw in any screen shows a recoverable
+    // "something went wrong" fallback instead of unmounting the whole app to a blank screen.
+    <ErrorBoundary>
     <Routes>
       {/* Public marketing + auth flow. */}
       <Route path="/" element={<Landing />} />
@@ -64,6 +68,7 @@ const App = () => {
         <Route path="*" element={<ComingSoon note="That page doesn't exist yet." />} />
       </Route>
     </Routes>
+    </ErrorBoundary>
   );
 };
 
