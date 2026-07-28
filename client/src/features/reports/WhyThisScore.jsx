@@ -20,7 +20,9 @@
 //   nextSteps — ["Verify with the sender…", …] plain strings from the server, so the advice can
 //               never contradict the score (code picks it, not the AI).
 import { useState } from "react";
-import { AlertTriangle, ShieldCheck, ChevronDown, ChevronRight, Compass } from "lucide-react";
+// ChevronRight is gone on purpose — the collapse now rotates a single ChevronDown instead of
+// swapping between two icons (see the button below).
+import { AlertTriangle, ShieldCheck, ChevronDown, Compass } from "lucide-react";
 
 // Severity → theme color for the row dot. Same three tokens EvidenceList uses in the chat card,
 // so a "why" row looks the same wherever it appears.
@@ -124,12 +126,15 @@ const WhyThisScore = ({ evidence = [], nextSteps = [] }) => {
             >
               <ShieldCheck size={15} color="var(--safe)" aria-hidden />
               What checked out ({checks.length})
-              {checksOpen
-                ? <ChevronDown size={15} aria-hidden style={{ marginLeft: "auto" }} />
-                : <ChevronRight size={15} aria-hidden style={{ marginLeft: "auto" }} />}
+              {/* ONE chevron that rotates, rather than swapping ChevronRight for ChevronDown. The
+                  rotation shows the panel opening; an icon swap is just a different picture
+                  appearing, which teaches the reader nothing. data-open drives the CSS. */}
+              <ChevronDown size={15} aria-hidden className="orbis-chevron"
+                data-open={checksOpen} style={{ marginLeft: "auto" }} />
             </button>
             {checksOpen && (
-              <ul id="why-checks-list" style={{ listStyle: "none", margin: "8px 0 0", padding: 0,
+              <ul id="why-checks-list" className="orbis-reveal"
+                style={{ listStyle: "none", margin: "8px 0 0", padding: 0,
                 display: "grid", gap: 8 }}>
                 {checks.map((row, i) => (
                   <EvidenceRow key={i} text={row.text} severity={row.severity} weight={row.weight} />

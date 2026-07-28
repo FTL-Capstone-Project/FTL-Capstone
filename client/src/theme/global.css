@@ -27,7 +27,16 @@ a:hover { text-decoration: underline; }
 /* Whole report card is clickable, but only the title <button> is a real control
    (keeps the <h3> in the heading outline for screen readers). The button's ::after
    stretches over the entire card so a click anywhere opens the modal. */
-.report-card { cursor: pointer; }
+/* The border + shadow fade in on hover instead of snapping. Deliberately NOT a transform:
+   this card contains RowActionsMenu's `position: fixed` outside-click backdrop, and a transform
+   on a hovered ancestor would re-anchor that backdrop to the card's box (CSS containing-block
+   rule), shrinking the full-screen dismiss layer to the card and breaking click-outside. A
+   deepening shadow reads as a lift without that trap. */
+.report-card {
+  cursor: pointer;
+  transition: border-color var(--dur-hover) ease,
+              box-shadow var(--dur-hover) ease;
+}
 .report-card__open::after {
   content: "";
   position: absolute;
@@ -78,8 +87,8 @@ a:hover { text-decoration: underline; }
   .landing-reveal {
     opacity: 0;
     transform: translateY(26px);
-    transition: opacity 0.6s cubic-bezier(0.22, 0.7, 0.2, 1),
-                transform 0.6s cubic-bezier(0.22, 0.7, 0.2, 1);
+    transition: opacity 0.6s var(--ease-soft),
+                transform 0.6s var(--ease-soft);
     /* No persistent will-change: keeping it on every reveal element permanently forces GPU layers
        and can HURT scroll perf. The transition alone is enough for these one-off moves. */
   }
@@ -87,7 +96,7 @@ a:hover { text-decoration: underline; }
 
   /* Hero load sequence: headline, sub, buttons, and the demo card assemble in a short stagger
      the moment the page loads (the page's one orchestrated moment). */
-  .landing-load { opacity: 0; animation: landingRise 0.8s cubic-bezier(0.22, 0.7, 0.2, 1) forwards; }
+  .landing-load { opacity: 0; animation: landingRise 0.8s var(--ease-soft) forwards; }
   .landing-load-1 { animation-delay: 0.05s; }
   .landing-load-2 { animation-delay: 0.16s; }
   .landing-load-3 { animation-delay: 0.27s; }
@@ -121,7 +130,7 @@ a:hover { text-decoration: underline; }
 
 /* Card hover lift — a small, consistent micro-interaction across landing cards. */
 @media (prefers-reduced-motion: no-preference) {
-  .landing-lift { transition: transform 0.35s cubic-bezier(0.22, 0.7, 0.2, 1), box-shadow 0.35s ease, border-color 0.35s ease; }
+  .landing-lift { transition: transform 0.35s var(--ease-soft), box-shadow 0.35s ease, border-color 0.35s ease; }
   .landing-lift:hover { transform: translateY(-6px); }
 }
 
@@ -156,3 +165,143 @@ a:hover { text-decoration: underline; }
 .verdict-frame[data-kind="safe"]      { --led: var(--led-safe); }
 .verdict-frame[data-kind="review"]    { --led: var(--led-review); }
 .verdict-frame[data-kind="dangerous"] { --led: var(--led-danger); }
+
+/* ============================================================
+   APP MOTION (the signed-in product) — owner: David
+   The landing page above already moves nicely; the app behind the login didn't move at
+   all. Menus, modals and dropdowns are all rendered conditionally ({open && …}), so they
+   used to teleport in and out with a hard cut.
+
+   Why these live in CSS instead of inline styles: an inline style can't express :active,
+   :hover, @keyframes, or prefers-reduced-motion — which is most of what motion needs. Every
+   number here comes from a motion token in tokens.css; nothing is hand-typed.
+
+   THE ACCESSIBILITY PATTERN (same one the landing page uses): the base rule is a plain
+   opacity fade, which is safe for everyone including people who ask for reduced motion.
+   Movement — slide, scale — is layered on ONLY inside
+   `@media (prefers-reduced-motion: no-preference)`. So reduced motion means gentler, not
+   dead: you still get the fade that tells you something appeared.
+
+   USAGE: add the class in JSX (`className="orbis-press"`). Menus also need a
+   `transformOrigin` inline, because only the component knows which corner it hangs off.
+   ============================================================ */
+
+@keyframes orbisFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── Press feedback ──
+   A click used to be completely silent. Now anything pressable dips a hair when you push
+   it, so it feels like a physical button. Subtle on purpose: 0.97, not 0.9. `:not(:disabled)`
+   so a greyed-out send button doesn't pretend to respond. */
+@media (prefers-reduced-motion: no-preference) {
+  .orbis-press { transition: transform var(--dur-press) var(--ease-out); }
+  .orbis-press:active:not(:disabled) { transform: scale(0.97); }
+}
+
+/* ── Hover / state tint ──
+   Backgrounds, borders and text colors used to snap between states. Fading them is the
+   cheapest single thing that makes a long list feel calm instead of twitchy. Color only,
+   so it's safe under reduced motion and needs no gate. */
+.orbis-hover {
+  transition: background-color var(--dur-hover) ease,
+              border-color var(--dur-hover) ease,
+              color var(--dur-hover) ease;
+}
+
+/* ── Dropdowns and ⋯ menus ──
+   A menu should look like it came out of the button you just pressed, so each usage sets
+   `transformOrigin` inline to the corner it's anchored to — "top right" for one that drops
+   down, "bottom right" for one that opens upward. Note it starts at 0.96, never 0: nothing
+   in the real world appears out of literally nothing, and scale(0) always looks cheap. */
+.orbis-menu { animation: orbisFadeIn var(--dur-menu) var(--ease-out) both; }
+@media (prefers-reduced-motion: no-preference) {
+  .orbis-menu { animation-name: orbisMenuIn; }
+}
+@keyframes orbisMenuIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Modals and dialogs ──
+   The dim backdrop fades up while the panel rises a few pixels into place. Scaling from the
+   CENTER is correct here — a modal genuinely does appear in the middle of the screen, unlike
+   a menu, which belongs to its trigger.
+   No exit animation, deliberately: every modal in this app unmounts the moment it closes
+   ({showModal && <Modal/>}), so by the time we'd animate out there's no element left. */
+.orbis-scrim  { animation: orbisFadeIn var(--dur-modal) var(--ease-out) both; }
+.orbis-dialog { animation: orbisFadeIn var(--dur-modal) var(--ease-out) both; }
+@media (prefers-reduced-motion: no-preference) {
+  .orbis-dialog { animation-name: orbisDialogIn; }
+}
+@keyframes orbisDialogIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Chat turns ──
+   The verdict card landing after a ~10-second check is the most-watched moment in the whole
+   product, and it used to just blink into existence. Each turn now rises in.
+   This plays once per message, not on every render: React reuses the same DOM node for a
+   stable key, and a CSS animation only restarts when the node is new. */
+.orbis-msg { animation: orbisFadeIn 260ms var(--ease-out) both; }
+@media (prefers-reduced-motion: no-preference) {
+  .orbis-msg { animation-name: orbisMsgIn; }
+}
+@keyframes orbisMsgIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Collapse reveal (the "What checked out" list) ──
+   Entrance only, and that's a deliberate call. The trick for animating a collapse BOTH ways
+   is to keep the list mounted at zero height — but a zero-height list is still read out by
+   screen readers, which would flatly contradict the aria-expanded="false" on its button.
+   Unmounting stays the correct behavior; the opening is the part you actually watch. */
+.orbis-reveal { animation: orbisFadeIn var(--dur-menu) var(--ease-out) both; }
+@media (prefers-reduced-motion: no-preference) {
+  .orbis-reveal { animation-name: orbisRevealIn; }
+}
+@keyframes orbisRevealIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Disclosure chevron ──
+   One chevron that ROTATES beats swapping a right-arrow icon for a down-arrow: the rotation
+   shows the panel opening, whereas an icon swap is just a different picture appearing.
+   Driven by a data-open attribute so the JSX stays a one-liner. */
+.orbis-chevron { transition: transform var(--dur-menu) var(--ease-out); }
+.orbis-chevron[data-open="false"] { transform: rotate(-90deg); }
+
+/* ── Score / progress bars ──
+   scaleX from the left edge rather than an animated `width`: transform runs on the GPU and
+   never triggers layout, while width forces the browser to re-lay-out every frame. Slower
+   than the usual UI budget on purpose — this one explains a number instead of responding to
+   a click, so you're meant to follow it. */
+@media (prefers-reduced-motion: no-preference) {
+  .orbis-bar-fill {
+    transform-origin: left center;
+    animation: orbisBarFill var(--dur-reveal) var(--ease-out) both;
+  }
+}
+@keyframes orbisBarFill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* Vertical sibling of the above, for the submission-history bar chart. Grows from the BOTTOM so
+   the bars rise off the axis instead of stretching out of their own middle. Each bar sets its own
+   `animationDelay` inline to stagger the draw left-to-right. */
+@media (prefers-reduced-motion: no-preference) {
+  .orbis-bar-grow {
+    transform-origin: bottom center;
+    animation: orbisBarGrow var(--dur-reveal) var(--ease-out) both;
+  }
+}
+@keyframes orbisBarGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+/* ── Report card hover lift ──
+   A deeper shadow on hover reads as the card lifting toward you. NOT a translateY: a transform
+   here would re-anchor the ⋯ menu's fixed outside-click backdrop to the card (see the note on
+   .report-card at the top of this file). Gated on a REAL pointer because on a touchscreen :hover
+   sticks after you tap, which would leave a tapped card looking permanently raised. The base
+   .report-card transition (border + shadow) animates this both ways. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .report-card:hover { box-shadow: 0 10px 30px rgba(10, 37, 64, 0.14); }
+}

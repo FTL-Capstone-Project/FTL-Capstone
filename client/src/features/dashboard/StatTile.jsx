@@ -52,7 +52,11 @@ const StatTile = ({ label, value, sub, trend, progress }) => {
             marginTop: 2,
           }}
         >
+          {/* orbis-bar-fill sweeps the fill out from the left when the tile mounts. It animates
+              scaleX rather than width, so the bar's real width is still exactly progress% — the
+              animation reveals the number, it can't misreport it. */}
           <div
+            className="orbis-bar-fill"
             style={{
               width: `${Math.min(100, Math.max(0, progress))}%`,
               height: "100%",

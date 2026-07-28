@@ -31,7 +31,7 @@ const SubmissionHistoryChart = ({ history }) => {
         <>
           {/* Bars */}
           <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 120 }}>
-            {history.map((d) => {
+            {history.map((d, i) => {
               const pct = (d.count / max) * 100;
               return (
                 <div
@@ -39,13 +39,21 @@ const SubmissionHistoryChart = ({ history }) => {
                   title={`${formatDate(d.date)}: ${d.count} check${d.count === 1 ? "" : "s"}`}
                   style={{ flex: 1, display: "flex", alignItems: "flex-end", height: "100%" }}
                 >
+                  {/* The bars grow up from the axis on load. This animates scaleY (a GPU transform)
+                      instead of the old `height`, which forced the browser to re-lay-out all 30
+                      bars on every frame. transformOrigin is bottom so they rise off the baseline
+                      rather than stretching from the middle. */}
                   <div
+                    className="orbis-bar-grow"
                     style={{
                       width: "100%",
                       height: `${Math.max(pct, d.count > 0 ? 6 : 2)}%`, // min height so tiny/zero days are visible
                       background: d.count > 0 ? "var(--primary)" : "var(--border)",
                       borderRadius: "3px 3px 0 0",
-                      transition: "height 0.2s",
+                      // A 10ms-per-bar stagger reads as the chart drawing itself left-to-right
+                      // instead of 30 bars popping at once. Oldest day first, so it moves the same
+                      // direction you read the axis underneath.
+                      animationDelay: `${i * 10}ms`,
                     }}
                   />
                 </div>

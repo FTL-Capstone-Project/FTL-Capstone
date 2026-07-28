@@ -94,7 +94,7 @@ const Composer = ({ onSend, onSendImage, disabled }) => {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* paperclip → hidden file input */}
           <button type="button" onClick={pickFile} disabled={disabled} aria-label="Upload an image"
-            title="Attach a screenshot"
+            title="Attach a screenshot" className="orbis-press"
             style={{ flexShrink: 0, background: "none", border: "none", cursor: disabled ? "default" : "pointer",
               color: "var(--text-dim)", padding: "4px 6px", display: "grid", placeItems: "center" }}>
             <Paperclip size={20} />
@@ -111,11 +111,17 @@ const Composer = ({ onSend, onSendImage, disabled }) => {
             // browser default (near-black), which is invisible on the dark-mode surface.
             style={{ flex: 1, border: "none", outline: "none", fontSize: "1em", background: "transparent", color: "var(--text)" }}
           />
-          <button type="submit" disabled={!canSend} aria-label="Send"
+          {/* The send button turning blue is how you learn there's something to send, so the color
+              fades rather than flicking the instant you type the first character. */}
+          <button type="submit" disabled={!canSend} aria-label="Send" className="orbis-press"
             style={{ flexShrink: 0, width: 40, height: 40, borderRadius: "50%", border: "none",
               background: canSend ? "var(--primary)" : "var(--border)",
               color: "#fff", cursor: canSend ? "pointer" : "default",
-              display: "grid", placeItems: "center", transition: "background 0.15s" }}>
+              display: "grid", placeItems: "center",
+              // Both properties must be named here: an inline `transition` REPLACES the one
+              // .orbis-press sets (shorthands don't merge across the cascade), so listing only
+              // background-color would kill the press-scale's easing and make the dip snap.
+              transition: "background-color var(--dur-hover) ease, transform var(--dur-press) var(--ease-out)" }}>
             <ArrowUp size={20} />
           </button>
         </div>

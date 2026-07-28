@@ -53,10 +53,11 @@ const ConfirmDialog = ({
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
       onClick={(e) => { if (e.target === e.currentTarget) onCancel?.(); }}
+      className="orbis-scrim"
       style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(10,37,64,0.45)",
         display: "grid", placeItems: "center", padding: 16 }}
     >
-      <div style={{ background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow)",
+      <div className="orbis-dialog" style={{ background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow)",
         width: "100%", maxWidth: 400, border: "1px solid var(--border)", overflow: "hidden" }}>
         <div style={{ padding: "22px 22px 20px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
@@ -81,6 +82,7 @@ const ConfirmDialog = ({
           <div style={{ display: "flex", gap: 10, marginTop: 22, justifyContent: "flex-end" }}>
             <button
               onClick={onCancel}
+              className="orbis-press"
               style={{ padding: "9px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.88em",
                 cursor: "pointer", border: "1px solid var(--border)", background: "transparent",
                 color: "var(--text-dim)" }}
@@ -90,6 +92,7 @@ const ConfirmDialog = ({
             <button
               ref={confirmRef}
               onClick={onConfirm}
+              className="orbis-press"
               style={{ padding: "9px 18px", borderRadius: 10, fontWeight: 700, fontSize: "0.88em",
                 cursor: "pointer", border: `1.5px solid ${confirmColor}`, background: confirmColor,
                 color: "#fff" }}

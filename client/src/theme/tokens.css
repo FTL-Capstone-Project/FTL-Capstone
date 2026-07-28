@@ -40,6 +40,33 @@
   --radius: 12px;
   --shadow: 0 6px 22px rgba(10, 37, 64, 0.08);
 
+  /* ── Motion ──
+     Same idea as the colors above: never hand-type a cubic-bezier in a component, use a
+     var(). One scale for the whole app, so a menu, a modal, and a button press all move
+     like they belong to the same product instead of each inventing its own feel.
+
+     Picking a curve:
+       entering / leaving the screen  → --ease-out    (fast start = feels responsive)
+       moving ACROSS the screen       → --ease-in-out
+       a sliding panel / drawer       → --ease-drawer
+       hover or color only            → plain `ease` is fine, no token needed
+     Gotcha: `ease-in` starts slow, which delays the exact moment the user is watching.
+     Don't use it on UI.
+
+     Durations: anything YOU trigger stays under 300ms, or it feels laggy. The one
+     exception is a reveal that EXPLAINS something (a score bar filling), which is
+     allowed to take longer because you're meant to watch it. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);      /* fast start, soft landing */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);  /* things travelling on screen */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);   /* iOS-like curve for the mobile drawer */
+  --ease-soft: cubic-bezier(0.22, 0.7, 0.2, 1);    /* long + gentle — the landing page reveals */
+  --dur-press: 140ms;    /* the dip when you push a button */
+  --dur-hover: 160ms;    /* hover tint / border color */
+  --dur-menu: 180ms;     /* dropdowns, ⋯ menus, collapse toggles */
+  --dur-modal: 240ms;    /* dialog + its backdrop */
+  --dur-panel: 300ms;    /* sidebar collapse, mobile drawer */
+  --dur-reveal: 520ms;   /* score bars filling — explanatory, so slower on purpose */
+
   /* Which Orbis logo the OrbisLogo component picks. Light theme = the dark wordmark. */
   --logo: "light";
 }

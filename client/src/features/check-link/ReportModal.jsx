@@ -52,9 +52,10 @@ const ReportModal = ({ indicatorId, currentCount = 0, onClose, onReported }) => 
   return (
     <div role="dialog" aria-modal="true" aria-label="Report this to the security team"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="orbis-scrim"
       style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(10,37,64,0.45)",
         display: "grid", placeItems: "center", padding: 16 }}>
-      <div ref={dialogRef} style={{ background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow)",
+      <div ref={dialogRef} className="orbis-dialog" style={{ background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow)",
         width: "100%", maxWidth: 460, border: "1px solid var(--border)", overflow: "hidden" }}>
 
         {/* header */}
@@ -70,7 +71,7 @@ const ReportModal = ({ indicatorId, currentCount = 0, onClose, onReported }) => 
               </p>
             </div>
           </div>
-          <button onClick={onClose} aria-label="Close"
+          <button onClick={onClose} aria-label="Close" className="orbis-press"
             style={{ flexShrink: 0, width: 32, height: 32, borderRadius: "50%", border: "none",
               background: "var(--canvas)", color: "var(--text-dim)", cursor: "pointer", display: "grid", placeItems: "center" }}>
             <X size={16} />
@@ -109,12 +110,12 @@ const ReportModal = ({ indicatorId, currentCount = 0, onClose, onReported }) => 
 
           {/* actions */}
           <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
-            <button onClick={onClose} disabled={submitting}
+            <button onClick={onClose} disabled={submitting} className="orbis-press"
               style={{ padding: "9px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.88em", cursor: "pointer",
                 border: "1px solid var(--border)", background: "transparent", color: "var(--text-dim)" }}>
               Cancel
             </button>
-            <button onClick={submit} disabled={submitting || overLimit}
+            <button onClick={submit} disabled={submitting || overLimit} className="orbis-press"
               style={{ padding: "9px 18px", borderRadius: 10, fontWeight: 700, fontSize: "0.88em",
                 cursor: submitting || overLimit ? "default" : "pointer", opacity: submitting || overLimit ? 0.6 : 1,
                 border: "1.5px solid var(--review)", background: "var(--review)", color: "#fff",

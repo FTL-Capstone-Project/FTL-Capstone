@@ -235,6 +235,7 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
   return (
     <div
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="orbis-scrim"
       style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(10,37,64,0.45)",
         display: "flex", alignItems: "flex-start", justifyContent: "center",
         padding: "40px 16px", overflowY: "auto" }}
@@ -244,6 +245,7 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
         role="dialog"
         aria-modal="true"
         aria-labelledby="report-modal-title"
+        className="orbis-dialog"
         style={{ background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow)",
           width: "100%", maxWidth: 640, maxHeight: "calc(100vh - 80px)", overflowY: "auto",
           padding: 28 }}
@@ -260,6 +262,7 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
             ref={closeBtnRef}
             onClick={onClose}
             aria-label="Close"
+            className="orbis-press"
             style={{ flexShrink: 0, width: 34, height: 34, borderRadius: "50%", border: "none",
               cursor: "pointer", background: "var(--canvas)", color: "var(--text-dim)",
               display: "grid", placeItems: "center" }}
@@ -462,6 +465,7 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
                 <button
                   type="submit"
                   disabled={submitting}
+                  className="orbis-press"
                   style={{ padding: "10px 20px", border: "none", borderRadius: 10, cursor: "pointer",
                     background: "var(--primary)", color: "#fff", fontSize: "0.9em", fontWeight: 700,
                     opacity: submitting ? 0.6 : 1 }}
@@ -552,7 +556,11 @@ const ScoreCard = ({ label, score, kind, subtitle, note }) => {
         <div role="img" aria-label={`${label}: ${score} out of 100`}
           style={{ height: 6, borderRadius: 999, background: "var(--border)", overflow: "hidden",
             margin: "0 0 10px" }}>
-          <div style={{ width: `${Math.max(0, Math.min(100, score))}%`, height: "100%",
+          {/* orbis-bar-fill sweeps the fill out from the left on open. It animates scaleX, not
+              width, so the bar's real width stays exactly score% — the animation can't lie about
+              the number, it just reveals it. */}
+          <div className="orbis-bar-fill"
+            style={{ width: `${Math.max(0, Math.min(100, score))}%`, height: "100%",
             borderRadius: 999, background: KIND_COLOR[kind] }} />
         </div>
       )}

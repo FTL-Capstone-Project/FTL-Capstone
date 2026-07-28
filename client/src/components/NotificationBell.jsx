@@ -38,6 +38,7 @@ const NotificationBell = () => {
     <div style={{ position: "relative" }}>
       <button
         onClick={toggleOpen}
+        className="orbis-press"
         style={{ position: "relative", background: "none", border: "none", cursor: "pointer",
           display: "flex", alignItems: "center", color: "var(--navy)" }}
         aria-label={`Notifications (${unreadCount} unread)`}
@@ -57,7 +58,11 @@ const NotificationBell = () => {
           <div onClick={() => setOpen(false)}
             style={{ position: "fixed", inset: 0, zIndex: 10 }} />
 
-          <div style={{ position: "absolute", right: 0, top: "130%", width: 300, zIndex: 20,
+          {/* transformOrigin "top right" — the panel grows down out of the bell, so it reads as
+              belonging to the bell rather than appearing out of nowhere near it. */}
+          <div className="orbis-menu"
+            style={{ position: "absolute", right: 0, top: "130%", width: 300, zIndex: 20,
+            transformOrigin: "top right",
             background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius)",
             boxShadow: "var(--shadow)", overflow: "hidden" }}>
             <div style={{ padding: "10px 14px", fontWeight: 700, color: "var(--navy)",
