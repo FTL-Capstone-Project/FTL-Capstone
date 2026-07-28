@@ -46,6 +46,20 @@ const pctTrend = (current, previous) => {
   return { pct, direction: change > 0 ? "up" : change < 0 ? "down" : "flat" };
 };
 
+// SAFETY CEILING on the history reads below — not pagination.
+//
+// Every list query here was unbounded: "give me every submission this user/org ever made", joined
+// with the indicator (and the reporter), then deduped in JS. Cost therefore grew linearly with
+// account age forever, and the analyst triage queue re-paid it on every visit. The largest org today
+// has 25 submissions, so this ceiling is ~20x current data — it changes nothing you can see now, it
+// just stops one busy org from eventually serving a multi-megabyte JSON blob (and stops a runaway
+// seed script from taking the page down).
+//
+// The REAL fix is cursor pagination on these endpoints; that's a UI change too (infinite scroll or
+// pages), so it's deliberately out of scope here. If an org ever legitimately exceeds this, the cards
+// beyond the ceiling silently stop appearing — so raise it or paginate before that happens.
+const MAX_HISTORY_ROWS = 500;
+
 historyRouter.get("/", requireAuth, async (req, res, next) => {
   const mine = req.query.mine === "1";
   const orgWide = req.query.org === "1";
@@ -66,6 +80,7 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
         },
         orderBy: { createdAt: "desc" },
         include: { indicator: true },
+        take: MAX_HISTORY_ROWS, // ceiling, not pagination — see MAX_HISTORY_ROWS
       });
 
       // A card is per-indicator but archivedAt is per-submission, so a user who archived a link
@@ -78,6 +93,7 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
         const active = await prisma.submission.findMany({
           where: { userId: req.user.id, archivedAt: null },
           select: { indicatorId: true },
+          take: MAX_HISTORY_ROWS,
         });
         activeIndicatorIds = new Set(active.map((s) => s.indicatorId));
       }
@@ -131,6 +147,7 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
         where: { orgId: req.user.orgId },
         orderBy: { createdAt: "desc" },
         include: { indicator: true, user: true },
+        take: MAX_HISTORY_ROWS, // ceiling, not pagination — see MAX_HISTORY_ROWS
       });
 
       // 2) My org's reviews for those indicators. In normal Team History we fetch
@@ -191,32 +208,80 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
     const weekStart = startOfDayUtc(6);   // last 7 days incl. today
     const prevWeekStart = startOfDayUtc(13); // the 7 days before that
 
-    // ── 1. Verdict breakdown + threat/target/type intel (ONE query) ──────────
-    // Fetch every org submission once — widened to carry createdAt + the indicator's
-    // domain/finalHost/aiTags — so verdict bands, threats-this-week, top targeted
-    // hosts, and the threat-type mix all derive from this single in-memory list.
-    // (Avoids a raw GROUP BY Prisma can't express, keeping queries parameterized.)
-    const allOrgSubmissions = await prisma.submission.findMany({
-      where: { orgId },
-      orderBy: { createdAt: "desc" }, // newest first → dedup keeps the latest submission
-      select: {
-        indicatorId: true,
-        createdAt: true,
-        source: true, // web | email → org-wide channel split
-        user: { select: { name: true } }, // reporter → "Top Reporters"
-        indicator: {
-          select: {
-            aiScore: true, domain: true, finalHost: true, aiTags: true,
-            // AI-confidence mix + the deterministic red-flag signals (key-dependent —
-            // stub to false/null without urlscan / Safe-Browsing keys, so the client
-            // only renders the flags with a non-zero count, same as the personal view).
-            aiConfidence: true, blacklistHit: true, redirectedToDifferentHost: true, domainAgeDays: true,
+    // The reads below are INDEPENDENT of each other, so we fire them CONCURRENTLY with Promise.all
+    // instead of awaiting each in turn. They used to run as sequential `await`s, making the
+    // dashboard's latency the SUM of several round trips to a serverless Postgres that sits a long
+    // way from the API; batched, the latency is the slowest single query instead — the cheapest
+    // latency win on this endpoint. (The JS aggregation afterwards is unchanged; only waiting is parallel.)
+    const [verdictIndicators, allOrgSubmissions, orgReviews, recentActivity] = await Promise.all([
+      // 1. Verdict-breakdown source. Query the DISTINCT INDICATORS this org has submitted (an
+      //    indicator is one row, so this is already deduped — no JS Set pass, and no arbitrary cap).
+      //    This deliberately does NOT reuse the capped submission read below: verdictBreakdown is an
+      //    AUTHORITATIVE COUNT shown on the dashboard, so a take-ceiling would silently UNDERCOUNT it
+      //    (and, on an unordered query, over a skewed subset). Payload is just the aiScore ints, so
+      //    this stays cheap even for a big org — cheaper than scanning every submission would be.
+      prisma.indicator.findMany({
+        where: { submissions: { some: { orgId } } },
+        select: { aiScore: true },
+      }),
+      // 2. Every org submission (newest first), widened to carry createdAt + the indicator's
+      //    domain/finalHost/aiTags + the deterministic red-flag signals, so threats-this-week, top
+      //    targeted hosts, the threat-type mix, the AI-confidence mix, red flags, channels, top
+      //    reporters, AND the 30-day trend all derive from this single in-memory list. (Avoids a raw
+      //    GROUP BY Prisma can't express, keeping queries parameterized.) Capped by MAX_HISTORY_ROWS
+      //    — a safety ceiling, not pagination; see the constant above.
+      prisma.submission.findMany({
+        where: { orgId },
+        orderBy: { createdAt: "desc" }, // newest first → dedup keeps the latest submission
+        take: MAX_HISTORY_ROWS, // ceiling, not pagination — see MAX_HISTORY_ROWS
+        select: {
+          indicatorId: true,
+          createdAt: true,
+          source: true, // web | email → org-wide channel split
+          user: { select: { name: true } }, // reporter → "Top Reporters"
+          indicator: {
+            select: {
+              aiScore: true, domain: true, finalHost: true, aiTags: true,
+              // AI-confidence mix + the deterministic red-flag signals (key-dependent —
+              // stub to false/null without urlscan / Safe-Browsing keys, so the client
+              // only renders the flags with a non-zero count, same as the personal view).
+              aiConfidence: true, blacklistHit: true, redirectedToDifferentHost: true, domainAgeDays: true,
+            },
           },
         },
-      },
-    });
+      }),
+      // 3. Every review in the org (newest first) with the joined AI score — powers the pending age,
+      //    throughput, AI-agreement, calibration, turnaround and shared-rate stats below. Scoped to
+      //    orgId (story #12); no personal item is exposed — these are counts + a percentage, plus the
+      //    oldest pending item's age in days. Capped by MAX_HISTORY_ROWS for the same safety reason as
+      //    the submission read above.
+      prisma.orgReview.findMany({
+        where: { orgId },
+        orderBy: { createdAt: "desc" }, // deterministic subset if we ever hit the ceiling
+        take: MAX_HISTORY_ROWS, // ceiling, not pagination — see MAX_HISTORY_ROWS
+        select: {
+          indicatorId: true,   // → map a review's status back onto its queue row
+          reviewStatus: true,
+          humanScore: true,
+          sharedWithOrg: true, // → shared-rate (how much of the queue reached the team)
+          createdAt: true,
+          updatedAt: true,
+          indicator: { select: { aiScore: true } },
+        },
+      }),
+      // 4. Recent activity feed (last N org submissions, newest first). Already bounded by take.
+      prisma.submission.findMany({
+        where: { orgId },
+        orderBy: { createdAt: "desc" },
+        take: ACTIVITY_LIMIT,
+        include: {
+          indicator: { select: { aiTitle: true, domain: true, aiScore: true, screenshotUrl: true } },
+          user: { select: { name: true } },
+        },
+      }),
+    ]);
 
-    // Dedup to unique indicators (same URL reported multiple times = one verdict).
+    // Dedup the submission list to unique indicators (same URL reported multiple times = one check).
     // Newest-first order above means we keep each indicator's most recent submission.
     const seenForStats = new Set();
     const uniqueChecks = []; // { indicatorId, createdAt, indicator }
@@ -227,8 +292,11 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
     }
     const uniqueIndicators = uniqueChecks.map((s) => s.indicator);
 
-    const verdictBreakdown = { safe: 0, review: 0, dangerous: 0, total: uniqueIndicators.length };
-    for (const ind of uniqueIndicators) {
+    // ── 1. Verdict breakdown ─────────────────────────────────────────────────
+    // verdictIndicators is already one row per unique indicator (deduped by the query above) and
+    // uncapped, so this is the AUTHORITATIVE safe/review/dangerous split shown on the dashboard.
+    const verdictBreakdown = { safe: 0, review: 0, dangerous: 0, total: verdictIndicators.length };
+    for (const ind of verdictIndicators) {
       const band = scoreBucket(ind.aiScore); // safe | review | dangerous
       verdictBreakdown[band] = (verdictBreakdown[band] ?? 0) + 1;
     }
@@ -331,21 +399,8 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
     const trend = [...trendMap.entries()].map(([date, count]) => ({ date, count }));
 
     // ── 3. Review-based stats: pending age, throughput, AI agreement ──────────
-    // ONE query for every review in the org (with the joined AI score) powers three
-    // analyst-only stats. Scoped to orgId (story #12); no personal item is exposed —
-    // these are counts + a percentage, plus the oldest pending item's age in days.
-    const orgReviews = await prisma.orgReview.findMany({
-      where: { orgId },
-      select: {
-        indicatorId: true,   // → map a review's status back onto its queue row
-        reviewStatus: true,
-        humanScore: true,
-        sharedWithOrg: true, // → shared-rate (how much of the queue reached the team)
-        createdAt: true,
-        updatedAt: true,
-        indicator: { select: { aiScore: true } },
-      },
-    });
+    // All derive from orgReviews (fetched in the batch above). Scoped to orgId (story #12); no
+    // personal item is exposed — these are counts + a percentage, plus the oldest pending item's age.
 
     // Look up a review's status by indicator so the recent-activity queue shows the REAL
     // state (pending / investigating / confirmed …) instead of assuming everything is pending.
@@ -418,15 +473,7 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
         : { pct: Math.round((sharedClosedCount / closedReviews.length) * 100), shared: sharedClosedCount, closed: closedReviews.length };
 
     // ── 4. Recent activity feed (last N org submissions, newest first) ────────
-    const recentActivity = await prisma.submission.findMany({
-      where: { orgId },
-      orderBy: { createdAt: "desc" },
-      take: ACTIVITY_LIMIT,
-      include: {
-        indicator: { select: { aiTitle: true, domain: true, aiScore: true, screenshotUrl: true } },
-        user: { select: { name: true } },
-      },
-    });
+    // recentActivity was fetched in the batch above.
     const recent = recentActivity.map((s) => ({
       indicatorId: s.indicatorId,
       title: s.indicator.aiTitle ?? s.rawUrl,

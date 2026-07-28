@@ -5,11 +5,15 @@ import request from "supertest";
 // Mock the DB module the router imports, so no live Postgres is needed.
 // Each test sets what findMany/count returns via these fns.
 const submissionFindMany = vi.fn();
+const indicatorFindMany = vi.fn();
 const orgReviewFindMany = vi.fn();
 const orgReviewCount = vi.fn();
 vi.mock("../../db.js", () => ({
   prisma: {
     submission: { findMany: (...a) => submissionFindMany(...a) },
+    // The analyst-stats verdict breakdown now queries DISTINCT indicators directly (deduped in the
+    // DB, exact, uncapped) instead of scanning every submission and deduping in JS.
+    indicator: { findMany: (...a) => indicatorFindMany(...a) },
     orgReview: {
       findMany: (...a) => orgReviewFindMany(...a),
       count: (...a) => orgReviewCount(...a),
@@ -44,6 +48,7 @@ const sub = ({ id, indicatorId, aiScore, name, createdAt }) => {
 
 beforeEach(() => {
   submissionFindMany.mockReset();
+  indicatorFindMany.mockReset();
   orgReviewFindMany.mockReset();
   orgReviewCount.mockReset();
 });
@@ -160,9 +165,11 @@ describe("GET /api/history?org=1 (Team History)", () => {
 });
 
 describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
-  // Mock setup: the stats branch calls submission.findMany TWICE (all subs + recent),
-  // then orgReview.findMany ONCE (pending age / throughput / AI agreement). We queue
-  // the two submission return values, and set orgReviewFindMany per test.
+  // Mock setup: the stats branch queries indicator.findMany ONCE (distinct-indicator verdict
+  // breakdown), submission.findMany TWICE (all subs → confidence/channel/reporter/trend, then the
+  // recent-activity feed), and orgReview.findMany ONCE (pending age / throughput / AI agreement /
+  // calibration / turnaround / shared rate). We queue the two submission return values, seed the
+  // indicator query, and set orgReviewFindMany per test.
   const analystUser = { id: 7, orgId: 99, role: "analyst", name: "Priya S." };
 
   // Widened to carry the fields the new analyst stats read: source (channel split),
@@ -193,11 +200,19 @@ describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
   });
 
   it("returns stats + recent scoped strictly to req.user.orgId", async () => {
-    // submission.findMany is called TWICE now: all-subs (also powers the 30-day trend in-memory),
-    // then the recent-activity feed. (The trend no longer runs its own query.)
+    // Verdict breakdown now comes from indicator.findMany (distinct indicators, already deduped and
+    // uncapped — an authoritative count). The other stats still derive from the org-submissions read.
+    indicatorFindMany.mockResolvedValueOnce([
+      { aiScore: 22 },  // dangerous
+      { aiScore: 91 },  // safe
+      { aiScore: 54 },  // review
+    ]);
+    // submission.findMany is called TWICE now: all-subs (also powers the 30-day trend in-memory plus
+    // the confidence/channel/reporter stats), then the recent-activity feed. (The trend no longer
+    // runs its own query.)
     submissionFindMany
       .mockResolvedValueOnce([
-        // all org subs (for verdict breakdown + confidence/channel/reporter/trend stats)
+        // all org subs (for confidence/channel/reporter/trend stats)
         makeSub(10, 22, "2026-07-15", "Anya K.", { source: "email", aiConfidence: "high" }),  // dangerous
         makeSub(11, 91, "2026-07-14", "Anya K.", { aiConfidence: "low" }),                     // safe
         makeSub(12, 54, "2026-07-13", "Marcus T.", { aiConfidence: "medium" }),                // review
@@ -223,12 +238,16 @@ describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
     for (const call of submissionFindMany.mock.calls) {
       expect(call[0].where).toMatchObject({ orgId: 99 });
     }
+    // The verdict-breakdown indicator query must be scoped to the org (via the submissions relation).
+    expect(indicatorFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { submissions: { some: { orgId: 99 } } } })
+    );
     // orgReview.findMany must also be scoped to the same orgId.
     expect(orgReviewFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ orgId: 99 }) })
     );
 
-    // Verdict breakdown reflects the 3 unique indicators above.
+    // Verdict breakdown reflects the 3 distinct indicators above (from indicator.findMany).
     expect(res.body.stats.verdictBreakdown).toMatchObject({
       safe: 1,
       review: 1,
@@ -275,20 +294,23 @@ describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
     });
   });
 
-  it("deduplicates the verdict breakdown (same indicator reported multiple times)", async () => {
-    // Indicator 10 reported twice → counts as ONE verdict, not two.
+  it("no reviews → review-derived stats fall back to null; confidence dedups to unique indicators", async () => {
+    // Verdict breakdown is deduped in the DB now (distinct indicators), so mock the indicator query
+    // directly: one dangerous indicator. The two duplicate submissions below still exercise the
+    // in-memory dedup that powers confidenceMix (same indicator reported twice = one indicator).
+    indicatorFindMany.mockResolvedValueOnce([{ aiScore: 22 }]); // one distinct indicator → dangerous
     submissionFindMany
       .mockResolvedValueOnce([
         makeSub(10, 22, "2026-07-15"),
-        makeSub(10, 22, "2026-07-14"), // duplicate
+        makeSub(10, 22, "2026-07-14"), // duplicate submission of the same indicator
       ])
-      .mockResolvedValueOnce([]); // recent activity (trend is now derived from the all-subs call)
-    orgReviewFindMany.mockResolvedValue([]); // no reviews → pending 0, agreement null
+      .mockResolvedValueOnce([]); // recent activity feed
+    orgReviewFindMany.mockResolvedValue([]); // no reviews → pending 0, agreement/calibration/... null
 
     const res = await request(appAs(analystUser)).get("/api/history");
 
     expect(res.status).toBe(200);
-    expect(res.body.stats.verdictBreakdown.total).toBe(1);   // deduplicated
+    expect(res.body.stats.verdictBreakdown.total).toBe(1);   // one distinct indicator
     expect(res.body.stats.verdictBreakdown.dangerous).toBe(1);
     expect(res.body.stats.pendingCount).toBe(0);
     expect(res.body.stats.aiAgreement).toBeNull(); // no analyst-scored reviews
@@ -298,5 +320,24 @@ describe("GET /api/history (analyst stats — no ?mine/?org)", () => {
     expect(res.body.stats.sharedRate).toBeNull();
     // Confidence unknown (aiConfidence not set on the deduped indicator) folds into `unknown`.
     expect(res.body.stats.confidenceMix).toMatchObject({ high: 0, medium: 0, low: 0, unknown: 1 });
+  });
+
+  it("verdict breakdown is an EXACT count — the indicator query is not capped", async () => {
+    // Regression guard: verdictBreakdown is an authoritative count on the dashboard, so its source
+    // query must NOT carry a `take` ceiling (a cap would silently undercount a large org, and on an
+    // unordered query would count an arbitrary subset). It counts distinct indicators directly.
+    indicatorFindMany.mockResolvedValueOnce([{ aiScore: 22 }, { aiScore: 22 }, { aiScore: 95 }]);
+    submissionFindMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    orgReviewFindMany.mockResolvedValue([]);
+
+    const res = await request(appAs(analystUser)).get("/api/history");
+
+    expect(res.status).toBe(200);
+    // No take/skip on the authoritative count query.
+    const call = indicatorFindMany.mock.calls[0][0];
+    expect(call.take).toBeUndefined();
+    expect(call.skip).toBeUndefined();
+    // Each returned indicator is one verdict — the route counts them straight (no re-dedup needed).
+    expect(res.body.stats.verdictBreakdown).toMatchObject({ dangerous: 2, safe: 1, total: 3 });
   });
 });

@@ -18,6 +18,10 @@ const ACTIVITY_LIMIT = 6; // right-rail activity feed rows
 const HISTORY_DAYS = 30; // "My Submission History" bar chart window
 const NEW_DOMAIN_DAYS = 30; // a domain younger than this is a "brand-new domain" red flag
 const THREAT_TYPE_LIMIT = 6; // how many threat-type bars to send the chart
+// Safety ceiling on the one big read below (see the note there). Generous on purpose: this is a
+// personal account, so real usage is orders of magnitude under it — it exists to keep the query cost
+// flat rather than proportional to how long someone has had the account.
+const MAX_DASHBOARD_ROWS = 500;
 
 // aiTags is stored as JSON — normalize whatever we get back to a plain string array.
 const tagsOf = (indicator) => (Array.isArray(indicator.aiTags) ? indicator.aiTags : []);
@@ -50,13 +54,19 @@ const trend = (current, previous) => {
  * @param {number} userId  req.user.id (the verified caller)
  */
 export const getDashboard = async (userId) => {
-  // Pull every submission for this user ONCE, with the joined global indicator
-  // (score/verdict/title live on the indicator). We derive most widgets from this
-  // in-memory list — cheap for a personal account, and avoids many round-trips.
+  // Pull this user's submissions ONCE, with the joined global indicator (score/verdict/title live on
+  // the indicator). We derive most widgets from this in-memory list — cheap for a personal account,
+  // and avoids many round-trips.
+  //
+  // Bounded by MAX_DASHBOARD_ROWS: this was unbounded, so a long-lived account would eventually load
+  // its entire history (every row, every joined indicator) on every dashboard visit. Every widget
+  // here is either a 30-day window or a small "recent" list, so rows past the ceiling can't affect
+  // what's rendered — except the lifetime totals, which is why the ceiling is set far above real usage.
   const submissions = await prisma.submission.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
     include: { indicator: true },
+    take: MAX_DASHBOARD_ROWS,
   });
 
   const weekStart = daysAgo(7);
