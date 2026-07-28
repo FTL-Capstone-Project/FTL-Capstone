@@ -111,8 +111,13 @@ const Dashboard = () => {
             />
           </div>
 
-          {/* Middle: submission-history bars + results donut */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {/* Middle: submission-history bars + results donut.
+              minmax(0, 1fr) NOT "1fr 1fr": a bare 1fr track is minmax(auto, 1fr), and that `auto`
+              floor equals the child's min-content width. A Recharts ResponsiveContainer reports a
+              min width, so the track refuses to shrink, the row grows past <main>, and the whole
+              page scrolls left/right. minmax(0, …) lets the column shrink to fit (same trick the
+              outer minmax(0, 1fr) 300px grid already uses). */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
             <SubmissionHistoryChart history={data.submissionHistory} />
             <ResultsDonut results={data.results} />
           </div>
@@ -121,7 +126,8 @@ const Dashboard = () => {
               ThreatTypes only renders once the user has actually hit risky links; before
               then we give the red-flags/channels card the full width so there's no empty gap. */}
           {data.threatTypes?.length > 0 ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            // minmax(0, 1fr) again — this row holds the ThreatTypesChart, the exact overflow trap.
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
               <ThreatTypesChart types={data.threatTypes} />
               <SafetySignals redFlags={data.redFlags} channels={data.channels} />
             </div>

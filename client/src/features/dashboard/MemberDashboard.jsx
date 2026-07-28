@@ -98,8 +98,12 @@ const MemberDashboard = () => {
             />
           </div>
 
-          {/* Team threat mix + my personal results side by side. */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {/* Team threat mix + my personal results side by side.
+              minmax(0, 1fr) NOT "1fr 1fr": a bare 1fr is minmax(auto, 1fr), whose `auto` floor is
+              the child's min-content width. The Recharts ThreatTypesChart reports a min width, so
+              a 1fr track can't shrink and the whole page scrolls sideways. minmax(0, …) lets it
+              shrink (matches the outer minmax(0, 1fr) 300px grid). */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
             {team.threatTypes?.length > 0 ? (
               <ThreatTypesChart
                 types={team.threatTypes}
