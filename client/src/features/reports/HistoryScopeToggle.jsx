@@ -21,6 +21,10 @@ const HistoryScopeToggle = ({ scope, onChange }) => {
           <button
             key={value}
             onClick={() => onChange(value)}
+            // orbis-hover fades the text color and the underline between tabs. A true sliding
+            // indicator would need one shared element behind both buttons; this crossfade gets
+            // most of the smoothness for none of the restructuring.
+            className="orbis-hover"
             style={{
               display: "flex",
               alignItems: "center",

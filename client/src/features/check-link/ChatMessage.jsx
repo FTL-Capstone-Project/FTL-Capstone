@@ -6,9 +6,12 @@ import OrboAvatar from "../../components/OrboAvatar.jsx";
 const ChatMessage = ({ role, pose = "wave", children }) => {
   const isUser = role === "user";
 
+  // orbis-msg rises each turn in instead of blinking it into place. It plays once per message,
+  // not on every re-render: React reuses the same DOM node while the key is stable, and a CSS
+  // animation only restarts on a brand-new node.
   if (isUser) {
     return (
-      <div style={{ display: "flex", justifyContent: "flex-end", margin: "10px 0" }}>
+      <div className="orbis-msg" style={{ display: "flex", justifyContent: "flex-end", margin: "10px 0" }}>
         <div style={{ maxWidth: "80%", background: "var(--primary)", color: "#fff",
           padding: "10px 14px", borderRadius: "16px 16px 4px 16px", wordBreak: "break-word", fontSize: "0.95em" }}>
           {children}
@@ -18,7 +21,7 @@ const ChatMessage = ({ role, pose = "wave", children }) => {
   }
 
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", margin: "10px 0" }}>
+    <div className="orbis-msg" style={{ display: "flex", gap: 10, alignItems: "flex-start", margin: "10px 0" }}>
       <div style={{ flexShrink: 0, width: 36, height: 36 }}>
         <OrboAvatar pose={pose} size={36} />
       </div>

@@ -229,6 +229,7 @@ const RowActionsMenu = ({ isArchived, onArchive, onRestore, onDelete }) => {
         aria-label="Report options"
         aria-haspopup="menu"
         aria-expanded={open}
+        className="orbis-press"
         style={{ border: "none", background: "var(--surface)", cursor: "pointer",
           color: "var(--text-dim)", display: "grid", placeItems: "center", padding: 4,
           borderRadius: 8 }}
@@ -245,7 +246,12 @@ const RowActionsMenu = ({ isArchived, onArchive, onRestore, onDelete }) => {
             onClick={(e) => { e.stopPropagation(); close(); }}
             style={{ position: "fixed", inset: 0, zIndex: 2 }}
           />
-          <div role="menu" style={{ position: "absolute", bottom: "100%", right: 0, marginBottom: 4,
+          {/* This menu opens UPWARD (bottom: 100%), so it grows from its BOTTOM right corner —
+              the edge touching the ⋯ button. Using "top right" here would make it appear to
+              drop out of the card above it. */}
+          <div role="menu" className="orbis-menu"
+            style={{ position: "absolute", bottom: "100%", right: 0, marginBottom: 4,
+            transformOrigin: "bottom right",
             zIndex: 3, minWidth: 160, background: "var(--surface)", border: "1px solid var(--border)",
             borderRadius: 10, boxShadow: "var(--shadow)", padding: 4 }}>
             {/* Archived rows offer "Restore"; active rows offer "Archive". */}

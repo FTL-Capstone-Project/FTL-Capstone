@@ -122,22 +122,33 @@ const AppShell = () => {
     ? {
         position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 50, width: 280,
         transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
-        transition: "transform .22s ease", boxShadow: drawerOpen ? "var(--shadow)" : "none",
+        // --ease-drawer is the iOS-style curve: it leaves fast and settles slowly, which is what
+        // makes a sliding panel feel like it has weight. A plain `ease` moves at the same speed
+        // in and out, and reads as a slide-show transition rather than a drawer.
+        transition: "transform var(--dur-panel) var(--ease-drawer)",
+        boxShadow: drawerOpen ? "var(--shadow)" : "none",
         background: "var(--surface)", borderRight: "1px solid var(--border)", padding: 18,
         display: "flex", flexDirection: "column", gap: 14,
       }
     : {
         width: railCollapsed ? 68 : 250, background: "var(--surface)",
         borderRight: "1px solid var(--border)", padding: railCollapsed ? "18px 12px" : 18,
-        display: "flex", flexDirection: "column", gap: 14, flexShrink: 0, transition: "width .15s ease",
+        display: "flex", flexDirection: "column", gap: 14, flexShrink: 0,
+        // This is the one place we knowingly animate a LAYOUT property. A docked sidebar has to
+        // change width to push the main column over — a transform would slide the sidebar without
+        // moving anything beside it. So: --ease-in-out (it's travelling across the screen, not
+        // entering it) and a duration you can actually follow. The old .15s made a 182px move look
+        // like a rendering glitch rather than a motion.
+        transition: "width var(--dur-panel) var(--ease-in-out), padding var(--dur-panel) var(--ease-in-out)",
       };
 
   return (
     <NotificationsProvider>
       <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-        {/* Mobile backdrop — tap outside the drawer to close it. */}
+        {/* Mobile backdrop — tap outside the drawer to close it. orbis-scrim fades the dim layer
+            up with the drawer instead of hard-cutting the screen to 45% black. */}
         {isMobile && drawerOpen && (
-          <div onClick={() => setDrawerOpen(false)} aria-hidden="true"
+          <div onClick={() => setDrawerOpen(false)} aria-hidden="true" className="orbis-scrim"
             style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(10,37,64,0.45)" }} />
         )}
         {/* ── Sidebar ── */}
@@ -153,6 +164,7 @@ const AppShell = () => {
             {!railCollapsed && (
               <button onClick={() => isMobile ? setDrawerOpen(false) : setCollapsed(true)}
                 aria-label={isMobile ? "Close menu" : "Collapse sidebar"} title={isMobile ? "Close" : "Collapse"}
+                className="orbis-press"
                 style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
                 <PanelLeftClose size={18} />
               </button>
@@ -160,6 +172,7 @@ const AppShell = () => {
           </div>
           {railCollapsed && (
             <button onClick={() => setCollapsed(false)} aria-label="Expand sidebar" title="Expand"
+              className="orbis-press"
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center" }}>
               <PanelLeft size={18} />
             </button>
@@ -173,7 +186,7 @@ const AppShell = () => {
             </div>
           )}
 
-          <button onClick={() => go("/ask-orbo?new=1")} style={{ display: "flex", alignItems: "center",
+          <button onClick={() => go("/ask-orbo?new=1")} className="orbis-press" style={{ display: "flex", alignItems: "center",
             justifyContent: "center", gap: 8, background: "var(--primary)", color: "#fff", border: "none",
             borderRadius: 12, padding: railCollapsed ? "11px 0" : "11px 14px", fontWeight: 700, cursor: "pointer", fontSize: "0.95em" }}>
             <Plus size={18} /> {!railCollapsed && "New check"}
@@ -236,7 +249,7 @@ const AppShell = () => {
             </div>
           )}
 
-          <NavLink to="/settings" onClick={() => isMobile && setDrawerOpen(false)} style={navLinkStyle(railCollapsed)}>
+          <NavLink to="/settings" onClick={() => isMobile && setDrawerOpen(false)} className="orbis-hover" style={navLinkStyle(railCollapsed)}>
             <Settings size={16} /> {!railCollapsed && "Settings"}
           </NavLink>
         </aside>
@@ -324,6 +337,9 @@ const RecentItem = ({ convo, active, onOpen, onDelete }) => {
   return (
     <div onMouseEnter={() => setHover(true)} onMouseLeave={() => { setHover(false); setMenuOpen(false); }}
       onClick={onOpen} title={convo.title}
+      // orbis-hover fades the highlight tint in/out. Without it, running the mouse down a long
+      // Recents list strobes the background on every row it crosses.
+      className="orbis-hover"
       style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
         borderRadius: 8, cursor: "pointer", color: active ? "var(--primary)" : "var(--text-dim)",
         fontSize: "0.85em", fontWeight: active ? 700 : 400,
@@ -333,13 +349,18 @@ const RecentItem = ({ convo, active, onOpen, onDelete }) => {
 
       {(hover || menuOpen) && (
         <button onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }} aria-label="Chat options"
+          className="orbis-press"
           style={{ border: "none", background: "none", cursor: "pointer", color: "var(--text-dim)", display: "grid", placeItems: "center", padding: 0 }}>
           <MoreHorizontal size={16} />
         </button>
       )}
 
       {menuOpen && (
-        <div style={{ position: "absolute", top: "100%", right: 4, zIndex: 20, minWidth: 150,
+        // transformOrigin "top right" so the menu grows out of the ⋯ button it hangs under,
+        // rather than swelling from its own middle (which reads as unrelated to the click).
+        <div className="orbis-menu"
+          style={{ position: "absolute", top: "100%", right: 4, zIndex: 20, minWidth: 150,
+          transformOrigin: "top right",
           background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
           boxShadow: "var(--shadow)", padding: 4, color: "var(--text)", fontWeight: 400 }}>
           <button onClick={handleRename} style={menuItemStyle}><Pencil size={14} /> Rename</button>
@@ -380,7 +401,9 @@ const menuItemStyle = {
 const NavItem = ({ item, collapsed, onNavigate }) => {
   const Icon = NAV_ICON[item.to] ?? Sparkles;
   return (
-    <NavLink to={item.to} title={item.label} onClick={onNavigate} style={({ isActive }) => ({
+    // orbis-hover only — no press dip. Nav is one of the most-clicked things in the app, and an
+    // animation you see a hundred times a day stops being feedback and starts being a delay.
+    <NavLink to={item.to} title={item.label} onClick={onNavigate} className="orbis-hover" style={({ isActive }) => ({
       display: "flex", alignItems: "center", gap: 10, padding: collapsed ? "8px 0" : "8px 12px",
       justifyContent: collapsed ? "center" : "flex-start", borderRadius: 10, textDecoration: "none",
       background: isActive ? "var(--canvas)" : "transparent",
