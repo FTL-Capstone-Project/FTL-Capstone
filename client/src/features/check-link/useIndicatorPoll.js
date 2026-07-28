@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../lib/api.js";
-import { POLL_INTERVAL_MS } from "../../config/constants.js";
+import { VERDICT_POLL_MS } from "../../config/constants.js";
 
-// ~195s cap (130 × 1.5s). Must exceed the server's STALE_MS self-heal (180s in
+// ~195s cap (130 × VERDICT_POLL_MS). Must exceed the server's STALE_MS self-heal (180s in
 // indicators.service.js): a stuck check is reaped to "error" at 180s, so we need to still be
 // polling then to SHOW that verdict instead of giving up first. The old 90s cap gave up while
 // the check was still legitimately running — which got more common once the LLM verdict leg (a
@@ -20,6 +20,14 @@ export const useIndicatorPoll = (indicatorId, cachedIndicator = null) => {
   const [indicator, setIndicator] = useState(cachedIndicator);
   const [error, setError] = useState("");
 
+  // getToken's identity is not guaranteed stable across renders. It used to be an effect DEPENDENCY,
+  // which meant any render that handed us a new function tore down the poll chain and started a
+  // fresh one — resetting `tries` to 0 and firing an immediate request. In the worst case that turns
+  // a paced 1.5s poll into one request per render, and the MAX_POLLS budget never runs out. Holding
+  // it in a ref keeps the fetch on the CURRENT token while letting the effect key off indicatorId only.
+  const getTokenRef = useRef(getToken);
+  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+
   useEffect(() => {
     if (!indicatorId) return;
     // Already resolved on a previous open → nothing to poll, render straight from the cache.
@@ -28,13 +36,13 @@ export const useIndicatorPoll = (indicatorId, cachedIndicator = null) => {
 
     const poll = async () => {
       try {
-        const data = await api.get(`/api/indicators/${indicatorId}`, { getToken });
+        const data = await api.get(`/api/indicators/${indicatorId}`, { getToken: getTokenRef.current });
         if (cancelled) return;
         setIndicator(data);
         tries += 1;
         const finished = data.status === "done" || data.status === "error";
         if (!finished && tries < MAX_POLLS) {
-          timer = setTimeout(poll, POLL_INTERVAL_MS);
+          timer = setTimeout(poll, VERDICT_POLL_MS);
         } else if (!finished) {
           setError("This check is taking longer than expected. Please try again.");
         }
@@ -44,7 +52,10 @@ export const useIndicatorPoll = (indicatorId, cachedIndicator = null) => {
     }
     poll();
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [indicatorId, getToken]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Keyed on indicatorId ONLY: a new id is a genuinely different check and should restart the
+    // poll, but a re-render must not. cachedIndicator is read once on entry (seed-or-skip) and is
+    // intentionally not a dependency — re-running on it would restart polling mid-scan.
+  }, [indicatorId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { indicator, error };
 }

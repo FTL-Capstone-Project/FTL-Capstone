@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from "react";
-import { useAuth } from "@clerk/clerk-react";
 import { X, ShieldCheck, Clock, FileCheck2, UserCheck, Layers } from "lucide-react";
 import { api } from "../../lib/api.js";
 import StatusBadge from "../../components/StatusBadge.jsx";
 import StatusChip from "./StatusChip.jsx";
 import WhyThisScore from "./WhyThisScore.jsx";
+import { useStableToken } from "../../lib/useStableToken.js";
 
 // The four authoritative review states an analyst can set. `value` must match the
 // backend exactly (OrgReview.reviewStatus + the PATCH /review route's whitelist) and
@@ -79,7 +79,7 @@ const CONFIDENCE_NOTE = {
 };
 
 const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClose }) => {
-  const { getToken } = useAuth();
+  const getToken = useStableToken();
   const [detail, setDetail] = useState(null); // richer fields from GET /api/indicators/:id
   const [loading, setLoading] = useState(true);
   const [fetchFailed, setFetchFailed] = useState(false); // detail fetch errored → show a note

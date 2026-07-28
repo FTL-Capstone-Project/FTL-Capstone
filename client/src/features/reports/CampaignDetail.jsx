@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useAuth } from "@clerk/clerk-react";
 import { Layers, ArrowLeft } from "lucide-react";
 import { api } from "../../lib/api.js";
 import ReportCard from "./ReportCard.jsx";
 import ReportDetailModal from "./ReportDetailModal.jsx";
+import { useStableToken } from "../../lib/useStableToken.js";
 
 // ── feature: reports · campaign detail page · owner: Ozias ── (extends card G1·06)
 // One campaign, opened from its row in the analyst triage queue. Route:
@@ -16,7 +16,7 @@ import ReportDetailModal from "./ReportDetailModal.jsx";
 
 const CampaignDetail = () => {
   const { campaignId } = useParams();
-  const { getToken } = useAuth();
+  const getToken = useStableToken();
   const [detail, setDetail] = useState(null);   // { campaign, indicators, reportCount }
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);  // fetch errored / not found → friendly message

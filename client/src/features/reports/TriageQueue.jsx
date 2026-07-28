@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { useAuth } from "@clerk/clerk-react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ListChecks, Search, X } from "lucide-react";
 import { api } from "../../lib/api.js";
@@ -7,6 +6,7 @@ import ReportCard from "./ReportCard.jsx";
 import ReportDetailModal from "./ReportDetailModal.jsx";
 import CampaignGroupRow from "./CampaignGroupRow.jsx";
 import { sortByPriority, isPending, groupByCampaign, isForwardedEmail } from "./triagePriority.js";
+import { useStableToken } from "../../lib/useStableToken.js";
 
 // ── feature: reports · analyst triage queue · owner: Ozias (search added by David) ──
 // The ANALYST variant of the Reports page (card G1·05): an org-wide triage queue.
@@ -34,7 +34,7 @@ const MIN_SEARCH_LENGTH = 2;
 const SEARCH_DEBOUNCE_MS = 300;
 
 const TriageQueue = () => {
-  const { getToken } = useAuth();
+  const getToken = useStableToken();
   const [reports, setReports] = useState([]);
   const [campaigns, setCampaigns] = useState([]); // for grouping rows by campaign (G1·06)
   const [filter, setFilter] = useState(Filters.ALL); // "all" | "pending"
@@ -53,13 +53,6 @@ const TriageQueue = () => {
 
   const term = query.trim();
   const searchActive = term.length >= MIN_SEARCH_LENGTH;
-
-  // Clerk's getToken is NOT guaranteed to keep the same identity across renders, and the search
-  // effect below both debounces and sets state — so listing getToken as a dependency would re-arm
-  // the timer on every render and re-fetch in a loop. Hold it in a ref (kept current) and let the
-  // effect depend only on the search term.
-  const getTokenRef = useRef(getToken);
-  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
 
   // Load the full org queue for this analyst. all=1 asks the backend to skip the
   // shared-only privacy gate so pending/investigating items are included.
@@ -96,7 +89,7 @@ const TriageQueue = () => {
     let cancelled = false;
     setSearching(true);
     const timer = setTimeout(() => {
-      api.get(`/api/search?q=${encodeURIComponent(term)}`, { getToken: getTokenRef.current })
+      api.get(`/api/search?q=${encodeURIComponent(term)}`, { getToken })
         .then((data) => {
           if (cancelled) return;
           setResults(data.reports ?? []);
@@ -112,7 +105,9 @@ const TriageQueue = () => {
     }, SEARCH_DEBOUNCE_MS);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [term, searchActive]);
+    // getToken comes from useStableToken, so its identity never changes — listing it here cannot
+    // re-arm the debounce timer. Keyed on the search term, which is what should drive a re-query.
+  }, [term, searchActive, getToken]);
 
   // Clearing the box also drops ?q= from the URL, so a refresh doesn't resurrect the search.
   const clearSearch = () => {
@@ -124,17 +119,23 @@ const TriageQueue = () => {
     }
   }
 
-  // Counts shown on the pills.
-  const pendingCount = reports.filter(isPending).length;
-  const emailCount = reports.filter(isForwardedEmail).length;
+  // Counts shown on the pills — two passes over the list, so memoized alongside everything else.
+  const { pendingCount, emailCount } = useMemo(() => ({
+    pendingCount: reports.filter(isPending).length,
+    emailCount: reports.filter(isForwardedEmail).length,
+  }), [reports]);
 
   // Apply the selected filter first, THEN priority-sort, THEN cluster by campaign.
-  const filtered =
-    filter === Filters.PENDING ? reports.filter(isPending)
-      : filter === Filters.EMAIL ? reports.filter(isForwardedEmail)
-      : reports;
-  const visible = sortByPriority(filtered);
-  const items = groupByCampaign(visible, campaigns); // report + campaign items, in priority order
+  // Memoized because this whole chain — filter, then a priority sort, then campaign grouping — ran on
+  // EVERY render, including ones triggered by opening the detail modal or typing in the search box.
+  // It also keeps `items` referentially stable so the memoized ReportCard rows can skip re-rendering.
+  const items = useMemo(() => {
+    const filtered =
+      filter === Filters.PENDING ? reports.filter(isPending)
+        : filter === Filters.EMAIL ? reports.filter(isForwardedEmail)
+        : reports;
+    return groupByCampaign(sortByPriority(filtered), campaigns);
+  }, [reports, filter, campaigns]);
 
   const PILLS = [
     { value: Filters.ALL, label: `All reports (${reports.length})` },
@@ -243,7 +244,7 @@ const TriageQueue = () => {
             <p style={{ color: "var(--text-dim)" }}>
               No reports in your organization yet.
             </p>
-          ) : visible.length === 0 ? (
+          ) : items.length === 0 ? (
             <p style={{ color: "var(--text-dim)" }}>Nothing pending review — the queue is clear.</p>
           ) : (
             <div style={{ display: "grid", gap: 8 }}>
