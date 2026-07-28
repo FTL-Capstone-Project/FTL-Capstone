@@ -221,13 +221,15 @@ describe("Dashboard role-router", () => {
     expect(screen.queryByText(/no dangerous links yet/i)).not.toBeInTheDocument();
   });
 
-  it("member Ask Orbo rail queries /api/nlp-query and renders the answer inline", async () => {
+  it("member Ask Orbo rail queries /api/nlp-query and renders the prose answer + cards", async () => {
     mockRole.mockReturnValue({ role: "member", orgName: "Acme" });
     apiGet.mockResolvedValue(MEMBER_STATS);
-    // The bucketCount shape the rail renders as "<total> <title>" + evidence links.
+    // The interactive engine returns LLM prose + embedded report cards (+ data/chartSpec for Insights).
     apiPost.mockResolvedValue({
-      data: [{ indicatorId: 7, title: "Fake MS365 login", domain: "ms365-verify.com", score: 8, band: "dangerous" }],
-      chartSpec: { type: "bucketCount", title: "dangerous links this week", total: 1, reportTotal: 2 },
+      answer: "You had 1 dangerous link this week: a fake Microsoft 365 sign-in page scoring 8/100.",
+      cards: [{ indicatorId: 7, title: "Fake MS365 login", domain: "ms365-verify.com", score: 8, verdict: "dangerous", reportedAt: "2026-07-26T08:00:00Z" }],
+      data: [{ label: "Total", value: 1 }],
+      chartSpec: { type: "count", title: "dangerous links this week" },
     });
 
     render(<MemoryRouter><Dashboard /></MemoryRouter>);
@@ -240,14 +242,13 @@ describe("Dashboard role-router", () => {
     fireEvent.change(input, { target: { value: "how many dangerous links this week?" } });
     fireEvent.submit(input.closest("form"));
 
-    // It hits the nlp-query endpoint (NOT a link checker) and renders the answer + evidence.
-    // (useApi passes a 3rd { getToken } arg, so match on the first two positionally.)
+    // It hits the nlp-query endpoint (NOT a link checker) with the question.
     await waitFor(() => expect(apiPost).toHaveBeenCalled());
     expect(apiPost.mock.calls[0][0]).toBe("/api/nlp-query");
     expect(apiPost.mock.calls[0][1]).toEqual({ question: "how many dangerous links this week?" });
-    await waitFor(() => screen.getByText("Fake MS365 login"));
-    // "dangerous links this week" appears in BOTH the echoed question bubble and Orbo's answer,
-    // so both the question round-tripped and the answer rendered.
-    expect(screen.getAllByText(/dangerous links this week/i).length).toBeGreaterThanOrEqual(2);
+    // Renders the LLM prose answer…
+    await waitFor(() => screen.getByText(/fake microsoft 365 sign-in page scoring 8/i));
+    // …and the embedded report card (a clickable link to the report).
+    expect(screen.getByText("Fake MS365 login")).toBeInTheDocument();
   });
 });

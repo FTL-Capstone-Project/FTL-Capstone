@@ -1,7 +1,7 @@
 // ── feature: dashboard · AnalystDashboard · owner: Michael ──
 // Org-wide analyst dashboard variant. Fetches GET /api/history (the analyst stats
 // endpoint built in G2·02) and renders, inside the SAME two-column shell every
-// dashboard variant uses (main content + a 300px right rail):
+// dashboard variant uses (main content + the Ask Orbo rail — see .dashboard-shell in global.css):
 //   tiles     : Pending Review, Threats This Week, Reviewed This Week, AI Agreement
 //   charts    : 7-day submission trend (BarChart) + verdict distribution (PieChart)
 //   intel     : threat types + top-targeted hosts
@@ -94,7 +94,7 @@ const AnalystDashboard = () => {
       <h1 style={{ color: "var(--navy)", margin: "0 0 20px" }}>Analyst Dashboard</h1>
 
       {/* Two columns: main content + right activity rail (rail drops below on narrow screens). */}
-      <div className="dashboard-grid">
+      <div className="dashboard-shell">
         <div style={{ display: "grid", gap: 20 }}>
           {/* ── Stat tiles ── */}
           <div
@@ -138,7 +138,7 @@ const AnalystDashboard = () => {
               is minmax(auto, 1fr), and that `auto` floor is the child's min-content width — a
               Recharts ResponsiveContainer reports one, so a 1fr column can't shrink, the row grows
               wider than <main>, and the whole page scrolls sideways. minmax(0, …) drops the floor
-              to 0 so the columns fit (same fix as the outer minmax(0, 1fr) 300px grid). */}
+              to 0 so the columns fit (same fix as the outer .dashboard-shell grid). */}
           <div className="dash-two-col">
             {/* 30-day submission trend (matches the personal dashboard's window). */}
             <Card title="Submission Trend" sub="Past 30 days">
@@ -457,9 +457,7 @@ const Thumbnail = ({ src, alt }) => {
 // ── Shared sub-components (match personal/member Page + Card frames) ─────────
 
 const Page = ({ children }) => (
-  <div style={{ maxWidth: 1080, margin: "40px auto", padding: "0 24px" }}>
-    {children}
-  </div>
+  <div className="dashboard-page">{children}</div>
 );
 
 const Card = ({ title, sub, children }) => (

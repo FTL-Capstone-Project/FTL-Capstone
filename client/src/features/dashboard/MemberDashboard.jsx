@@ -72,7 +72,7 @@ const MemberDashboard = () => {
     <Page>
       <Header orgName={orgName} />
 
-      <div className="dashboard-grid">
+      <div className="dashboard-shell">
         <div style={{ display: "grid", gap: 20 }}>
           {/* Top row: my engagement + team threat picture. */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
@@ -102,7 +102,7 @@ const MemberDashboard = () => {
               minmax(0, 1fr) NOT "1fr 1fr": a bare 1fr is minmax(auto, 1fr), whose `auto` floor is
               the child's min-content width. The Recharts ThreatTypesChart reports a min width, so
               a 1fr track can't shrink and the whole page scrolls sideways. minmax(0, …) lets it
-              shrink (matches the outer minmax(0, 1fr) 300px grid). */}
+              shrink (matches the outer .dashboard-shell grid). */}
           <div className="dash-two-col">
             {team.threatTypes?.length > 0 ? (
               <ThreatTypesChart
@@ -135,7 +135,7 @@ const Header = ({ orgName }) => (
 );
 
 const Page = ({ children }) => (
-  <div style={{ maxWidth: 1080, margin: "40px auto", padding: "0 24px" }}>{children}</div>
+  <div className="dashboard-page">{children}</div>
 );
 
 export default MemberDashboard;

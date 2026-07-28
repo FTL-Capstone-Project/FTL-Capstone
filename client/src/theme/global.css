@@ -24,15 +24,39 @@ a:hover { text-decoration: underline; }
   .report-card__score { text-align: left; }
 }
 
-/* ── Dashboard responsive grids ──
-   The dashboards laid out their main column + right rail as an inline "minmax(0,1fr) 300px" and
-   their chart rows as "1fr 1fr", with NO responsive fallback — so on a phone the 300px rail and the
-   side-by-side charts got crushed into unreadable slivers. These two classes carry the desktop
-   layout AND stack to a single column under 768px. Applied in place of the inline templates. */
-.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
-.dash-two-col   { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
-@media (max-width: 768px) {
-  .dashboard-grid, .dash-two-col { grid-template-columns: 1fr; }
+/* ── Dashboard layout (responsive) ──
+   Combines two efforts: the wide centered page frame + main-column/Ask-Orbo-rail shell, AND the
+   responsive chart-row grid. Inline styles can't hold a breakpoint, so it all lives here:
+     • .dashboard-page  → the centered frame. --dash-rail (one place) sets the rail width; Ask Orbo
+                          is a primary tool so it's generous. Frame max-width unchanged, so widening
+                          the rail just narrows the content column — page margins stay put.
+     • .dashboard-shell → main content | fixed rail, side by side.
+     • .dash-two-col    → a two-up chart row (submission history + donut, etc.).
+   All of them STACK to a single column ≤ 900px so the rail + side-by-side charts don't get crushed
+   into slivers on tablets/phones. */
+.dashboard-page {
+  --dash-rail: 420px;
+  max-width: 1320px;
+  margin: 40px auto;
+  padding: 0 24px;
+}
+.dashboard-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--dash-rail);
+  gap: 24px;
+  align-items: start;
+}
+.dash-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .dashboard-shell, .dash-two-col { grid-template-columns: minmax(0, 1fr); }
+}
+/* Tighten the page gutters on small phones so content isn't crowded by 24px each side. */
+@media (max-width: 560px) {
+  .dashboard-page { margin: 24px auto; padding: 0 14px; }
 }
 
 /* Whole report card is clickable, but only the title <button> is a real control

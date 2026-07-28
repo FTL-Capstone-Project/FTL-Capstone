@@ -13,9 +13,18 @@ import { Link } from "react-router-dom";
 import { useApi } from "../../lib/useApi.js";
 import orboWave from "../../assets/orbo/orbo-wave.png";
 
+// How many activity rows to show before the "See more" toggle. The feed can get long, so we
+// keep it to a tidy few and let the user expand to the full list on demand.
+const ACTIVITY_PREVIEW = 3;
+
 // `title` relabels the feed (personal/member "My Activity", analyst "Team Activity"). `role`
 // tells the chat whether to offer the analyst-only "Open in Insights" link for big reports.
 const ActivityRail = ({ activity = [], title = "My Activity", role = "member" }) => {
+  // Collapsed by default → show only the first few; "See more" reveals the rest.
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? activity : activity.slice(0, ACTIVITY_PREVIEW);
+  const hiddenCount = activity.length - ACTIVITY_PREVIEW;
+
   return (
     <aside style={{ display: "grid", gap: 20, alignContent: "start" }}>
       {/* Activity feed */}
@@ -25,7 +34,7 @@ const ActivityRail = ({ activity = [], title = "My Activity", role = "member" })
           <p style={{ color: "var(--text-dim)", fontSize: "0.85em" }}>No activity yet.</p>
         ) : (
           <div style={{ display: "grid", gap: 16 }}>
-            {activity.map((a, i) => (
+            {shown.map((a, i) => (
               <div key={i} style={{ display: "flex", gap: 10 }}>
                 <span
                   style={{
@@ -53,6 +62,19 @@ const ActivityRail = ({ activity = [], title = "My Activity", role = "member" })
                 </div>
               </div>
             ))}
+            {/* Toggle: only when there's more than the preview count. Collapses back with "Show less". */}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                style={{
+                  justifySelf: "start", background: "none", border: "none", padding: "2px 0",
+                  color: "var(--primary)", fontWeight: 600, fontSize: "0.82em", cursor: "pointer",
+                }}
+              >
+                {expanded ? "Show less" : `See more (${hiddenCount})`}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -175,8 +197,9 @@ const AskOrboChat = ({ role = "member" }) => {
 const Bubble = ({ message, role }) => {
   if (message.from === "user") {
     return (
-      <div style={{ alignSelf: "flex-end", maxWidth: "85%", background: "var(--primary)", color: "#fff",
-        borderRadius: "12px 12px 4px 12px", padding: "8px 12px", fontSize: "0.84em", lineHeight: 1.4 }}>
+      <div style={{ alignSelf: "flex-end", maxWidth: "85%", minWidth: 0, background: "var(--primary)", color: "#fff",
+        borderRadius: "12px 12px 4px 12px", padding: "8px 12px", fontSize: "0.84em", lineHeight: 1.4,
+        overflowWrap: "anywhere" }}>
         {message.text}
       </div>
     );
@@ -184,114 +207,88 @@ const Bubble = ({ message, role }) => {
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
       <img src={orboWave} alt="" width={24} height={24} style={{ objectFit: "contain", flexShrink: 0 }} />
-      <div style={{ maxWidth: "85%", background: "var(--canvas)", borderRadius: "4px 12px 12px 12px",
-        padding: "10px 12px", fontSize: "0.84em", color: "var(--text)", lineHeight: 1.45 }}>
+      {/* minWidth:0 lets this bubble shrink inside the flex row instead of forcing the row wider;
+          overflowWrap breaks a long unbroken token (URL/domain) rather than overflowing sideways. */}
+      <div style={{ maxWidth: "85%", minWidth: 0, background: "var(--canvas)", borderRadius: "4px 12px 12px 12px",
+        padding: "10px 12px", fontSize: "0.84em", color: "var(--text)", lineHeight: 1.45, overflowWrap: "anywhere" }}>
         <OrboAnswer message={message} role={role} />
       </div>
     </div>
   );
 };
 
-// Render Orbo's structured answer by kind. Everything here is data the server already
-// scoped to the caller — we only format it.
-const OrboAnswer = ({ message, role }) => {
-  if (message.kind === "count") {
-    return (
-      <span>
-        <strong style={{ color: "var(--navy)" }}>{message.value}</strong> {message.label}
-      </span>
-    );
-  }
+// Verdict → the theme colour used for a card's score chip.
+const VERDICT_COLOR = { safe: "var(--safe)", dangerous: "var(--danger)", suspicious: "var(--review)" };
 
-  if (message.kind === "bucketCount") {
-    return (
-      <div style={{ display: "grid", gap: 8 }}>
-        <span>
-          <strong style={{ color: "var(--navy)" }}>{message.total}</strong> {message.title}
-          {message.reportTotal > message.total ? ` (${message.reportTotal} reports)` : ""}
-        </span>
-        {message.links.length > 0 && (
-          <div style={{ display: "grid", gap: 6 }}>
-            {message.links.map((l) => (
-              <Link
-                key={l.indicatorId}
-                to={`/reports?q=${encodeURIComponent(l.domain ?? l.title ?? "")}`}
-                style={{ display: "flex", justifyContent: "space-between", gap: 8, textDecoration: "none",
-                  color: "var(--text)", borderTop: "1px solid var(--border)", paddingTop: 6 }}
-              >
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.title}</span>
-                <span style={{ flexShrink: 0, fontWeight: 700,
-                  color: l.band === "safe" ? "var(--safe)" : l.band === "dangerous" ? "var(--danger)" : "var(--review)" }}>
-                  {l.score == null ? "—" : `${l.score}/100`}
+// "Jul 26, 2026" from an ISO timestamp (or "" if absent/unparseable).
+const shortDate = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+};
+
+// Render Orbo's answer: the LLM-written prose, plus embedded report cards when the answer is a
+// list of reports. The prose is the server's `answer`; cards are exact DB values (not LLM text).
+const OrboAnswer = ({ message }) => {
+  const cards = Array.isArray(message.cards) ? message.cards : [];
+  return (
+    // minWidth:0 on the grid + its rows so neither the prose nor a card can widen the bubble.
+    <div style={{ display: "grid", gap: cards.length ? 10 : 0, minWidth: 0 }}>
+      {message.text && <span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{message.text}</span>}
+      {cards.length > 0 && (
+        <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
+          {cards.map((c) => (
+            <Link
+              key={c.indicatorId}
+              to={`/reports?q=${encodeURIComponent(c.domain ?? c.title ?? "")}`}
+              style={{
+                display: "block", textDecoration: "none", color: "var(--text)",
+                background: "var(--surface)", border: "1px solid var(--border)",
+                borderRadius: 10, padding: "8px 10px",
+                // A grid item defaults to min-width:auto, which lets the nowrap title push the card
+                // past the bubble. minWidth:0 lets it shrink so the title ellipsis kicks in instead.
+                minWidth: 0,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                <span style={{ minWidth: 0, fontWeight: 700, color: "var(--navy)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {c.title}
                 </span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
+                {c.score != null && (
+                  <span style={{ flexShrink: 0, fontWeight: 800, color: VERDICT_COLOR[c.verdict] ?? "var(--text-dim)" }}>
+                    {c.score}/100
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 3, fontSize: "0.82em", color: "var(--text-dim)", flexWrap: "wrap", minWidth: 0 }}>
+                {c.verdict && <span style={{ color: VERDICT_COLOR[c.verdict] ?? "var(--text-dim)", fontWeight: 600, textTransform: "capitalize" }}>{c.verdict}</span>}
+                {c.reviewStatus && <span>· {c.reviewStatus}</span>}
+                {c.channel && <span>· {c.channel === "email" ? "Forwarded email" : "Web check"}</span>}
+                {shortDate(c.reportedAt) && <span>· {shortDate(c.reportedAt)}</span>}
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
-  if (message.kind === "report") {
-    return (
-      <div style={{ display: "grid", gap: 6 }}>
-        <span>{message.summary}</span>
-        {/* The full charted report lives on Insights, which is an analyst-only surface. */}
-        {role === "analyst" && (
-          <Link to="/insights" style={{ color: "var(--primary)", fontWeight: 600, textDecoration: "none" }}>
-            Open in Insights →
-          </Link>
-        )}
-      </div>
-    );
-  }
-
-  // Plain text (greeting, fallback, or an error line).
-  return <span>{message.text}</span>;
-}
-
-// Turn an /api/nlp-query response into a chat message. The response is one of:
-//   { fallback } · { data:[{value}], chartSpec:{type:"count"} } ·
-//   { data:[links], chartSpec:{type:"bucketCount", total, reportTotal} }  ← verdict counts AND
-//        review-status (triage queue) counts share this shape, so both render the same way ·
-//   { data, chartSpec:{type:"report"|"heatmap"|"trend"|"table"|"histogram", title, empty?} }
+// Turn an /api/nlp-query response into a chat message. The interactive engine returns:
+//   { answer, cards, data, chartSpec }  — prose + optional embedded report cards (data/chartSpec
+//                                          are for the Insights page; the chat uses answer+cards) ·
+//   { fallback }                        — LLM unavailable / not answerable from the data
 const toOrboMessage = (res) => {
   if (!res || res.fallback) {
     return { from: "orbo", kind: "text", text: res?.fallback ?? "I couldn't find an answer to that." };
   }
-  const spec = res.chartSpec ?? {};
-
-  if (spec.type === "count") {
-    const value = res.data?.[0]?.value ?? 0;
-    // chartSpec.title is a noun phrase ("Blacklisted"); render "<n> match Blacklisted"-ish.
-    return { from: "orbo", kind: "count", value, label: (spec.title ?? "results").toLowerCase() };
-  }
-
-  if (spec.type === "bucketCount") {
-    const links = Array.isArray(res.data) ? res.data.slice(0, 5) : [];
-    return {
-      from: "orbo", kind: "bucketCount",
-      title: spec.title ?? "links", total: spec.total ?? links.length,
-      reportTotal: spec.reportTotal ?? spec.total ?? links.length, links,
-    };
-  }
-
-  // Any of the 5 named reports (or an empty one) → a one-line summary + link-out.
-  if (["report", "heatmap", "trend", "table", "histogram"].includes(spec.type)) {
-    const summary = spec.empty
-      ? `No data yet for "${spec.title}".`
-      : `Here's your ${spec.title ?? "report"}${spec.subtitle ? ` — ${spec.subtitle}` : ""}.`;
-    return { from: "orbo", kind: "report", summary };
-  }
-
-  // A generic grouped chart (bar/line/pie) — summarize the top buckets in words.
-  if (Array.isArray(res.data) && res.data.length) {
-    const top = [...res.data].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 3)
-      .map((d) => `${d.label}: ${d.value}`).join(", ");
-    return { from: "orbo", kind: "text", text: `${spec.title ?? "Results"} — ${top}.` };
-  }
-
-  return { from: "orbo", kind: "text", text: "I looked, but there's no data for that yet." };
+  return {
+    from: "orbo",
+    kind: "answer",
+    text: res.answer ?? "Here's what I found.",
+    cards: Array.isArray(res.cards) ? res.cards : [],
+  };
 }
 
 // "2m ago" / "3h ago" / "5d ago" from an ISO timestamp.

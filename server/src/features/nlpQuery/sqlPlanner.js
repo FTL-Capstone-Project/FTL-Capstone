@@ -45,16 +45,29 @@ const sqlSystem = (role, today) =>
   `- Today is ${today} (UTC). For "this week" use reported_at >= date '${today}' - interval '7 days'.\n` +
   "- \"How many links/threats\" means COUNT(DISTINCT indicator_id) (a link can be reported many " +
   "times); \"how many reports/submissions\" means COUNT(*).\n" +
-  "- For a breakdown, GROUP BY the dimension and SELECT that dimension + the count, aliased clearly.\n" +
+  "- For a breakdown (\"by verdict\", \"per channel\"), GROUP BY the dimension and SELECT that " +
+  "dimension + the count, aliased clearly.\n" +
+  "- When the user wants to SEE or LIST the reports themselves (\"which/what reports…\", \"show me " +
+  "the dangerous links\", \"the last report\", \"recent phishing\"), SELECT the report columns so " +
+  "they can be shown as cards: indicator_id, title, domain, score, verdict, channel, review_status, " +
+  "reported_at — ordered sensibly (e.g. reported_at DESC, or score ASC for most-dangerous-first) " +
+  "with a reasonable LIMIT (e.g. 10). Prefer this detailed shape over a bare count whenever the " +
+  "user is asking to see specific reports.\n" +
   (role === "analyst"
-    ? "- You MAY use the reporter column (e.g. group by reporter).\n"
+    ? "- You MAY use the reporter column (e.g. group by reporter, or select it in a report list).\n"
     : "- Do NOT select or filter by reporter (not available to this user).\n") +
   "Return only the SQL.";
 
-// Strip accidental markdown fences / stray prose the model might add around the SQL.
-const cleanSql = (text) => {
+// Extract clean SQL from the model's reply. Models often wrap SQL in a ```sql … ``` fence (with
+// stray newlines/prose around it), which left mangled backticks + a trailing ";" that broke the
+// query. So: if there's a fenced block, take ITS CONTENTS; otherwise strip any stray fences. Then
+// drop trailing semicolons/whitespace so exactly one statement reaches the guard.
+export const cleanSql = (text) => {
   let s = String(text ?? "").trim();
-  s = s.replace(/^```(?:sql)?/i, "").replace(/```$/,"").trim(); // drop code fences
+  const fenced = s.match(/```(?:sql)?\s*([\s\S]*?)```/i); // contents of the first fenced block
+  if (fenced) s = fenced[1];
+  s = s.replace(/```/g, "").trim(); // remove any leftover backtick fences anywhere
+  s = s.replace(/;\s*$/, "").trim(); // drop a trailing semicolon the model added
   return s;
 };
 
@@ -85,6 +98,73 @@ export const answerWithSql = async (question, scope) => {
     console.warn("⚠ nlp-query SQL execution failed:", e.message);
     return { error: "exec", reason: e.message };
   }
+};
+
+// ── Prose composer: rows → a professional, natural answer written by the LLM ─────────────────
+// This is the "interactive" half. The model is handed the user's question and the ACTUAL rows the
+// scoped query returned, and writes a short, professional answer — like a person who looked the
+// data up. It sees only in-scope, shareable columns (the view guarantees that), so there is nothing
+// sensitive to leak, and the numbers it states come from the rows we pass, not its imagination.
+// Empty rows → it says, plainly, that there's nothing matching. Never invents data.
+const MAX_ROWS_TO_LLM = 40; // enough to summarize; keeps the prompt bounded
+export const composeAnswer = async (question, rows) => {
+  // Postgres COUNT/aggregates come back as BigInt, which JSON.stringify can't serialize — coerce
+  // to Number (and Date to ISO) so the rows can go into the prompt cleanly.
+  const jsonSafe = (v) => (typeof v === "bigint" ? Number(v) : v instanceof Date ? v.toISOString() : v);
+  const sample = rows.slice(0, MAX_ROWS_TO_LLM).map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, jsonSafe(v)])));
+  const system =
+    "You are Orbo, a security analyst assistant. You asked a database and got the rows below. Write " +
+    "a SHORT, professional answer to the user's question using ONLY those rows — like a colleague " +
+    "who looked it up. Rules:\n" +
+    "- State the key figure(s) in a natural sentence. Do NOT restate the user's question.\n" +
+    "- If the rows are empty, say plainly that there's nothing matching in their reports — do not apologize at length or invent data.\n" +
+    "- Dates: write them readably (e.g. \"July 26, 2026\"). Scores are out of 100.\n" +
+    "- 1-3 sentences. No markdown headings, no bullet dumps of every row (cards show the list). Plain, confident, professional.";
+  const user =
+    `User's question: ${question}\n\n` +
+    `Rows returned (${rows.length} total${rows.length > sample.length ? `, showing first ${sample.length}` : ""}):\n` +
+    JSON.stringify(sample, null, 0);
+  try {
+    const text = await chatText({ system, user, maxTokens: 220, temperature: 0.2 });
+    return text.trim();
+  } catch (e) {
+    console.warn("⚠ nlp-query prose step failed:", e.message);
+    return null; // caller falls back to a minimal deterministic sentence
+  }
+};
+
+// ── Card builder: turn report-shaped rows into embedded cards the chat renders ───────────────
+// When the result rows look like individual reports (they carry an indicator_id + a title/domain),
+// we surface them as cards — the "list of reports" experience. Aggregate/breakdown rows (no
+// indicator_id) get no cards; the prose + any chart carry those. Deterministic: cards show exact
+// DB values, never anything the LLM wrote.
+const num = (v) => (typeof v === "bigint" ? Number(v) : v);
+export const buildCards = (rows) => {
+  if (!rows.length) return [];
+  const r0 = rows[0];
+  const looksLikeReport = "indicator_id" in r0 && ("title" in r0 || "domain" in r0);
+  if (!looksLikeReport) return [];
+  // One card per unique link even if a report is listed multiple times (same link reported by
+  // several teammates). Keep first occurrence — the SQL already ordered rows sensibly.
+  const seen = new Set();
+  const cards = [];
+  for (const r of rows) {
+    const id = num(r.indicator_id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    cards.push({
+      indicatorId: id,
+      title: r.title ?? r.domain ?? "Untitled report",
+      domain: r.domain ?? null,
+      score: r.human_score != null ? num(r.human_score) : (r.score != null ? num(r.score) : null),
+      verdict: r.verdict ?? null,                 // 'safe' | 'suspicious' | 'dangerous'
+      channel: r.channel ?? null,                 // 'web' | 'email'
+      reviewStatus: r.review_status ?? null,
+      reportedAt: r.reported_at ?? null,
+    });
+    if (cards.length >= 8) break;
+  }
+  return cards;
 };
 
 // ── Deterministic formatter: rows → the existing chartSpec shapes the client already renders ──

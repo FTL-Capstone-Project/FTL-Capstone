@@ -116,7 +116,7 @@ const Dashboard = () => {
               floor equals the child's min-content width. A Recharts ResponsiveContainer reports a
               min width, so the track refuses to shrink, the row grows past <main>, and the whole
               page scrolls left/right. minmax(0, …) lets the column shrink to fit (same trick the
-              outer minmax(0, 1fr) 300px grid already uses). */}
+              outer .dashboard-shell grid already uses). */}
           <div className="dash-two-col">
             <SubmissionHistoryChart history={data.submissionHistory} />
             <ResultsDonut results={data.results} />
@@ -144,8 +144,10 @@ const Dashboard = () => {
 }
 
 // Shared page frame (centers content, matches Reports' spacing).
+// Wider page frame (see .dashboard-page in global.css). Individuals have no rail, so their
+// content fills the wider frame single-column; the responsive gutters come from the class.
 const Page = ({ children }) => {
-  return <div style={{ maxWidth: 1080, margin: "40px auto", padding: "0 24px" }}>{children}</div>;
+  return <div className="dashboard-page">{children}</div>;
 }
 
 export default Dashboard;
