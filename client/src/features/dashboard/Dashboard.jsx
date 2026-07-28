@@ -13,7 +13,6 @@ import ResultsDonut from "./ResultsDonut.jsx";
 import ThreatTypesChart from "./ThreatTypesChart.jsx";
 import SafetySignals from "./SafetySignals.jsx";
 import RecentSubmissions from "./RecentSubmissions.jsx";
-import ActivityRail from "./ActivityRail.jsx";
 import DashboardEmpty from "./DashboardEmpty.jsx";
 
 const Dashboard = () => {
@@ -71,8 +70,9 @@ const Dashboard = () => {
     <Page>
       <h1 style={{ color: "var(--navy)", margin: "0 0 20px" }}>My Dashboard</h1>
 
-      {/* Two columns: main content + right activity rail (rail drops below on narrow screens). */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: 24, alignItems: "start" }}>
+      {/* Single column. Individuals have no team data to query, so there's no Ask Orbo data
+          rail here (that lives on the member + analyst dashboards). Their stats stand alone. */}
+      <div style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "grid", gap: 20 }}>
           {/* Top row: 4 stat tiles */}
           <div
@@ -132,9 +132,6 @@ const Dashboard = () => {
           {/* Bottom: recent submissions */}
           <RecentSubmissions items={data.recentSubmissions} />
         </div>
-
-        {/* Right rail: activity feed + Ask Orbo mini-box */}
-        <ActivityRail activity={data.activity} />
       </div>
     </Page>
   );

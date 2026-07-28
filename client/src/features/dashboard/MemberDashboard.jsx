@@ -117,8 +117,8 @@ const MemberDashboard = () => {
           <RecentSubmissions items={data.recentSubmissions} />
         </div>
 
-        {/* Right rail: personal activity + Ask Orbo chat space. */}
-        <ActivityRail activity={data.activity} />
+        {/* Right rail: personal activity + Ask Orbo data-query chat. */}
+        <ActivityRail activity={data.activity} role="member" />
       </div>
     </Page>
   );

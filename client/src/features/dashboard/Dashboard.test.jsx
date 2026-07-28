@@ -7,7 +7,7 @@
 // Each variant's charts are tested in their own file; here we focus on the router
 // + data-fetch contract.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 // Role is injected per-test by setting the mocked hook's return value.
@@ -21,8 +21,10 @@ vi.mock("@clerk/clerk-react", () => {
 });
 
 // api.get backs both /api/dashboard (personal + member) and /api/history (analyst).
+// api.post backs the Ask Orbo data-query rail (/api/nlp-query) on member + analyst dashboards.
 const apiGet = vi.fn();
-vi.mock("../../lib/api.js", () => ({ api: { get: (...a) => apiGet(...a) } }));
+const apiPost = vi.fn();
+vi.mock("../../lib/api.js", () => ({ api: { get: (...a) => apiGet(...a), post: (...a) => apiPost(...a) } }));
 
 // Stub Recharts so JSDOM doesn't need a real SVG engine.
 vi.mock("recharts", () => ({
@@ -102,6 +104,10 @@ const MEMBER_STATS = {
 
 beforeEach(() => {
   apiGet.mockReset();
+  apiPost.mockReset();
+  // The rail fires a query only on user submit, but default to a benign resolved value so a
+  // stray call never rejects mid-test.
+  apiPost.mockResolvedValue({ fallback: "ok" });
 });
 
 describe("Dashboard role-router", () => {
@@ -146,6 +152,9 @@ describe("Dashboard role-router", () => {
     expect(screen.queryByRole("heading", { name: /analyst dashboard/i })).not.toBeInTheDocument();
     // Personal variant fetches /api/dashboard, not /api/history.
     expect(apiGet).toHaveBeenCalledWith("/api/dashboard", expect.anything());
+    // Individuals have NO Ask Orbo data rail (no team data to query).
+    expect(screen.queryByText("Ask Orbo")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/ask about your data/i)).not.toBeInTheDocument();
   });
 
   it("renders the member variant for role=member (team-aware, not analyst)", async () => {
@@ -210,5 +219,35 @@ describe("Dashboard role-router", () => {
     // The old misleading copy must be gone.
     expect(screen.queryByText(/no risky submissions yet/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/no dangerous links yet/i)).not.toBeInTheDocument();
+  });
+
+  it("member Ask Orbo rail queries /api/nlp-query and renders the answer inline", async () => {
+    mockRole.mockReturnValue({ role: "member", orgName: "Acme" });
+    apiGet.mockResolvedValue(MEMBER_STATS);
+    // The bucketCount shape the rail renders as "<total> <title>" + evidence links.
+    apiPost.mockResolvedValue({
+      data: [{ indicatorId: 7, title: "Fake MS365 login", domain: "ms365-verify.com", score: 8, band: "dangerous" }],
+      chartSpec: { type: "bucketCount", title: "dangerous links this week", total: 1, reportTotal: 2 },
+    });
+
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    // The rail is present for members.
+    await waitFor(() => screen.getByPlaceholderText(/ask about your data/i));
+
+    // Type a question and submit.
+    const input = screen.getByPlaceholderText(/ask about your data/i);
+    fireEvent.change(input, { target: { value: "how many dangerous links this week?" } });
+    fireEvent.submit(input.closest("form"));
+
+    // It hits the nlp-query endpoint (NOT a link checker) and renders the answer + evidence.
+    // (useApi passes a 3rd { getToken } arg, so match on the first two positionally.)
+    await waitFor(() => expect(apiPost).toHaveBeenCalled());
+    expect(apiPost.mock.calls[0][0]).toBe("/api/nlp-query");
+    expect(apiPost.mock.calls[0][1]).toEqual({ question: "how many dangerous links this week?" });
+    await waitFor(() => screen.getByText("Fake MS365 login"));
+    // "dangerous links this week" appears in BOTH the echoed question bubble and Orbo's answer,
+    // so both the question round-tripped and the answer rendered.
+    expect(screen.getAllByText(/dangerous links this week/i).length).toBeGreaterThanOrEqual(2);
   });
 });

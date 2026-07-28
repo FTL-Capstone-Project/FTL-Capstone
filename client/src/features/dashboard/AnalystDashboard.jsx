@@ -296,7 +296,7 @@ const AnalystDashboard = () => {
         </div>
 
         {/* Right rail: team activity feed + Ask Orbo chat space (shared across all variants). */}
-        <ActivityRail activity={activity} title="Team Activity" />
+        <ActivityRail activity={activity} title="Team Activity" role="analyst" />
       </div>
     </Page>
   );

@@ -1,77 +1,41 @@
-// ── feature: nlp-query · owner: David · charts 3–6 built by Ozias ──
-// AI Feature B: an analyst asks the threat history in plain English ("how many dangerous
-// links this week?", "top impersonated brands"), and we turn it into a CHART.
+// ── feature: nlp-query · owner: David · LLM-first rearchitecture by Michael ──
+// AI Feature B: a user asks their org's threat data in plain English and gets a real answer.
 //
-// SECURITY MODEL (the whole point): the LLM never touches SQL and never picks a raw field.
-// It proposes a STRUCTURED spec constrained to a WHITELIST. We then validate every field,
-// operator, and value against that whitelist and build a PARAMETERIZED Prisma query. Model
-// output that fails validation is rejected → the "try rephrasing" fallback. This is the same
-// discipline as the verdict pipeline: the AI narrates/proposes, code makes the real decision.
+// HOW IT WORKS (LLM-first, catalog-driven — NO keyword matching):
+//   1. We hand the LLM a CATALOG (catalog.js — the "form"): every metric + field we can answer,
+//      each with a rich plain-English description, trimmed to what the caller's role may see.
+//   2. The LLM reads the question + catalog and returns a structured PLAN — which metric, which
+//      filters, which group-by — in words drawn straight from the catalog. This is the layer that
+//      actually understands language, so rewordings ("how many reports were made this week" vs
+//      "count of checks in the last 7 days") map to the same plan.
+//   3. validatePlan() checks EVERY token in that plan against the catalog (the security gate): an
+//      unknown metric/field/op/enum value, or an analyst-only field a member named, is rejected.
+//      The LLM proposes; code decides. A rejected/return-nothing plan → an honest message.
+//   4. The validated plan runs as a PARAMETERIZED, ORG-SCOPED Prisma query. Nothing the LLM says
+//      ever becomes SQL or a raw column.
 //
-// TWO KINDS OF ANSWER:
-//   1. a GENERIC chart (count/bar/line/pie) built from a free-form filter + groupBy — David's
-//      original path, unchanged below.
-//   2. a NAMED REPORT (weekly report, heatmap, 90-day trend, campaigns table, score histogram) —
-//      the five wireframed variants. These take no filters, so the model only picks a name from
-//      the REPORTS whitelist and code does all the querying and maths.
-//
-// ORG ISOLATION (project_plan.md §5, story #12): indicators are a GLOBAL table shared by every
-// org, so every read here is narrowed to the indicators THIS analyst's org actually submitted.
-// Without that narrowing an analyst would be counting other orgs' links.
+// ORG ISOLATION (story #12) + MEMBER PRIVACY GATE: every read is narrowed to the caller's visible
+// indicator set (analyst = whole org; member = own submissions ∪ analyst-shared reviews).
 import { chatJSON } from "../../services/llm.js";
 import { scoreBucket } from "../../services/verdict.js";
 import { listCampaigns } from "../campaigns/campaigns.service.js";
+import { isAnalyst } from "../../middleware/roles.js";
+import { FIELDS, METRICS, catalogPrompt, allowedFields, allowedMetrics } from "./catalog.js";
 
-// ── The whitelist: the ONLY fields/operators/values the analyst can query. ──
-// Each field maps to a real Indicator column and declares its type + allowed operators.
-// Nothing outside this table can ever reach the query.
-const FIELDS = {
-  score:      { column: "aiScore",       type: "number", ops: ["gte", "lte", "gt", "lt", "eq"] },
-  domainAge:  { column: "domainAgeDays", type: "number", ops: ["gte", "lte", "gt", "lt", "eq"] },
-  blacklisted:{ column: "blacklistHit",  type: "boolean", ops: ["eq"] },
-  status:     { column: "status",        type: "enum",   ops: ["eq"], values: ["pending", "scanning", "done", "error"] },
-  reviewStatus:{ column: "globalReviewStatus", type: "enum", ops: ["eq"], values: ["pending review", "confirmed safe", "confirmed dangerous"] },
-  createdAt:  { column: "createdAt",     type: "date",   ops: ["gte", "lte"] }, // "since"/"before"
-};
-
-// Verdict buckets → score ranges, so "dangerous"/"safe" questions map to a numeric filter
-// (matches scoreBucket: ≥70 safe, ≥35 review, else dangerous).
+// Verdict band → score range (safe ≥70, suspicious 35-69, dangerous <35). Matches scoreBucket().
 const BUCKET_RANGES = {
   safe:      { gte: 70 },
-  review:    { gte: 35, lt: 70 },
+  suspicious:{ gte: 35, lt: 70 },
   dangerous: { lt: 35 },
 };
 
-// Chart types we can render (the client maps these to Recharts). Whitelisted too.
-const CHART_TYPES = ["bar", "line", "pie", "count"];
+// Catalog operator → Prisma filter key. gte/lte/gt/lt pass straight through; "eq" becomes Prisma's
+// "equals" (the catalog uses the shorter "eq" for the LLM's benefit). This is the only translation
+// between the catalog's vocabulary and Prisma's.
+const prismaOp = (op) => (op === "eq" ? "equals" : op);
 
-// ── The NAMED REPORTS whitelist (the 5 wireframed variants) ──
-// Same idea as CHART_TYPES: the model may only name one of these keys. The chart type is
-// DERIVED here from the key — never taken from the model — so the two can't disagree.
-// Titles match the wireframes in client/src/assets/wireframes/Analyst/.
-const REPORTS = {
-  weekly:       { chart: "report",    title: "Weekly Threat Report" },
-  heatmap:      { chart: "heatmap",   title: "Submission Activity Heatmap" },
-  trend:        { chart: "trend",     title: "90-Day Threat Trend by Attack Type" },
-  campaigns:    { chart: "table",     title: "Active Threat Campaigns" },
-  distribution: { chart: "histogram", title: "Orbis Score Distribution" },
-};
-
-// The prompt chips on the Insights page are canned strings, so we can recognise the common
-// questions WITHOUT paying for a Claude call. Each report lists keyword sets: a question matches
-// when every word in any one set appears. Order matters — the first match wins.
-const REPORT_KEYWORDS = {
-  weekly:       [["weekly"], ["week", "report"]],
-  heatmap:      [["heatmap"], ["heat", "map"], ["when", "submitted"], ["most", "common", "time"]],
-  trend:        [["trend"], ["90", "day"], ["over", "time"], ["attack", "type"]],
-  campaigns:    [["campaign"]],
-  distribution: [["distribution"], ["histogram"], ["score", "spread"], ["score", "breakdown"]],
-};
-
-// ── Small date helper (UTC, no external dep) ──
-// UTC everywhere, matching dashboard.service.js. Defined up here because arrow consts aren't
-// hoisted and the keyword matcher below calls it. The heatmap surfaces the UTC caveat in its
-// subtitle so an analyst in another timezone isn't misled by the hour labels.
+// Midnight UTC, n days ago. Used by the report builders' rolling windows. (UTC everywhere, matching
+// dashboard.service.js; the heatmap surfaces the UTC caveat in its subtitle.)
 const startOfUtcDay = (daysBack = 0) => {
   const d = new Date();
   d.setUTCHours(0, 0, 0, 0);
@@ -79,126 +43,103 @@ const startOfUtcDay = (daysBack = 0) => {
   return d;
 };
 
-// The GENERIC (non-report) prompt chips deserve the same no-LLM treatment. Every string the
-// Insights page offers as a chip must answer without depending on the model: the chip is a
-// promise the UI makes, and "How many dangerous links this week?" used to be the only one that
-// could fail — the LLM sometimes answered {"unmappable":true} or a spec that failed validation,
-// which surfaced as the "try rephrasing" fallback suggesting the very question just asked.
-// Each entry maps keyword sets → the already-validated spec shape validateSpec() produces.
-const COUNT_BUCKETS = { dangerous: "dangerous", suspicious: "review", safe: "safe" };
-const THIS_WEEK_WORDS = [["this", "week"], ["last", "7", "days"], ["past", "week"], ["7", "days"]];
 
-// "how many <bucket> links this week" → a count filtered to that verdict + the last 7 days.
-const matchBucketCount = (text) => {
-  // "how many" (or "count") + a verdict word is the shape we recognise. Anything more
-  // specific still falls through to the LLM, which can express filters we don't hardcode.
-  const asksHowMany = text.includes("how many") || text.includes("count of") || text.startsWith("count ");
-  if (!asksHowMany) return null;
-
-  const bucketWord = Object.keys(COUNT_BUCKETS).find((word) => text.includes(word));
-  if (!bucketWord) return null;
-
-  const scopedToWeek = THIS_WEEK_WORDS.some((set) => set.every((word) => text.includes(word)));
-  const filters = [];
-  let title = `${bucketWord[0].toUpperCase()}${bucketWord.slice(1)} links`;
-  if (scopedToWeek) {
-    // Same 7-day window the weekly report uses, so the two screens can't disagree.
-    filters.push({ column: "createdAt", op: "gte", value: startOfUtcDay(6) });
-    title += " this week";
-  }
-  // bucketCount marks this for the evidence-carrying builder (number + the links behind it),
-  // rather than the generic path's bare total.
-  return { chart: "count", bucketCount: true, groupBy: null, filters, verdictBucket: COUNT_BUCKETS[bucketWord], title };
+// ── The LLM planner: question + catalog → a structured plan ──────────────────────────────────
+// We describe the catalog (trimmed to the caller's role) and ask the model to pick ONE metric,
+// its filters, and an optional group-by — using ONLY names from the catalog. Temperature 0 for
+// determinism. The model may also return {unanswerable:true} for off-topic questions. This is the
+// ONLY place natural language is interpreted; everything after is deterministic + validated.
+const planWithLLM = async (question, role) => {
+  const { metrics, fields } = catalogPrompt(role);
+  const system =
+    "You turn a question about an organization's phishing/threat-report data into a STRICT JSON " +
+    "query plan. You do NOT write SQL and you MUST use ONLY the metric names, field names, " +
+    "operators and values listed below — never invent one.\n\n" +
+    `METRICS (pick exactly one):\n${metrics}\n\n` +
+    `FIELDS (for filters and group-by):\n${fields}\n\n` +
+    "Reply with ONLY minified JSON in one of these two shapes:\n" +
+    '{"metric":"<metric name>","filters":[{"field":"<field name>","op":"<operator>","value":<string|number|boolean>}],"groupBy":"<field name or null>"}\n' +
+    'or, if the question is not about this data: {"unanswerable":true,"reason":"<one short sentence>"}\n\n' +
+    "RULES: Only the \"count\" metric takes filters/groupBy; the report metrics take neither. " +
+    "For date phrases (\"this week\", \"last 7 days\", \"since July 1\") use the reportedAt field " +
+    "with a gte operator and an ISO date value; today is " + new Date().toISOString().slice(0, 10) + ". " +
+    "For verdict words (dangerous/suspicious/safe) use the verdict field. Map synonyms to the " +
+    "closest listed value (e.g. \"malicious\"/\"scam\"/\"phishing link\" → verdict \"dangerous\"; " +
+    "\"risky\" → \"suspicious\"). No prose, no markdown, JSON only.";
+  return chatJSON({ system, user: `Question: ${question}\n\nReturn the JSON plan.`, maxTokens: 300, temperature: 0 });
 };
 
-// Try to map a question straight to an answer with NO LLM call. Returns a validated spec or null.
-// Two families: the 5 named reports, and the generic "how many X" counts above.
-export const matchReport = (question) => {
-  const text = String(question ?? "").toLowerCase();
-  for (const [report, keywordSets] of Object.entries(REPORT_KEYWORDS)) {
-    const hit = keywordSets.some((set) => set.every((word) => text.includes(word)));
-    if (hit) return { report, chart: REPORTS[report].chart, title: REPORTS[report].title };
-  }
-  return matchBucketCount(text);
-};
+// ── validatePlan: the SECURITY GATE. Check every token in the LLM's plan against the catalog. ──
+// Returns a normalized, safe plan or null (→ honest fallback). `role` enforces the analyst-only
+// gate: a member's plan may not name an analyst-only metric/field even if the LLM emitted one.
+// Nothing here trusts the model — an unknown metric, field, op, or bad enum value is rejected.
+export const validatePlan = (plan, role = "member") => {
+  if (!plan || typeof plan !== "object" || plan.unanswerable) return null;
 
-// Group-by dimensions the analyst can slice by (safe columns only).
-const GROUP_BY = {
-  verdict:     "aiScore",     // bucketed into safe/review/dangerous
-  status:      "status",
-  reviewStatus:"globalReviewStatus",
-  day:         "createdAt",   // grouped by calendar day
-};
+  const metricsForRole = allowedMetrics(role);
+  const fieldsForRole = allowedFields(role);
 
-// The JSON contract we force the LLM to return. Kept tight so validation is simple.
-const SYSTEM = `You translate an analyst's plain-English question about a threat-history database
-into a STRICT JSON query spec. You do NOT write SQL. Reply with ONLY minified JSON.
+  const metric = metricsForRole[plan.metric];
+  if (!metric) return null; // unknown or not-allowed-for-role metric → reject
 
-If the question asks for one of these five standard reports, reply ONLY:
-{"report":"weekly|heatmap|trend|campaigns|distribution"}
-  weekly       = a weekly threat report / this week's summary
-  heatmap      = WHEN threats are submitted (day-of-week x time-of-day activity)
-  trend        = how attack types have trended over the last 90 days
-  campaigns    = a breakdown of active threat campaigns
-  distribution = the spread/distribution of safety scores
-
-Otherwise reply:
-{"chart":"bar|line|pie|count","groupBy":"verdict|status|reviewStatus|day|null",
-"filters":[{"field":"score|domainAge|blacklisted|status|reviewStatus|createdAt","op":"gte|lte|gt|lt|eq","value":<number|boolean|string>}],
-"verdictBucket":"safe|review|dangerous|null","title":"<short chart title>"}
-Rules: use ONLY those field/op/chart/groupBy values. For "dangerous/suspicious/safe" questions set
-verdictBucket. For "this week/last 7 days" add a createdAt gte filter with an ISO date. If the
-question can't be expressed with these fields, reply {"unmappable":true}. No prose, no markdown.`;
-
-// Validate the LLM's spec against the whitelist. Returns a safe, normalized spec or null.
-// null → caller returns the "try rephrasing" fallback. This is the security gate.
-export const validateSpec = (spec) => {
-  if (!spec || typeof spec !== "object" || spec.unmappable) return null;
-
-  // A named report short-circuits everything: the key must be in REPORTS, and we take the chart
-  // type + title from OUR table, not from the model. Any filters/groupBy it sent are ignored.
-  if (spec.report != null) {
-    const report = REPORTS[spec.report];
-    if (!report) return null; // unknown report name → reject (same as an unknown chart type)
-    return { report: spec.report, chart: report.chart, title: report.title };
+  // Report metrics take no filters/groupBy — return them bare (their builders do the rest).
+  if (metric.kind === "report") {
+    return { kind: "report", report: metric.report, metricKey: plan.metric };
   }
 
-  if (!CHART_TYPES.includes(spec.chart)) return null;
-
-  const groupBy = spec.groupBy && GROUP_BY[spec.groupBy] ? spec.groupBy : null;
-
-  const rawFilters = Array.isArray(spec.filters) ? spec.filters : [];
+  // Count metric: validate + coerce each filter against the catalog.
+  const rawFilters = Array.isArray(plan.filters) ? plan.filters : [];
   const filters = [];
   for (const f of rawFilters) {
-    const def = FIELDS[f?.field];
-    if (!def) return null;                       // unknown field → reject the whole thing
-    if (!def.ops.includes(f.op)) return null;    // disallowed operator → reject
-    // Type-check + coerce the value; reject anything that doesn't fit the declared type.
-    let value = f.value;
-    if (def.type === "number") { value = Number(value); if (!Number.isFinite(value)) return null; }
-    else if (def.type === "boolean") { if (typeof value !== "boolean") return null; }
-    else if (def.type === "enum") { if (!def.values.includes(value)) return null; }
-    else if (def.type === "date") { const d = new Date(value); if (isNaN(d.getTime())) return null; value = d; }
-    else return null;
-    filters.push({ column: def.column, op: f.op, value });
+    const def = fieldsForRole[f?.field];
+    if (!def) return null;                    // unknown / not-allowed field → reject whole plan
+    if (!def.ops.includes(f.op)) return null; // operator not allowed for this field → reject
+    const value = coerceValue(def, f.value);
+    if (value === REJECT) return null;        // wrong type / bad enum → reject
+    filters.push({ field: f.field, def, op: f.op, value });
   }
 
-  const verdictBucket = ["safe", "review", "dangerous"].includes(spec.verdictBucket) ? spec.verdictBucket : null;
-  const title = typeof spec.title === "string" && spec.title.trim() ? spec.title.trim().slice(0, 80) : "Threat query";
-  return { chart: spec.chart, groupBy, filters, verdictBucket, title };
+  // group-by must be a catalog field flagged groupable on this metric, and allowed for the role.
+  let groupBy = null;
+  if (plan.groupBy && plan.groupBy !== "null") {
+    if (!metric.groupableBy?.includes(plan.groupBy)) return null;
+    if (!fieldsForRole[plan.groupBy]) return null; // e.g. member tried to group by reporter
+    groupBy = plan.groupBy;
+  }
+
+  return { kind: "count", metricKey: plan.metric, filters, groupBy };
 };
 
-// Build a PARAMETERIZED Prisma `where` from the validated spec. Only whitelisted columns
-// and operator keys ever appear here — values are passed as Prisma args (never interpolated).
-const buildWhere = (spec) => {
-  const where = {};
-  for (const f of spec.filters) {
-    where[f.column] = { ...(where[f.column] || {}), [f.op]: f.value };
+// Sentinel so a legitimately-falsey coerced value (0, false) isn't confused with a rejection.
+const REJECT = Symbol("reject");
+
+// Type-check + coerce one filter value against its catalog field definition.
+const coerceValue = (def, raw) => {
+  switch (def.type) {
+    case "number": {
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : REJECT;
+    }
+    case "boolean":
+      if (typeof raw === "boolean") return raw;
+      if (raw === "true") return true;
+      if (raw === "false") return false;
+      return REJECT;
+    case "date": {
+      const d = new Date(raw);
+      return isNaN(d.getTime()) ? REJECT : d;
+    }
+    case "enum":
+    case "verdictBand":
+      // Closed set — the value MUST be one the catalog declares (case-insensitive match).
+      return def.values.find((v) => v.toLowerCase() === String(raw).toLowerCase()) ?? REJECT;
+    case "tag":
+    case "string":
+      // Free text (attack-type category / reporter name). Trim + cap length; never becomes SQL.
+      return typeof raw === "string" && raw.trim() ? raw.trim().slice(0, 100) : REJECT;
+    default:
+      return REJECT;
   }
-  if (spec.verdictBucket) {
-    where.aiScore = { ...(where.aiScore || {}), ...BUCKET_RANGES[spec.verdictBucket] };
-  }
-  return where;
 };
 
 // Bucket a raw safety score into the verdict label. Delegates to the ONE shared rubric in
@@ -206,37 +147,71 @@ const buildWhere = (spec) => {
 // what "dangerous" means (safe ≥70 · review ≥35 · else dangerous).
 const bucketOf = (score) => scoreBucket(score);
 
-// ── Org isolation ───────────────────────────────────────────────────────────────────────────
-// Indicators are GLOBAL (one row per URL, shared by every org), so "which indicators may this
-// analyst see?" = "which indicators did their org submit?". We look that up once and then narrow
-// every query with `id: { in: ids }`. Same shape as the analyst branch in history.routes.js.
-const orgIndicatorIds = async (prisma, orgId) => {
-  const rows = await prisma.submission.findMany({
-    where: { orgId },
-    select: { indicatorId: true },
-    distinct: ["indicatorId"],
-    take: MAX_ROWS,
-  });
-  return rows.map((r) => r.indicatorId);
+// ── Access scope (org isolation + role-based privacy gate) ──────────────────────────────────
+// Indicators are GLOBAL (one row per URL, shared by every org), so every read is narrowed to a
+// per-caller allowlist of indicator ids. WHO may see WHICH indicators depends on the role:
+//
+//   analyst → every indicator THEIR ORG submitted (full org visibility — the analyst surface).
+//   member  → only what a member is allowed to see in Team History: indicators THEY THEMSELVES
+//             submitted, UNION indicators their org has an analyst-SHARED review on
+//             (OrgReview.sharedWithOrg = true). This is the exact same privacy gate as
+//             history.routes.js's ?org=1 branch — a member can never count a teammate's
+//             un-shared, private submissions.
+//
+// Returning the allowlist as an array (not a boolean flag) means EVERY query below intersects the
+// same set via `id: { in: ids }` — for an analyst that's a no-op superset, for a member it's the
+// gate. One uniform rule, so there's no query that can accidentally skip the narrowing and leak.
+const visibleIndicatorIds = async (prisma, scope) => {
+  const { orgId, userId, role } = scope;
+
+  if (isAnalyst(role)) {
+    const rows = await prisma.submission.findMany({
+      where: { orgId },
+      select: { indicatorId: true },
+      distinct: ["indicatorId"],
+      take: MAX_ROWS,
+    });
+    return rows.map((r) => r.indicatorId);
+  }
+
+  // Member: own submissions ∪ analyst-shared reviews (the Team-History privacy gate).
+  const [mine, shared] = await Promise.all([
+    prisma.submission.findMany({
+      where: { orgId, userId },
+      select: { indicatorId: true },
+      distinct: ["indicatorId"],
+      take: MAX_ROWS,
+    }),
+    prisma.orgReview.findMany({
+      where: { orgId, sharedWithOrg: true },
+      select: { indicatorId: true },
+      take: MAX_ROWS,
+    }),
+  ]);
+  return [...new Set([...mine.map((r) => r.indicatorId), ...shared.map((r) => r.indicatorId)])];
 };
 
 // An "I looked, there's nothing here" answer. Used when the analyst has no org, or the org has
 // no submissions yet. Shape matches a real answer so the client renders its normal empty state
 // instead of erroring — and, crucially, we return this INSTEAD of running an unscoped query.
-const emptyResult = (spec) => {
-  if (spec.chart === "report") {
-    return {
-      data: { totals: { total: 0, dangerous: 0, suspicious: 0, safe: 0 }, daily: [], topThreats: [], findings: [] },
-      chartSpec: { type: "report", title: spec.title, empty: true },
-    };
+// An "I looked, there's nothing here" answer for when the caller has no org / no visible data.
+// Shape matches a real answer so the client renders its normal empty state. Keyed off the plan
+// kind + (for reports) the report type, since a `report` hands the client an OBJECT not an array.
+const emptyResult = (plan) => {
+  if (plan.kind === "report") {
+    if (plan.report === "weekly") {
+      return {
+        data: { totals: { total: 0, dangerous: 0, suspicious: 0, safe: 0 }, daily: [], topThreats: [], findings: [] },
+        chartSpec: { type: "report", title: REPORT_TITLES.weekly, empty: true },
+      };
+    }
+    const type = { heatmap: "heatmap", trend: "trend", campaigns: "table", distribution: "histogram" }[plan.report];
+    return { data: [], chartSpec: { type, title: REPORT_TITLES[plan.report], empty: true } };
   }
-  // A bucket count keeps its own shape when empty so the client renders the same card, not a
-  // different one — the evidence list is simply empty.
-  if (spec.bucketCount) {
-    return { data: [], chartSpec: { type: "bucketCount", title: spec.title, total: 0, reportTotal: 0, band: spec.verdictBucket, empty: true } };
-  }
-  if (spec.chart === "count") return { data: [{ label: "Total", value: 0 }], chartSpec: { type: "count", title: spec.title, empty: true } };
-  return { data: [], chartSpec: { type: spec.chart, title: spec.title, empty: true } };
+  // A count keeps its bucketCount shape when empty so the client renders the same card, not a
+  // different one — the evidence list is simply empty. A grouped count renders as an empty bar.
+  if (plan.groupBy) return { data: [], chartSpec: { type: "bar", title: "No data", groupBy: plan.groupBy, empty: true } };
+  return { data: [], chartSpec: { type: "bucketCount", title: "No data", total: 0, reportTotal: 0, band: null, empty: true } };
 };
 
 // Percent change current-vs-previous. Same rubric as dashboard.service.js's trend() so the two
@@ -274,10 +249,11 @@ const MAX_ROWS = 1000;     // safety cap on every read (matches the original tak
 // Counts the org's submissions in a 7×8 grid. Mon=0 (the wireframe starts the week on Monday)
 // and each slot is a 3-hour block. Returns every cell, including empty ones, so the client can
 // render a complete grid without inventing gaps.
-const buildHeatmap = async (prisma, spec, orgId) => {
+const buildHeatmap = async (prisma, spec, orgId, indicatorIds) => {
   const since = startOfUtcDay(HEATMAP_DAYS - 1);
   const rows = await prisma.submission.findMany({
-    where: { orgId, createdAt: { gte: since } },
+    // indicatorId ∈ allowlist enforces the caller's scope (member sees only own+shared).
+    where: { orgId, indicatorId: { in: indicatorIds }, createdAt: { gte: since } },
     select: { createdAt: true },
     take: MAX_ROWS,
   });
@@ -465,12 +441,13 @@ const buildHistogram = async (prisma, spec, orgId, indicatorIds) => {
 // The composite card: totals, a stacked day-by-verdict bar chart, the week's worst threats, and
 // findings. The findings text is COMPUTED (percentChange above), never LLM-written, so the
 // numbers in the sentence always match the numbers in the chart.
-const buildWeeklyReport = async (prisma, spec, orgId) => {
+const buildWeeklyReport = async (prisma, spec, orgId, indicatorIds) => {
   const weekStart = startOfUtcDay(6);      // 7 days incl. today
   const prevWeekStart = startOfUtcDay(13); // the 7 days before that, for the comparison
 
   const rows = await prisma.submission.findMany({
-    where: { orgId, createdAt: { gte: prevWeekStart } },
+    // Scope gate: only indicators the caller may see (member = own + analyst-shared).
+    where: { orgId, indicatorId: { in: indicatorIds }, createdAt: { gte: prevWeekStart } },
     select: {
       indicatorId: true,
       createdAt: true,
@@ -535,49 +512,101 @@ const buildWeeklyReport = async (prisma, spec, orgId) => {
   return { data: { totals, daily, topThreats, findings }, chartSpec: { type: "report", title: spec.title, subtitle: range } };
 };
 
-// Dispatch a validated named report to its builder.
-const buildReport = (prisma, spec, orgId, indicatorIds) => {
-  if (spec.report === "heatmap") return buildHeatmap(prisma, spec, orgId);
+// Dispatch a validated named report to its builder. `scope` carries the caller's role so
+// analyst-only reports (campaigns) can be gated; every builder gets the pre-computed
+// indicatorIds allowlist so its reads stay within the caller's visibility.
+const buildReport = (prisma, spec, orgId, indicatorIds, scope) => {
+  if (spec.report === "heatmap") return buildHeatmap(prisma, spec, orgId, indicatorIds);
   if (spec.report === "trend") return buildTrend(prisma, spec, orgId, indicatorIds);
-  if (spec.report === "campaigns") return buildCampaignTable(prisma, spec, orgId);
+  if (spec.report === "campaigns") {
+    // Campaigns are an analyst construct (clustering + triage). A member has no campaign
+    // surface, so we return the empty table rather than exposing org-wide campaign rollups.
+    if (!isAnalyst(scope.role)) return { data: [], chartSpec: { type: "table", title: spec.title, empty: true } };
+    return buildCampaignTable(prisma, spec, orgId);
+  }
   if (spec.report === "distribution") return buildHistogram(prisma, spec, orgId, indicatorIds);
-  return buildWeeklyReport(prisma, spec, orgId);
+  return buildWeeklyReport(prisma, spec, orgId, indicatorIds);
 };
 
-// ── "How many <verdict> links this week?" — the count, PLUS the links it counted ────────────
-// A bare number is not actionable: an analyst's next question is always "which ones?". So the
-// count chip returns the matching links with the detail needed to triage them, and the client
-// renders the number with an evidence list underneath.
+// ── The unified COUNT builder: one query path for every filter/group-by in the catalog ───────
+// The plan's filters name catalog FIELDS; each field knows its table (submission / indicator /
+// orgReview) and column, so we translate the plan into ONE parameterized Prisma `where` on the
+// org's submissions, joined to the indicator (and, when needed, the org's review). We count over
+// SUBMISSIONS (not indicators) because "this week" means when the ORG reported it, and dedup to
+// one row per link while keeping the report count. Scoped to `indicatorIds` = the caller's
+// visible set, so a member never counts a teammate's private submission.
 //
-// This builder also fixes a subtle correctness bug in the generic path. `createdAt` in FIELDS
-// maps to Indicator.createdAt = when the URL was FIRST SEEN GLOBALLY (by any org, ever). What an
-// analyst means by "this week" is when THEIR ORG reported it — Submission.createdAt. Filtering on
-// the indicator's own date counted links the org reported months ago but that happened to be
-// first seen recently (and missed old links freshly re-reported). We count DISTINCT indicators
-// from the org's submissions in the window instead.
-const buildBucketCount = async (prisma, spec, orgId) => {
-  const range = BUCKET_RANGES[spec.verdictBucket];
-  // The date filter (if the question was scoped to a week) applies to the SUBMISSION.
-  const submittedAt = spec.filters.find((f) => f.column === "createdAt");
+// A groupBy returns a labelled breakdown ({label,value}[]) for a bar/pie; otherwise it returns the
+// number PLUS the matching links (the "which ones?" evidence the analyst always wants next).
+const buildCount = async (prisma, plan, orgId, indicatorIds) => {
+  // Split the validated filters by which table they constrain.
+  const where = { orgId, indicatorId: { in: indicatorIds } };
+  const indicatorWhere = {};
+  let reviewStatusFilter = null;
+
+  for (const f of plan.filters) {
+    const { def, op, value, field } = f;
+    if (field === "verdict") {
+      // Verdict band → an aiScore range on the indicator.
+      Object.assign(indicatorWhere, { aiScore: { ...(indicatorWhere.aiScore || {}), ...BUCKET_RANGES[value] } });
+    } else if (field === "attackType") {
+      // aiTags is a JSON array; Prisma `array_contains` matches an exact tag string.
+      indicatorWhere.aiTags = { array_contains: value };
+    } else if (def.table === "indicator") {
+      indicatorWhere[def.column] = { ...(indicatorWhere[def.column] || {}), [prismaOp(op)]: value };
+    } else if (def.table === "submission") {
+      if (def.column === "userName") where.user = { name: value };
+      else where[def.column] = { ...(where[def.column] || {}), [prismaOp(op)]: value };
+    } else if (def.table === "orgReview") {
+      // Review status lives on the org's OrgReview row → resolve to the matching indicator ids
+      // (still inside the caller's visible set) and intersect.
+      reviewStatusFilter = value;
+    }
+  }
+
+  // If a review-status filter is present, narrow indicatorIds to those with that status first.
+  let scopedIds = indicatorIds;
+  if (reviewStatusFilter) {
+    const reviewed = await prisma.orgReview.findMany({
+      where: { orgId, indicatorId: { in: indicatorIds }, reviewStatus: reviewStatusFilter },
+      select: { indicatorId: true },
+      take: MAX_ROWS,
+    });
+    scopedIds = reviewed.map((r) => r.indicatorId);
+    where.indicatorId = { in: scopedIds };
+    if (scopedIds.length === 0) {
+      return { data: [], chartSpec: { type: "bucketCount", title: titleFor(plan), total: 0, reportTotal: 0, band: null, empty: true } };
+    }
+  }
+  if (Object.keys(indicatorWhere).length) where.indicator = indicatorWhere;
 
   const submissions = await prisma.submission.findMany({
-    where: {
-      orgId,
-      ...(submittedAt ? { createdAt: { [submittedAt.op]: submittedAt.value } } : {}),
-      indicator: { aiScore: range },
-    },
-    orderBy: { createdAt: "desc" }, // newest first, so the dedup below keeps the latest report
+    where,
+    orderBy: { createdAt: "desc" }, // newest first → dedup keeps the latest report
     select: {
       indicatorId: true,
       createdAt: true,
+      source: true,
       user: { select: { name: true, email: true } },
-      indicator: { select: { aiTitle: true, domain: true, aiScore: true, aiTags: true, blacklistHit: true } },
+      indicator: { select: { aiTitle: true, domain: true, aiScore: true, aiTags: true, blacklistHit: true, aiConfidence: true } },
     },
     take: MAX_ROWS,
   });
 
-  // One row per link even when several teammates reported it — but keep the report count, since
-  // "5 people hit this one" is exactly the signal an analyst prioritises on.
+  // ── Grouped breakdown → labelled chart data ──
+  if (plan.groupBy) {
+    const counts = new Map();
+    const seen = new Set(); // dedup to unique indicators for the breakdown
+    for (const s of submissions) {
+      if (seen.has(s.indicatorId)) continue;
+      seen.add(s.indicatorId);
+      for (const key of groupKeys(plan.groupBy, s)) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const data = [...counts.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+    return { data, chartSpec: { type: "bar", title: titleFor(plan), groupBy: plan.groupBy, empty: data.length === 0 } };
+  }
+
+  // ── Plain count → number + the links behind it ──
   const byIndicator = new Map();
   for (const s of submissions) {
     const existing = byIndicator.get(s.indicatorId);
@@ -596,77 +625,121 @@ const buildBucketCount = async (prisma, spec, orgId) => {
       reportCount: 1,
     });
   }
-  // Most dangerous first (lowest safety score) — the triage order the analyst wants.
   const links = [...byIndicator.values()].sort((a, b) => (a.score ?? 100) - (b.score ?? 100));
-
   return {
     data: links,
     chartSpec: {
       type: "bucketCount",
-      title: spec.title,
+      title: titleFor(plan),
       total: links.length,
-      // How many times those links were reported in total — "8 reports across 5 links".
       reportTotal: submissions.length,
-      band: spec.verdictBucket,
+      band: null,
       empty: links.length === 0,
     },
   };
 };
 
-// Run the validated query and shape the result into { data, chartSpec } for the client.
-// `prisma` is passed in (same testable pattern as the other services). `orgId` is the caller's
-// org — every read is narrowed to it (story #12); null/0 → an empty result, never a global read.
-export const runNlpQuery = async (prisma, spec, orgId) => {
-  if (!orgId) return emptyResult(spec);
-
-  const indicatorIds = await orgIndicatorIds(prisma, orgId);
-  if (indicatorIds.length === 0) return emptyResult(spec);
-
-  // The five named reports each have their own builder.
-  if (spec.report) return buildReport(prisma, spec, orgId, indicatorIds);
-
-  // A verdict-bucket count answers with evidence (see buildBucketCount). Only the keyword path
-  // sets this shape — an LLM-authored count with a groupBy still uses the generic path below.
-  if (spec.bucketCount) return buildBucketCount(prisma, spec, orgId);
-
-  const where = { ...buildWhere(spec), id: { in: indicatorIds } };
-  const rows = await prisma.indicator.findMany({
-    where,
-    select: { aiScore: true, status: true, globalReviewStatus: true, createdAt: true, domain: true },
-    take: 1000, // safety cap
-  });
-
-  // "count" → a single number. Otherwise group by the chosen dimension into chart data.
-  if (spec.chart === "count" || !spec.groupBy) {
-    return { data: [{ label: "Total", value: rows.length }], chartSpec: { type: "count", title: spec.title } };
+// The group-by key(s) for one submission. attackType can yield several (a link has many tags).
+const groupKeys = (groupBy, s) => {
+  const ind = s.indicator ?? {};
+  // scoreBucket returns the INTERNAL "review" label; the catalog + UI use "suspicious", so map it
+  // for display consistency (a filter uses "suspicious" too).
+  if (groupBy === "verdict") return [bucketOf(ind.aiScore) === "review" ? "suspicious" : bucketOf(ind.aiScore)];
+  if (groupBy === "confidence") return [ind.aiConfidence ?? "unrated"];
+  if (groupBy === "channel") return [s.source === "email" ? "email" : "web"];
+  if (groupBy === "reporter") return [s.user?.name ?? s.user?.email ?? "Unknown"];
+  if (groupBy === "attackType") {
+    const tags = Array.isArray(ind.aiTags) ? ind.aiTags.filter((t) => typeof t === "string" && t.trim()) : [];
+    return tags.length ? tags : ["Uncategorized"];
   }
-
-  const counts = {};
-  for (const r of rows) {
-    let key;
-    if (spec.groupBy === "verdict") key = bucketOf(r.aiScore);
-    else if (spec.groupBy === "status") key = r.status ?? "unknown";
-    else if (spec.groupBy === "reviewStatus") key = r.globalReviewStatus ?? "not reviewed";
-    else if (spec.groupBy === "day") key = new Date(r.createdAt).toISOString().slice(0, 10);
-    counts[key] = (counts[key] || 0) + 1;
-  }
-  const data = Object.entries(counts).map(([label, value]) => ({ label, value }));
-  return { data, chartSpec: { type: spec.chart, title: spec.title, groupBy: spec.groupBy } };
+  return ["Total"];
 };
 
-// Top-level: question → validated spec → data. Returns { data, chartSpec } or a fallback.
-// `orgId` is the caller's org, threaded through so every query stays org-scoped.
-export const answerNlpQuery = async (prisma, question, orgId) => {
-  // Fast path: the 5 named reports are recognisable from keywords, so the common questions
-  // (including every prompt chip on the Insights page) skip the Claude call entirely.
-  const matched = matchReport(question);
-  if (matched) return runNlpQuery(prisma, matched, orgId);
+// A readable title from the plan: "<verdict> links this week", "Reports pending review", etc.
+// Derived from the filters so the card header always reflects what was actually asked.
+const titleFor = (plan) => {
+  const byField = Object.fromEntries(plan.filters.map((f) => [f.field, f.value]));
+  // Review status is its own phrasing ("Reports pending review").
+  if (byField.reviewStatus) return `Reports ${byField.reviewStatus}`;
 
-  const raw = await chatJSON({ system: SYSTEM, user: `Question: ${question}\n\nReturn the JSON spec.`, maxTokens: 300, temperature: 0 });
-  const spec = validateSpec(raw);
-  if (!spec) {
-    return { fallback: "I couldn't turn that into a chart. Try rephrasing — e.g. \"how many dangerous links this week?\" or \"break down checks by verdict\"." };
+  const parts = [];
+  if (byField.verdict) parts.push(cap(byField.verdict));
+  if (byField.confidence) parts.push(`${byField.confidence}-confidence`);
+  if (byField.attackType) parts.push(byField.attackType);
+  if (byField.blacklisted === true) parts.push("blacklisted");
+  parts.push("links");
+  if (byField.channel) parts.push(`from ${byField.channel}`);
+  // A date filter reads as "this week" only when it's the ~last 7 days; otherwise leave it generic
+  // rather than assert a window we didn't actually compute.
+  const reportedAt = plan.filters.find((f) => f.field === "reportedAt" && f.op === "gte");
+  if (reportedAt) {
+    const days = Math.round((Date.now() - new Date(reportedAt.value).getTime()) / 86_400_000);
+    if (days >= 6 && days <= 8) parts.push("this week");
+    else if (days >= 28 && days <= 31) parts.push("this month");
   }
-  const result = await runNlpQuery(prisma, spec, orgId);
-  return result;
+  return cap(parts.join(" "));
 };
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// Dispatch a validated plan to its builder. `scope` carries the caller's role (report gating);
+// every builder gets the pre-computed indicatorIds allowlist so reads stay within visibility.
+export const runNlpQuery = async (prisma, plan, scope) => {
+  const orgId = scope?.orgId;
+  if (!orgId) return emptyResult(plan);
+
+  const indicatorIds = await visibleIndicatorIds(prisma, scope);
+  if (indicatorIds.length === 0) return emptyResult(plan);
+
+  if (plan.kind === "report") {
+    return buildReport(prisma, { report: plan.report, title: REPORT_TITLES[plan.report] }, orgId, indicatorIds, scope);
+  }
+  return buildCount(prisma, plan, orgId, indicatorIds);
+};
+
+// Titles for the 5 named reports (kept here so the report builders get a stable header).
+const REPORT_TITLES = {
+  weekly: "Weekly Threat Report",
+  heatmap: "Submission Activity Heatmap",
+  trend: "90-Day Threat Trend by Attack Type",
+  campaigns: "Active Threat Campaigns",
+  distribution: "Orbis Score Distribution",
+};
+
+// Top-level: question → LLM plan → validate → data. Returns { data, chartSpec } or { fallback }.
+// LLM-FIRST: there is no keyword layer. The model reads the catalog and proposes a plan; we
+// validate it against the catalog (the security gate) and run it. If the LLM is unavailable, we
+// say so honestly rather than guess. `scope` keeps every query org- and role-scoped.
+export const answerNlpQuery = async (prisma, question, scope) => {
+  const role = scope?.role ?? "member";
+  let plan = null;
+  try {
+    const first = await planWithLLM(question, role);
+    // The model's honest "not about this data" escape → a helpful, specific message.
+    if (first?.unanswerable) return { fallback: unanswerableMessage(role) };
+    plan = validatePlan(first, role);
+    if (!plan) {
+      // One corrective retry: a temperature-0 model occasionally emits an off-catalog token.
+      const retry = await planWithLLM(
+        `${question}\n\n(Your previous answer used a name that isn't in the catalog. Use ONLY the ` +
+          `listed metric/field/operator/value names, or reply {"unanswerable":true}.)`,
+        role,
+      );
+      if (retry?.unanswerable) return { fallback: unanswerableMessage(role) };
+      plan = validatePlan(retry, role);
+    }
+  } catch (e) {
+    console.warn("⚠ nlp-query LLM step failed:", e.message);
+    return { fallback: "Orbo's data assistant is temporarily unavailable — please try again in a moment." };
+  }
+
+  if (!plan) return { fallback: unanswerableMessage(role) };
+  return runNlpQuery(prisma, plan, scope);
+};
+
+// Honest "I can't answer that" — lists what Orbo CAN do so the user can re-aim, without repeating
+// their exact phrasing back at them. Members don't see campaigns, so tailor the examples.
+const unanswerableMessage = (role) =>
+  "I answer questions about your team's threat reports — for example: \"how many dangerous links " +
+  "this week\", \"how many came from email\", \"break down checks by verdict\", \"how many pending " +
+  "review\"" + (role === "analyst" ? ", or \"show the weekly report / active campaigns\"" : "") +
+  ". I couldn't map that question to the data I hold — try one of those.";
