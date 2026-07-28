@@ -16,6 +16,7 @@ import { useSignUp, useClerk, useOrganization, useAuth } from "@clerk/clerk-reac
 import { Navigate, useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { AuthCard, Field, PrimaryButton, PrivacyNote } from "./AuthKit.jsx";
+import { useApi } from "../../lib/useApi.js";
 import OrboAvatar from "../../components/OrboAvatar.jsx";
 
 // Free/consumer email domains that don't represent a specific organization.
@@ -190,6 +191,7 @@ const Step1 = ({ onDone, onPersonal }) => {
 // ── Step 2: invite teammates ─────────────────────────────────────────────────
 const Step2 = ({ canAutoAdd, domain, onDone }) => {
   const { organization } = useOrganization();
+  const api = useApi();
   const [emails, setEmails] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -204,11 +206,20 @@ const Step2 = ({ canAutoAdd, domain, onDone }) => {
     setBusy(true);
     setError("");
     try {
-      await organization.inviteMembers({ emailAddresses: list, role: "org:member" });
+      // Invitations are created SERVER-SIDE (POST /api/org/invite) so the Clerk org API + secret
+      // key stay off the client, and the invite email is pointed back at the Orbis sign-in page.
+      // The just-created org is active in this session, so requireAnalyst on the server passes.
+      const res = await api.post("/api/org/invite", { emails: list });
+      // Partial success is fine (some may already be members); only surface an error if NOTHING
+      // went out and we have reasons to show.
+      if ((res?.invited?.length ?? 0) === 0 && (res?.failed?.length ?? 0) > 0) {
+        setError(res.failed[0]?.reason || "Couldn't send those invites. Check the addresses and try again.");
+        return;
+      }
       setDone(true);
       setTimeout(onDone, 1200); // brief "sent!" pause before routing
     } catch (err) {
-      setError(errMsg(err, "Couldn't send some invites. Check the email addresses and try again."));
+      setError(err?.body?.error || "Couldn't send some invites. Check the email addresses and try again.");
     } finally {
       setBusy(false);
     }

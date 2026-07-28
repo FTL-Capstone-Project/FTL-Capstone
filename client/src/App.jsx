@@ -36,7 +36,10 @@ const App = () => {
       {/* Public marketing + auth flow. */}
       <Route path="/" element={<Landing />} />
       <Route path="/get-started" element={<PublicOnly><ChooseAccountType /></PublicOnly>} />
-      <Route path="/signin" element={<PublicOnly><SignIn /></PublicOnly>} />
+      {/* /signin is NOT wrapped in PublicOnly: it owns the signed-in state so it can route by
+          role vs. the ?type= page (personal/org/analyst) and show a mismatch error instead of
+          being auto-bounced to /ask-orbo. See SignIn.jsx post-auth routing. */}
+      <Route path="/signin" element={<SignIn />} />
       <Route path="/create-account" element={<PublicOnly><CreateAccount /></PublicOnly>} />
       <Route path="/create-team" element={<PublicOnly><CreateTeam /></PublicOnly>} />
       <Route path="/sso-callback" element={<SsoCallback />} />

@@ -10,13 +10,14 @@
 // link + tagline — the sign-in itself is identical for everyone (Clerk decides the
 // real org/role once they're in).
 import { useState, useEffect } from "react";
-import { useSignIn, useSignUp, useAuth } from "@clerk/clerk-react";
+import { useSignIn, useSignUp, useAuth, useOrganizationList } from "@clerk/clerk-react";
 import { Navigate, useSearchParams, Link } from "react-router-dom";
+import { useOrbisRole } from "../../lib/useOrbisRole.js";
 import {
   AuthCard, SocialButton, SsoButton, Field, PrimaryButton, Divider, PrivacyNote, GoogleMark, AppleMark,
 } from "./AuthKit.jsx";
 
-const AFTER_AUTH = "/ask-orbo"; // where a signed-in user lands
+const AFTER_AUTH = "/ask-orbo"; // where a signed-in user lands once routing is settled
 
 // Footer option per account type (per the auth-flow spec).
 const FOOTER = {
@@ -31,6 +32,92 @@ const errMsg = (err, fallback) => err?.errors?.[0]?.message || fallback;
 const ErrorText = ({ children }) => (
   <p style={{ color: "var(--danger)", fontSize: "0.85em", margin: "0 0 12px", textAlign: "center" }}>{children}</p>
 );
+
+// ── Post-auth router ─────────────────────────────────────────────────────────
+// After sign-in succeeds, decide where the user goes based on the login page they used (`type`)
+// vs. their actual Orbis role. One identity, three "variants" (personal / member / analyst) chosen
+// by which org is active — so this ROUTER, not the credentials, picks the variant:
+//
+//   personal      → ALWAYS succeeds into the personal variant. If an org is active, deactivate it
+//                   first so they land personal (they can switch to their org later). Never errors.
+//   organizational→ needs an org. member → member variant · admin → analyst variant · no org →
+//                   error + link to the Personal page.
+//   analyst       → needs org:admin. admin → analyst variant · member → error + link to Org page ·
+//                   no org → error + link to Personal page.
+//
+// We use useOrganizationList to find + activate the user's org membership (Clerk doesn't always
+// auto-activate an org on sign-in). While memberships load we render nothing (avoids a flash).
+const PostAuthRouter = ({ type }) => {
+  const { role, orgId } = useOrbisRole();
+  const { isLoaded, setActive, userMemberships } = useOrganizationList({
+    userMemberships: { infinite: true },
+  });
+  const [decision, setDecision] = useState(null); // null=deciding | "go" | "wrong-personal" | "wrong-org"
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    const memberships = userMemberships?.data ?? [];
+    // The user's admin membership (→ analyst) and any membership (→ member), if present.
+    const adminM = memberships.find((m) => m.role === "org:admin" || m.role === "admin");
+    const anyM = memberships[0] ?? null;
+
+    (async () => {
+      // ── Personal page: always land in the personal variant (no active org). ──
+      if (type === "personal") {
+        if (orgId) { try { await setActive?.({ organization: null }); } catch { /* best-effort */ } }
+        setDecision("go");
+        return;
+      }
+
+      // ── Analyst page: requires org:admin. ──
+      if (type === "analyst") {
+        if (role === "analyst") { setDecision("go"); return; } // already admin in an active org
+        if (adminM) { try { await setActive?.({ organization: adminM.organization.id }); } catch { /* */ } setDecision("go"); return; }
+        if (orgId || anyM) { setDecision("wrong-org"); return; } // a member → send to Org login
+        setDecision("wrong-personal"); // no org at all → send to Personal
+        return;
+      }
+
+      // ── Organizational page: requires any org membership (admin lands as analyst variant). ──
+      // An invite ticket already activated the org, so a set orgId is the fast path.
+      if (orgId || anyM) {
+        if (!orgId && anyM) { try { await setActive?.({ organization: anyM.organization.id }); } catch { /* */ } }
+        setDecision("go");
+      } else {
+        setDecision("wrong-personal"); // no org → send them to Personal
+      }
+    })();
+  }, [isLoaded, type, orgId, role, userMemberships, setActive]);
+
+  if (decision === "go") return <Navigate to={AFTER_AUTH} replace />;
+  if (decision === "wrong-personal") return <WrongAccount kind="personal" />;
+  if (decision === "wrong-org") return <WrongAccount kind="organizational" />;
+  // Still deciding (memberships loading / setActive in flight) — brief placeholder, no flash.
+  return (
+    <AuthCard tagline="Signing you in…">
+      <p style={{ textAlign: "center", color: "var(--text-dim)", fontSize: "0.9em" }}>One moment.</p>
+    </AuthCard>
+  );
+};
+
+// The "you used the wrong login page" error, with a link to the correct one. `kind` is the page we
+// send them TO. We DON'T sign them out — they're validly authenticated, just on the wrong door — so
+// the link switches the ?type and re-runs PostAuthRouter, which will route them correctly.
+const WrongAccount = ({ kind }) => {
+  const target = kind === "personal"
+    ? { to: "/signin?type=personal", label: "Personal", lead: "This isn't an organizational account." }
+    : { to: "/signin?type=organizational", label: "Organizational", lead: "This isn't an analyst account." };
+  return (
+    <AuthCard tagline="Wrong sign-in page">
+      <p style={{ textAlign: "center", color: "var(--text)", fontSize: "0.92em", lineHeight: 1.5, margin: "0 0 16px" }}>
+        {target.lead}{" "}Please log in via{" "}
+        <Link to={target.to} style={{ color: "var(--primary)", fontWeight: 700, textDecoration: "none" }}>
+          {target.label}
+        </Link>.
+      </p>
+    </AuthCard>
+  );
+};
 
 const SignIn = () => {
   const { signIn, isLoaded, setActive } = useSignIn();
@@ -55,8 +142,12 @@ const SignIn = () => {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Once Clerk confirms the session, redirect off real state (not imperative navigate).
-  if (isSignedIn) return <Navigate to={AFTER_AUTH} replace />;
+  // Once Clerk confirms the session, hand off to the post-auth router: it applies the per-page
+  // role rules (personal always → personal variant; org needs an org; analyst needs admin) and
+  // either routes into the app or shows a "wrong page" error with a link to the right one.
+  // (An invite ticket is mid-processing when this flips, but PostAuthRouter's rules still hold —
+  // the invitee is an org member, so the org page's checks pass.)
+  if (isSignedIn) return <PostAuthRouter type={type} />;
 
   // ── Invite-ticket auto-processing ──────────────────────────────────────────
   // Runs once when the component mounts with a ticket in the URL.

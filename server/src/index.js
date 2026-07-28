@@ -30,6 +30,7 @@ import { askOrboRouter } from "./features/askOrbo/askOrbo.routes.js";
 import { nlpQueryRouter } from "./features/nlpQuery/nlpQuery.routes.js";
 import { campaignsRouter } from "./features/campaigns/campaigns.routes.js";
 import { searchRouter } from "./features/search/search.routes.js";
+import { orgRouter } from "./features/org/org.routes.js";
 
 warnMissingEnv();
 
@@ -111,6 +112,7 @@ export function createApp() {
   app.use("/api/nlp-query", nlpQueryRouter);   // David: AI Feature B (NL question → chart)
   app.use("/api/campaigns", campaignsRouter);  // David's slice; built by Ozias for G1·06 triage grouping
   app.use("/api/search", searchRouter);        // David: analyst keyword search over org threat history
+  app.use("/api/org", orgRouter);              // Michael: server-side org invitations (Clerk ops off the client)
 
   // 6) Central error handler.
   // Only surface a message for deliberate CLIENT errors (a 4xx status our own code
