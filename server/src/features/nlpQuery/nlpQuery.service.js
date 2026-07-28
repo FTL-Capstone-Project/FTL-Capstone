@@ -16,11 +16,12 @@
 //
 // ORG ISOLATION (story #12) + MEMBER PRIVACY GATE: every read is narrowed to the caller's visible
 // indicator set (analyst = whole org; member = own submissions ∪ analyst-shared reviews).
-import { chatJSON } from "../../services/llm.js";
+import { chatJSON, chatText } from "../../services/llm.js";
 import { scoreBucket } from "../../services/verdict.js";
 import { listCampaigns } from "../campaigns/campaigns.service.js";
 import { isAnalyst } from "../../middleware/roles.js";
 import { FIELDS, METRICS, catalogPrompt, allowedFields, allowedMetrics } from "./catalog.js";
+import { answerWithSql, formatRows } from "./sqlPlanner.js";
 
 // Verdict band → score range (safe ≥70, suspicious 35-69, dangerous <35). Matches scoreBucket().
 const BUCKET_RANGES = {
@@ -705,35 +706,67 @@ const REPORT_TITLES = {
   distribution: "Orbis Score Distribution",
 };
 
-// Top-level: question → LLM plan → validate → data. Returns { data, chartSpec } or { fallback }.
-// LLM-FIRST: there is no keyword layer. The model reads the catalog and proposes a plan; we
-// validate it against the catalog (the security gate) and run it. If the LLM is unavailable, we
-// say so honestly rather than guess. `scope` keeps every query org- and role-scoped.
+// Top-level: question → answer. Returns { data, chartSpec } or { fallback }.
+//
+// TWO ENGINES, chosen by a cheap classifier:
+//   • The 5 NAMED REPORTS (weekly / heatmap / trend / campaigns / distribution) are rich, bespoke
+//     chart shapes, so they keep their hand-built builders (routed via the catalog plan path).
+//   • EVERYTHING ELSE — any count / breakdown / filter question — goes to the SQL engine: the LLM
+//     writes a SELECT over the v_reports view, sqlGuard proves it's a safe read-only single-view
+//     query, the scoped executor runs it under the caller's org + privacy gate, and a deterministic
+//     formatter shapes the rows. This is what makes ANY filter×grouping combination answerable
+//     without pre-building it — the capability upgrade.
+//
+// If the LLM is unavailable we say so honestly (no keyword fallback). `scope` keeps every read
+// org- and role-scoped no matter which engine runs.
 export const answerNlpQuery = async (prisma, question, scope) => {
   const role = scope?.role ?? "member";
-  let plan = null;
+
+  // 1) Is this one of the 5 named reports? A tiny classifier call keeps them on their rich builders.
+  let reportKey = null;
   try {
-    const first = await planWithLLM(question, role);
-    // The model's honest "not about this data" escape → a helpful, specific message.
-    if (first?.unanswerable) return { fallback: unanswerableMessage(role) };
-    plan = validatePlan(first, role);
-    if (!plan) {
-      // One corrective retry: a temperature-0 model occasionally emits an off-catalog token.
-      const retry = await planWithLLM(
-        `${question}\n\n(Your previous answer used a name that isn't in the catalog. Use ONLY the ` +
-          `listed metric/field/operator/value names, or reply {"unanswerable":true}.)`,
-        role,
-      );
-      if (retry?.unanswerable) return { fallback: unanswerableMessage(role) };
-      plan = validatePlan(retry, role);
-    }
+    reportKey = await classifyReport(question, role);
   } catch (e) {
-    console.warn("⚠ nlp-query LLM step failed:", e.message);
+    console.warn("⚠ nlp-query classifier failed:", e.message);
     return { fallback: "Orbo's data assistant is temporarily unavailable — please try again in a moment." };
   }
+  if (reportKey === "unanswerable") return { fallback: unanswerableMessage(role) };
+  if (reportKey && REPORT_TITLES[reportKey]) {
+    // campaigns is analyst-only — a member asking for it falls through to the honest message.
+    if (reportKey === "campaigns" && role !== "analyst") return { fallback: unanswerableMessage(role) };
+    return runNlpQuery(prisma, { kind: "report", report: reportKey, metricKey: reportKey }, scope);
+  }
 
-  if (!plan) return { fallback: unanswerableMessage(role) };
-  return runNlpQuery(prisma, plan, scope);
+  // 2) Otherwise → the SQL engine (guarded + scoped). Formatter shapes rows into chartSpec.
+  try {
+    const result = await answerWithSql(question, scope);
+    if (result.error) return { fallback: unanswerableMessage(role) };
+    return formatRows(result.rows, question);
+  } catch (e) {
+    console.warn("⚠ nlp-query SQL engine failed:", e.message);
+    return { fallback: "Orbo's data assistant is temporarily unavailable — please try again in a moment." };
+  }
+};
+
+// A cheap classifier: does this question want one of the 5 named reports, a general data query, or
+// nothing we cover? Returns a report key | "query" | "unanswerable". Kept tiny + strict so most
+// questions fall straight through to the flexible SQL engine.
+const classifyReport = async (question, role) => {
+  const options = ["weekly", "heatmap", "trend", role === "analyst" ? "campaigns" : null, "distribution"]
+    .filter(Boolean).join(" | ");
+  const system =
+    "Classify the user's question about threat-report data into ONE word:\n" +
+    `- one of these named reports if they clearly ask for it: ${options}\n` +
+    "    weekly = a weekly summary report; heatmap = when reports come in (day/time); " +
+    "trend = attack types over ~90 days; campaigns = clustered attack campaigns; " +
+    "distribution = the spread of safety scores.\n" +
+    "- \"query\" for ANY other question about the data (counts, breakdowns, filters, \"how many …\").\n" +
+    "- \"unanswerable\" if it is NOT about their threat-report data (weather, jokes, general chit-chat).\n" +
+    "Reply with ONLY the one word.";
+  const raw = (await chatText({ system, user: question, maxTokens: 8, temperature: 0 })).trim().toLowerCase().replace(/[^a-z]/g, "");
+  if (["weekly", "heatmap", "trend", "campaigns", "distribution"].includes(raw)) return raw;
+  if (raw === "unanswerable") return "unanswerable";
+  return "query";
 };
 
 // Honest "I can't answer that" — lists what Orbo CAN do so the user can re-aim, without repeating

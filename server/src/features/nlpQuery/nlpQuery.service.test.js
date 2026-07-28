@@ -1,9 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock the LLM so we can feed answerNlpQuery a controlled plan (the planner's job is understanding
-// language, which we don't unit-test here; we test that a plan is VALIDATED + RUN correctly).
+// Mock the LLM. chatText backs the report-classifier + the SQL planner; chatJSON backs the legacy
+// catalog plan path (still used by validatePlan tests). The report BUILDERS are exercised via
+// runNlpQuery with a mock prisma; the SQL engine is mocked here (its own guard/executor have
+// dedicated suites) so these tests focus on answerNlpQuery's routing.
 const chatJSON = vi.fn();
-vi.mock("../../services/llm.js", () => ({ chatJSON: (...a) => chatJSON(...a) }));
+const chatText = vi.fn();
+vi.mock("../../services/llm.js", () => ({ chatJSON: (...a) => chatJSON(...a), chatText: (...a) => chatText(...a) }));
+
+// Mock the SQL engine so answerNlpQuery routing can be tested without a live DB. The real SQL
+// path is covered by sqlGuard.test.js (adversarial) + live E2E.
+const answerWithSql = vi.fn();
+const formatRows = vi.fn();
+vi.mock("./sqlPlanner.js", () => ({ answerWithSql: (...a) => answerWithSql(...a), formatRows: (...a) => formatRows(...a) }));
 
 const { validatePlan, runNlpQuery, answerNlpQuery } = await import("./nlpQuery.service.js");
 
@@ -33,7 +42,12 @@ const sub = (indicatorId, { aiScore = 50, source = "web", aiConfidence = "high",
   indicator: { aiTitle: `t${indicatorId}`, domain: `d${indicatorId}.com`, aiScore, aiTags, blacklistHit, aiConfidence },
 });
 
-beforeEach(() => chatJSON.mockReset());
+beforeEach(() => {
+  chatJSON.mockReset();
+  chatText.mockReset();
+  answerWithSql.mockReset();
+  formatRows.mockReset();
+});
 
 // ── The security gate: validatePlan rejects anything not in the catalog ─────────────────────
 describe("validatePlan — the catalog is the whitelist", () => {
@@ -244,52 +258,57 @@ describe("named reports — shapes the client renders, scoped to the org", () =>
   });
 });
 
-// ── answerNlpQuery end-to-end: LLM-first, validated, with honest failures ───────────────────
-describe("answerNlpQuery — LLM-first pipeline", () => {
+// ── answerNlpQuery routing: classifier → (named report builder | SQL engine) ────────────────
+// The classifier (chatText) decides between the 5 rich named reports and the flexible SQL engine.
+// Report builders run via mock prisma; the SQL engine is mocked (its guard/executor are tested
+// separately + live). These assert the ROUTING + honest failure handling.
+describe("answerNlpQuery — two-engine routing", () => {
   const prisma = () => mockPrisma({ submissions: [sub(11, { aiScore: 10 })] });
 
-  it("runs a valid LLM plan and returns data (no keyword layer involved)", async () => {
-    chatJSON.mockResolvedValue({ metric: "count", filters: [{ field: "verdict", op: "eq", value: "dangerous" }], groupBy: null });
-    const res = await answerNlpQuery(prisma(), "how many malicious links did we get", analyst());
-    expect(res.chartSpec).toBeDefined();
-    expect(res.fallback).toBeUndefined();
+  it("routes a data question to the SQL engine and returns its formatted result", async () => {
+    chatText.mockResolvedValueOnce("query"); // classifier → not a named report
+    answerWithSql.mockResolvedValue({ rows: [{ n: 5 }], sql: "SELECT count(*) ..." });
+    formatRows.mockReturnValue({ data: [{ label: "Total", value: 5 }], chartSpec: { type: "count", title: "How many dangerous links" } });
+
+    const res = await answerNlpQuery(prisma(), "how many dangerous links from email this week", analyst());
+    expect(answerWithSql).toHaveBeenCalledWith("how many dangerous links from email this week", analyst());
+    expect(res.chartSpec.type).toBe("count");
+    expect(res.data[0].value).toBe(5);
   });
 
-  it("honors the model's 'unanswerable' with a helpful message (no query run)", async () => {
-    chatJSON.mockResolvedValue({ unanswerable: true, reason: "off-topic" });
-    const res = await answerNlpQuery(prisma(), "what's the weather", analyst());
-    expect(res.fallback).toMatch(/threat reports/i);
+  it("routes a named-report question to its builder (no SQL engine call)", async () => {
+    chatText.mockResolvedValueOnce("weekly"); // classifier → the weekly report
+    const res = await answerNlpQuery(prisma(), "give me this week's summary", analyst());
+    expect(answerWithSql).not.toHaveBeenCalled();
+    expect(res.chartSpec.type).toBe("report");
+    expect(res.chartSpec.title).toBe("Weekly Threat Report");
+  });
+
+  it("gives an honest fallback when the SQL engine can't build/guard a query", async () => {
+    chatText.mockResolvedValueOnce("query");
+    answerWithSql.mockResolvedValue({ error: "reject", reason: "only the v_reports view may be queried" });
+    const res = await answerNlpQuery(prisma(), "something the guard rejects", analyst());
+    expect(res.fallback).toBeDefined();
     expect(res.data).toBeUndefined();
   });
 
-  it("RETRIES once when the first plan is off-catalog, then succeeds", async () => {
-    chatJSON
-      .mockResolvedValueOnce({ metric: "explode", filters: [] })                                   // invalid
-      .mockResolvedValueOnce({ metric: "count", filters: [], groupBy: null });                     // valid on retry
-    const res = await answerNlpQuery(prisma(), "something odd", analyst());
-    expect(chatJSON).toHaveBeenCalledTimes(2);
-    expect(res.chartSpec).toBeDefined();
+  it("honors the classifier's 'unanswerable' with a helpful message (no engine call)", async () => {
+    chatText.mockResolvedValueOnce("unanswerable");
+    const res = await answerNlpQuery(prisma(), "what's the weather", analyst());
+    expect(answerWithSql).not.toHaveBeenCalled();
+    expect(res.fallback).toMatch(/threat reports/i);
   });
 
-  it("gives an honest fallback after the retry also fails", async () => {
-    chatJSON.mockResolvedValue({ metric: "explode", filters: [] });
-    const res = await answerNlpQuery(prisma(), "unmappable thing", analyst());
-    expect(chatJSON).toHaveBeenCalledTimes(2);
-    expect(res.fallback).toBeDefined();
-  });
-
-  it("returns a clean 'unavailable' message (not a 500) when the LLM transport throws", async () => {
-    chatJSON.mockRejectedValueOnce(new Error("gateway 502"));
+  it("returns a clean 'unavailable' message (not a 500) when the classifier LLM throws", async () => {
+    chatText.mockRejectedValueOnce(new Error("gateway 502"));
     const res = await answerNlpQuery(prisma(), "how many dangerous links", analyst());
     expect(res.fallback).toMatch(/unavailable/i);
   });
 
-  it("a member's plan naming an analyst-only field is rejected end-to-end", async () => {
-    // Even if the model emits reporter (it shouldn't — it's trimmed from the member prompt), the
-    // validator rejects it, and the retry too → honest fallback, never a leak.
-    chatJSON.mockResolvedValue({ metric: "count", filters: [{ field: "reporter", op: "eq", value: "Anya" }] });
-    const res = await answerNlpQuery(prisma(), "how many did anya report", member());
+  it("denies a member the analyst-only campaigns report (routes to fallback, not the builder)", async () => {
+    chatText.mockResolvedValueOnce("campaigns"); // even if the classifier says campaigns…
+    const res = await answerNlpQuery(prisma(), "show active campaigns", member());
+    // …a member can't have it → honest fallback, campaign builder never runs.
     expect(res.fallback).toBeDefined();
-    expect(res.data).toBeUndefined();
   });
 });
