@@ -5,8 +5,14 @@
 // analyst review route can reuse createNotification() without importing anything
 // Express-y — that's how the "closure loop" (story #7) fires the bell badge.
 
+// How many alerts the bell will ever show. The dropdown is a short recent-activity list, not an
+// archive — nobody scrolls 300 notifications in a popover. This used to be UNBOUNDED, so the bell's
+// poll re-fetched a user's ENTIRE history on every tick and the payload grew forever (one real
+// account was already at 65 rows). Bounding it makes the poll cost flat instead of linear in account age.
+export const NOTIFICATION_LIMIT = 50;
+
 /**
- * List one user's notifications, newest first.
+ * List one user's notifications, newest first (capped at NOTIFICATION_LIMIT).
  *
  * @param {import('@prisma/client').PrismaClient} prisma
  * @param {number} userId
@@ -16,7 +22,21 @@ export const listNotifications = async (prisma, userId) => {
   return prisma.notification.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
+    take: NOTIFICATION_LIMIT,
   });
+}
+
+/**
+ * Count one user's UNREAD notifications. Separate from the list because the list is capped: deriving
+ * the badge number from a truncated page would under-report it (51 unread would render as "50").
+ * This is a cheap indexed COUNT, not a second scan.
+ *
+ * @param {import('@prisma/client').PrismaClient} prisma
+ * @param {number} userId
+ * @returns {Promise<number>}
+ */
+export const countUnreadNotifications = async (prisma, userId) => {
+  return prisma.notification.count({ where: { userId, isRead: false } });
 }
 
 /**
@@ -41,6 +61,25 @@ export const markNotificationRead = async (prisma, { id, userId }) => {
     data: { isRead: true },
   });
   return { status: "ok", notification };
+}
+
+/**
+ * Mark ALL of a user's unread notifications read, in ONE query. This exists because the bell's
+ * "mark all read" used to PATCH each visible id one-by-one — which, now that the list is capped at
+ * NOTIFICATION_LIMIT, could only ever clear the newest 50. A user who accumulated more unread than
+ * the cap had older rows that fell outside the window and could NEVER be cleared from the UI. A
+ * single scoped updateMany clears every unread row regardless of what the display page showed.
+ *
+ * @param {import('@prisma/client').PrismaClient} prisma
+ * @param {number} userId
+ * @returns {Promise<number>} how many rows were flipped to read
+ */
+export const markAllNotificationsRead = async (prisma, userId) => {
+  const { count } = await prisma.notification.updateMany({
+    where: { userId, isRead: false },   // scoped to the caller; only touches still-unread rows
+    data: { isRead: true },
+  });
+  return count;
 }
 
 /**

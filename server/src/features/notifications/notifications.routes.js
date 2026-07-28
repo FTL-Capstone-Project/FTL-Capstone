@@ -11,7 +11,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { prisma } from "../../db.js";
-import { listNotifications, markNotificationRead } from "./notifications.service.js";
+import { listNotifications, countUnreadNotifications, markNotificationRead, markAllNotificationsRead } from "./notifications.service.js";
 
 export const notificationsRouter = Router();
 
@@ -32,10 +32,28 @@ const toNotificationJson = (n) => {
 // read that user's rows (story #12 isolation).
 notificationsRouter.get("/", requireAuth, async (req, res, next) => {
   try {
-    const rows = await listNotifications(prisma, req.user.id);
-    const notifications = rows.map(toNotificationJson);
-    const unreadCount = notifications.filter((n) => !n.is_read).length;
-    return res.json({ notifications, unreadCount });
+    // The list is CAPPED (see NOTIFICATION_LIMIT), so unreadCount comes from its own COUNT rather
+    // than from the returned page — otherwise a user with more unread than the cap would see an
+    // understated badge. Both queries hit the userId / isRead indexes and run concurrently.
+    const [rows, unreadCount] = await Promise.all([
+      listNotifications(prisma, req.user.id),
+      countUnreadNotifications(prisma, req.user.id),
+    ]);
+    return res.json({ notifications: rows.map(toNotificationJson), unreadCount });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PATCH /api/notifications/read-all — mark EVERY one of the caller's unread alerts read in a single
+// query. This is what the bell's "mark all read" should call: the list is capped at
+// NOTIFICATION_LIMIT, so clearing only the visible ids would strand any unread rows past the cap
+// (they'd never re-enter the window to be cleared). Registered BEFORE "/:id/read" so "read-all" is
+// never parsed as an :id param.
+notificationsRouter.patch("/read-all", requireAuth, async (req, res, next) => {
+  try {
+    const count = await markAllNotificationsRead(prisma, req.user.id);
+    return res.json({ updated: count });
   } catch (err) {
     return next(err);
   }
