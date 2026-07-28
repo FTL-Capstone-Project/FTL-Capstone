@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "@clerk/clerk-react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowUpDown } from "lucide-react";
 import { api } from "../../lib/api.js";
 import { useOrbisRole } from "../../lib/useOrbisRole.js";
@@ -9,6 +8,7 @@ import HistoryScopeToggle from "./HistoryScopeToggle.jsx";
 import TriageQueue from "./TriageQueue.jsx";
 import ConfirmDialog from "../../components/ConfirmDialog.jsx";
 import { isForwardedEmail } from "./triagePriority.js";
+import { useStableToken } from "../../lib/useStableToken.js";
 
 // The filter options (O2). Most compare against each report's verdict `kind`; "Forwarded" is a
 // different dimension (report `source`), handled specially below. Note: our verdict kind for
@@ -52,7 +52,7 @@ const Reports = () => {
 
 // The individual / org-member Reports view: "My checks" + optional Team History toggle.
 const MyChecks = ({ role }) => {
-  const { getToken } = useAuth();
+  const getToken = useStableToken();
   const [reports, setReports] = useState([]);       // my ACTIVE reports (?mine=1)
   const [archivedReports, setArchivedReports] = useState([]); // my archived reports (?mine=1&archived=1)
   const [teamReports, setTeamReports] = useState([]); // my whole org's reports (?org=1)
@@ -149,14 +149,21 @@ const MyChecks = ({ role }) => {
   // selected filter on top of whichever is showing. "Forwarded" filters by report SOURCE (how it
   // arrived); the rest filter by verdict KIND.
   const activeReports = scope === "team" ? teamReports : showArchived ? archivedReports : reports;
-  const filteredReports =
-    filter === "all" ? activeReports
-      : filter === "email" ? activeReports.filter(isForwardedEmail)
-      : activeReports.filter((r) => r.kind === filter);
-  // Sort a COPY so we never mutate the fetched arrays in state. Falls back to newest if the
-  // selected sort key somehow isn't found.
-  const sortCompare = (SORTS.find((s) => s.value === sort) ?? SORTS[0]).compare;
-  const visibleReports = [...filteredReports].sort(sortCompare);
+  // Memoized because this ran on EVERY render: filtering the list and then copying + sorting it is
+  // O(n log n), and it was redone whenever any unrelated state changed (opening the detail modal,
+  // hovering a row menu, a re-render from a parent). Now it only recomputes when the data or the
+  // filter/sort selection actually changes. It also gives `visibleReports` a stable identity, which
+  // is what lets the memoized ReportCard rows below skip re-rendering.
+  const visibleReports = useMemo(() => {
+    const filtered =
+      filter === "all" ? activeReports
+        : filter === "email" ? activeReports.filter(isForwardedEmail)
+        : activeReports.filter((r) => r.kind === filter);
+    // Sort a COPY so we never mutate the fetched arrays in state. Falls back to newest if the
+    // selected sort key somehow isn't found.
+    const sortCompare = (SORTS.find((s) => s.value === sort) ?? SORTS[0]).compare;
+    return [...filtered].sort(sortCompare);
+  }, [activeReports, filter, sort]);
   // Row actions only make sense on MY History (not Team History, which is other people's reports).
   const canManage = scope === "mine";
   // Only solo individuals may permanently delete: a member's report feeds the analyst queue, so the

@@ -3,8 +3,21 @@ import { ShieldCheck, AlertTriangle, ShieldAlert } from "lucide-react";
 
 export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
-// How often CheckResult re-polls the indicator while a scan runs (ms).
-export const POLL_INTERVAL_MS = 1500;
+// How often CheckResult re-polls the indicator while a scan runs (ms). This one SHOULD be fast:
+// the user is staring at a spinner waiting for a verdict, and the poll stops as soon as the scan
+// finishes (see useIndicatorPoll's MAX_POLLS cap), so it's short-lived by nature.
+export const VERDICT_POLL_MS = 1500;
+
+// How often the notification bell re-checks for new alerts (ms). DELIBERATELY much slower than the
+// verdict poll: this one runs for the WHOLE session on every page, so its cost is continuous rather
+// than short-lived. At 1.5s it was ~40 requests/minute/user forever, which on our free-tier API and
+// serverless DB competes with the genuinely expensive scan/LLM calls. Alerts here are analyst
+// closure notices, not chat — nobody needs them within a second. We also refresh immediately on tab
+// focus, so returning to the tab feels instant regardless of where we are in this interval.
+export const NOTIFICATION_POLL_MS = 30_000;
+
+// Kept as an alias so any straggler import doesn't break; prefer the two named constants above.
+export const POLL_INTERVAL_MS = VERDICT_POLL_MS;
 
 // Sidebar nav per role (§4 / DESIGN_SPEC). Each item: label, sublabel, path, icon.
 // The chat is "Ask Orbo" at /ask-orbo (the canonical Home). Individuals & members lead

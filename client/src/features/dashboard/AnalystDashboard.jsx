@@ -14,7 +14,6 @@
 // SVG/CSS and stay unchanged. The right rail + Page/Card frames match the personal and
 // member variants so all three read as one layout.
 import { useEffect, useState } from "react";
-import { useAuth } from "@clerk/clerk-react";
 import { Scale, Timer, Share2 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -30,10 +29,11 @@ import ThreatTypesChart from "./ThreatTypesChart.jsx";
 import SafetySignals from "./SafetySignals.jsx";
 import ActivityRail from "./ActivityRail.jsx";
 import StatusChip from "../reports/StatusChip.jsx";
+import { useStableToken } from "../../lib/useStableToken.js";
 
 // ── AnalystDashboard ────────────────────────────────────────────────────────
 const AnalystDashboard = () => {
-  const { getToken } = useAuth();
+  const getToken = useStableToken();
   const [data, setData] = useState(null);   // { stats, recent, activity }
   const [error, setError] = useState(false);
 
