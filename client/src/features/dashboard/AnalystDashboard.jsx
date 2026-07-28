@@ -133,8 +133,13 @@ const AnalystDashboard = () => {
             />
           </div>
 
-          {/* ── Charts row ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {/* ── Charts row ──
+              All the two-column rows below use minmax(0, 1fr), not a bare "1fr 1fr". A 1fr track
+              is minmax(auto, 1fr), and that `auto` floor is the child's min-content width — a
+              Recharts ResponsiveContainer reports one, so a 1fr column can't shrink, the row grows
+              wider than <main>, and the whole page scrolls sideways. minmax(0, …) drops the floor
+              to 0 so the columns fit (same fix as the outer minmax(0, 1fr) 300px grid). */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
             {/* 30-day submission trend (matches the personal dashboard's window). */}
             <Card title="Submission Trend" sub="Past 30 days">
               {trend.every((d) => d.count === 0) ? (
@@ -187,7 +192,7 @@ const AnalystDashboard = () => {
           </div>
 
           {/* ── Threat intel row: what categories + which hosts are being weaponized ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
             {threatTypes.length > 0 ? (
               <ThreatTypesChart
                 types={threatTypes}
@@ -228,7 +233,7 @@ const AnalystDashboard = () => {
           </div>
 
           {/* ── Analyst analytics row: review health (text) + AI-confidence mix ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
             <ReviewInsights
               calibration={scoreCalibration}
               turnaroundDays={avgTurnaroundDays}
@@ -238,7 +243,7 @@ const AnalystDashboard = () => {
           </div>
 
           {/* ── Coverage row: who's reporting + org-wide deterministic signals & channels ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
             <TopReporters reporters={topReporters} />
             <SafetySignals redFlags={redFlags} channels={channels} />
           </div>
