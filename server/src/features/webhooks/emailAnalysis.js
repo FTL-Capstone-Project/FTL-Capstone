@@ -12,7 +12,7 @@
 //     SAME deterministic scorer (code owns the number; prompt-injection can't move it).
 import { chatJSON } from "../../services/llm.js";
 import { env } from "../../config/env.js";
-import { SIGNAL_CATALOG, scoreEmailBodySignals } from "../vision/phishingSignals.js";
+import { SIGNAL_CATALOG, scoreEmailBodySignals, verdictMatchesBucket } from "../vision/phishingSignals.js";
 import { knownBrandDomain, detectLookalike, registeredDomain } from "../../services/typosquat.js";
 import { extractEmailAddress } from "./inboundEmail.js";
 
@@ -205,8 +205,13 @@ const buildEmailBodyReport = ({ signals = [], modelVerdict = "", modelTitle = ""
   const bucket = bodyBucket(scored.rawScore);
   const cleanTitle = typeof modelTitle === "string" ? modelTitle.trim().replace(/^["']|["']$/g, "") : "";
   const title = (cleanTitle && cleanTitle.length <= 60 ? cleanTitle : "") || emailFallbackTitle(bucket, scored.count);
+  // Same words-must-match-the-number guard as the image path: the score is signal-derived and the
+  // model's sentence is independent prose, so a review-band body must not carry scam-asserting words
+  // (and a clean one no negativity). On a mismatch, drop the sentence for the bucket-keyed fallback.
   const cleanVerdict = typeof modelVerdict === "string" ? modelVerdict.trim() : "";
-  const verdict = cleanVerdict || emailFallbackVerdict(bucket, scored.count, summary);
+  const verdict = (cleanVerdict && verdictMatchesBucket(cleanVerdict, bucket))
+    ? cleanVerdict
+    : emailFallbackVerdict(bucket, scored.count, summary);
   return {
     status: "done",
     ai_score: scored.rawScore,

@@ -90,7 +90,13 @@ describe("analyzeEmailBody", () => {
     const report = await analyzeEmailBody({ from: "x@y.com", subject: "locked", body: "confirm your password now" });
     expect(report.ai_score).toBe(47);                       // raw weighted, not the old hard-20
     expect(report.signalMeta).toMatchObject({ crownCount: 1, count: 2 }); // metadata for the gated combine
-    expect(report.ai_verdict).toBe("Looks like phishing.");
+    // The raw body score is 47 (review band) because escalation to DANGER is the combine's job, not
+    // this leg's. So the model's scam-ASSERTING sentence ("Looks like phishing.") contradicts this
+    // leg's own review-band number and is replaced by a bucket-matched line. The danger call still
+    // happens downstream in combineEmailReports when corroborated — it's just not asserted HERE, where
+    // the number doesn't support it. (Guards the "words say scam, number says 47" contradiction.)
+    expect(report.ai_verdict).not.toMatch(/phishing|scam/i);
+    expect(report.ai_verdict).toMatch(/warning signs|closer look|worth/i);
     expect(report.evidence.length).toBeGreaterThan(0);
   });
 

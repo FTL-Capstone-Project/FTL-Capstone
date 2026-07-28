@@ -59,10 +59,10 @@ describe("scorePhishingSignals — deterministic image scoring", () => {
 });
 
 describe("buildImageReport — VerdictCard-shaped output", () => {
-  it("shapes a dangerous verdict with code-owned score even if the model narrates 'safe'", () => {
+  it("a dangerous score REJECTS the model's reassuring words — sentence must match the number", () => {
     const r = buildImageReport({
       signals: ["credentials", "urgency"],
-      // model tries to say it's fine — code must still score it dangerous
+      // model tries to say it's fine — code must both score it dangerous AND not show "safe" prose.
       modelVerdict: "This looks like a totally safe and normal login page.",
       modelTitle: "All good",
       summary: "a login page asking for your password",
@@ -72,8 +72,26 @@ describe("buildImageReport — VerdictCard-shaped output", () => {
     expect(r.isImageReport).toBe(true);
     expect(r.evidence.length).toBeGreaterThanOrEqual(1);
     expect(r.evidence[0].severity).toBe("dangerous");
-    // the model's sentence is kept (it's just narration), but the NUMBER is ours
-    expect(r.ai_verdict).toContain("safe");
+    // The reassuring model sentence is DROPPED (it contradicts the dangerous score); the fallback
+    // verdict keyed to the bucket is used instead, so the words and the number agree.
+    expect(r.ai_verdict).not.toMatch(/\bsafe\b/i);
+    expect(r.ai_verdict).toMatch(/scam|phishing/i);
+  });
+
+  it("a SAFE score REJECTS alarmed model words — the '70 + untrustworthy' contradiction", () => {
+    // The reported live bug: no red-flag signals → score in the safe band, but the model narrated
+    // it as untrustworthy. The card must not pair a green score with alarmed prose.
+    const r = buildImageReport({
+      signals: [], // clean → score lands >= review/safe
+      modelVerdict: "This message looks untrustworthy and is likely a scam — do not trust it.",
+      modelTitle: "Suspicious",
+      summary: "a newsletter",
+    });
+    // With no signals the score sits at/above the review line; whatever the bucket, the shown
+    // verdict must NOT carry the model's alarmed wording when the score isn't dangerous.
+    if (r.ai_score >= 35) {
+      expect(r.ai_verdict).not.toMatch(/untrustworthy|likely a scam|do not trust/i);
+    }
   });
 
   it("falls back to a rule-written verdict when the model gives no words", () => {

@@ -55,6 +55,17 @@ describe("POST /api/ask-orbo (chat)", () => {
     expect(chatText).toHaveBeenCalledOnce();
   });
 
+  it("instructs the model NOT to verdict a specific target (chat is not a scanner)", async () => {
+    // The chat endpoint has no sandbox/blacklist/DNS behind it, so it must never voice a safety call
+    // on a specific link/sender — that produced "//bing.com is safe" with no scan. This locks the rule
+    // into the system prompt so a future edit can't silently drop it.
+    chatText.mockResolvedValue("I'll run a real check on that.");
+    await request(app()).post("/api/ask-orbo").send({ question: "is //bing.com safe?" });
+    const systemPrompt = chatText.mock.calls[0][0].system;
+    expect(systemPrompt).toMatch(/not a scanner|never (state|give)/i);
+    expect(systemPrompt).toMatch(/safe|trustworthy|score/i); // names what it must not assert
+  });
+
   it("pulls grounding context when an indicatorId is supplied", async () => {
     getIndicatorContext.mockResolvedValue({ title: "Fake PayPal", verdict: "dangerous", score: 8 });
     chatText.mockResolvedValue("That check was dangerous because...");

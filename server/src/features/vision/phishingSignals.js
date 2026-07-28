@@ -134,6 +134,26 @@ export const scoreEmailBodySignals = (signalTypes = []) => {
 // Bucket a safety score the same way the rest of the app does (verdict.js scoreBucket).
 const bucketOf = (score) => (score >= 70 ? "safe" : score >= 35 ? "review" : "dangerous");
 
+// Does the model's free-text verdict AGREE with the deterministic safety bucket? The score is
+// code-owned; the sentence is the model's free prose (computed independently), so it can openly
+// contradict the number in either direction. This keyword guard catches the glaring conflicts and,
+// when it fires, we drop the sentence for a bucket-keyed fallback so words and number always match.
+//
+// Two tiers of negative wording, because "review" and "dangerous" tolerate different tones:
+//   DANGER_WORDS  — ASSERT the thing IS a scam/threat ("scam", "phishing", "do not trust"). These
+//                   belong ONLY to the dangerous band; on safe OR review they're a contradiction.
+//   CAUTION_WORDS — hedged wariness ("suspicious", "red flag", "be careful"). Fine on review, but
+//                   still wrong on a clean SAFE score.
+const DANGER_WORDS = /\b(scam|phish|phishing|fraud|malicious|do not (?:trust|click|act|enter)|don't (?:trust|click|act|enter)|steal|compromis|definitely (?:a scam|dangerous)|likely (?:a scam|phishing))/i;
+const CAUTION_WORDS = /\b(untrustworthy|not trustworthy|suspicious|dangerous|avoid|red flag|be careful|risky|questionable)/i;
+const REASSURE_WORDS = /\b(safe|legitimate|legit|trustworthy|no (?:red flags|signs|issues|concerns)|looks fine|appears fine|nothing suspicious)/i;
+export const verdictMatchesBucket = (verdict, bucket) => {
+  if (bucket === "safe") return !DANGER_WORDS.test(verdict) && !CAUTION_WORDS.test(verdict); // clean → no negativity
+  if (bucket === "review") return !DANGER_WORDS.test(verdict); // may be cautious, must not ASSERT a scam
+  if (bucket === "dangerous") return !REASSURE_WORDS.test(verdict); // must not sound reassuring
+  return true;
+};
+
 // Turn the deterministic score + the model's narration into a VerdictCard-shaped object, so the
 // existing card renders it with no new UI. CODE owns score/confidence/evidence/tags; the model
 // only contributes the plain-English verdict sentence and a headline (validated + backstopped).
@@ -142,10 +162,17 @@ export const buildImageReport = ({ signals = [], modelVerdict = "", modelTitle =
   const { score, evidence, confidence, signalCount } = scorePhishingSignals(signals);
   const bucket = bucketOf(score);
 
-  // Prefer the model's sentence, but never let it assert "safe" for a flagged image — fall back
-  // to a rule-written verdict keyed to the deterministic bucket if the model's words are missing.
+  // Prefer the model's sentence, but the WORDS must agree with the NUMBER. The score is code-owned
+  // (deterministic signals); the sentence is the model's free prose, computed independently — so it
+  // can contradict the score in EITHER direction. The reported bug was the reverse of the old one:
+  // the model wrote cautionary/"untrustworthy" prose while the score sat at 70 (safe band), because
+  // no signals were detected. A verdict card that says "this looks untrustworthy" next to a green 70
+  // is worse than useless. So if the model's wording disagrees with the deterministic bucket, drop it
+  // and use the rule-written sentence keyed to the bucket, so the words and the number always match.
   const cleanVerdict = typeof modelVerdict === "string" ? modelVerdict.trim() : "";
-  const verdict = cleanVerdict || fallbackVerdict(bucket, signalCount, summary);
+  const verdict = (cleanVerdict && verdictMatchesBucket(cleanVerdict, bucket))
+    ? cleanVerdict
+    : fallbackVerdict(bucket, signalCount, summary);
 
   const tags = deriveTags(bucket, signalCount);
   const rawTitle = typeof modelTitle === "string" ? modelTitle.trim().replace(/^["']|["']$/g, "") : "";

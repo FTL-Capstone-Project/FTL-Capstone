@@ -16,7 +16,11 @@ import { getConversation, saveConversation, newConversationId } from "../../lib/
 const looksCheckable = (text) => {
   const t = text.trim();
   if (/\s/.test(t) && !/^https?:\/\//i.test(t)) return false; // has spaces → it's a sentence/question
-  const urlish = /^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+.*$/i.test(t);
+  // Accept a leading protocol-relative "//host" (browsers treat //bing.com as a real link, and the
+  // server canonicalizes it fine) — without this it fell through to chat and got a bare "it's safe"
+  // opinion with no scan behind it. Strip the leading slashes before the host test.
+  const bare = t.replace(/^\/\//, "");
+  const urlish = /^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+.*$/i.test(bare);
   const emailish = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
   return urlish || emailish;
 }
@@ -53,13 +57,26 @@ const isWebmailUrl = (u = "") => {
   return /(^|\/\/|\.)(mail\.google|gmail|outlook\.(live|office)|mail\.yahoo|proton\.me|icloud)\b/i.test(u);
 }
 
-// Pull the first URL or email out of ANY message (even a sentence like "is this legit? https://…").
-// Used to offer a "Get report" scan button under Orbo's chat reply.
+// Pull the first checkable target (URL or email) out of ANY message — even a sentence like
+// "is this legit? https://…" or an evasive "is //bing.com safe?". Whatever this returns gets
+// SCANNED (not chatted about), so it must catch the smuggling shapes: full URLs, protocol-relative
+// "//host", and bare "host.tld" — otherwise those slip into chat and get an un-scanned opinion.
 const extractTarget = (text) => {
   const url = text.match(/https?:\/\/[^\s]+/i);
   if (url) return url[0].replace(/[.,)\]]+$/, ""); // trim trailing punctuation
   const email = text.match(/[^\s@]+@[^\s@]+\.[^\s@]+/);
   if (email) return email[0].replace(/[.,)\]]+$/, "");
+  // Protocol-relative "//bing.com" — a browser treats it as a real link, so we must too.
+  const protoRel = text.match(/(?:^|\s)\/\/([a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/[^\s]*)?/i);
+  if (protoRel) return (protoRel[1] + (protoRel[2] ?? "")).replace(/[.,)\]]+$/, "");
+  // Bare "host.tld[/path]" embedded in prose — only when the final label is a known TLD, so we
+  // don't turn "Mr. Smith" or "e.g. later" into a scan. Mirrors collapseSpacedDomain's TLD gate.
+  const bareMatches = text.match(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s]*)?/gi) ?? [];
+  for (const m of bareMatches) {
+    const host = m.replace(/[.,)\]]+$/, "").split("/")[0];
+    const tld = host.split(".").pop()?.toLowerCase();
+    if (COMMON_TLDS.has(tld)) return m.replace(/[.,)\]]+$/, "");
+  }
   return null;
 }
 
@@ -192,8 +209,24 @@ const Home = () => {
     // Repair a stray space in an otherwise-bare domain ("Ucoz. com" → "Ucoz.com") so it gets
     // SCANNED instead of silently falling through to chat. Real sentences are left untouched.
     const repaired = collapseSpacedDomain(text);
-    if (looksCheckable(repaired)) await checkTarget(repaired);
-    else await askOrbo(text, extractTarget(text));
+    if (looksCheckable(repaired)) { await checkTarget(repaired); return; }
+    // A SENTENCE that still contains a link/email → SCAN that target, don't let chat opine on it.
+    // Orbo the chatbot has no scan behind it, so a free-form "is https://x.com safe?" used to get a
+    // bare LLM verdict (the "//bing.com is safe" / open-redirect bypass). If there's something
+    // checkable in the message, the scanner is the authority — run it and announce it.
+    const target = extractTarget(text);
+    if (target) { await scanFromChat(target); return; }
+    // Nothing checkable → genuine free-form question. Chat may answer, but never verdicts (server-enforced).
+    await askOrbo(text);
+  }
+
+  // A checkable target found inside a chat sentence → say we're checking it, then run the REAL
+  // scan/sender-report (checkTarget routes URL→sandbox, email→sender report). This replaces the old
+  // "chat answer + a Get-report button" for anything with a concrete target, so the safety call
+  // always comes from the scanner, never the conversational model.
+  const scanFromChat = async (target) => {
+    add({ role: "orbo", kind: "text", pose: "thinking", text: `Let me actually check ${target} — running a real scan now…` });
+    await checkTarget(target);
   }
 
   const handleChip = (chip) => {
