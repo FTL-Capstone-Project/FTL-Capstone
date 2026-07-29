@@ -30,6 +30,7 @@ import SafetySignals from "./SafetySignals.jsx";
 import ActivityRail from "./ActivityRail.jsx";
 import StatusChip from "../reports/StatusChip.jsx";
 import { useStableToken } from "../../lib/useStableToken.js";
+import RetryButton from "../../components/RetryButton.jsx";
 
 // ── AnalystDashboard ────────────────────────────────────────────────────────
 const AnalystDashboard = () => {
@@ -37,19 +38,24 @@ const AnalystDashboard = () => {
   const [data, setData] = useState(null);   // { stats, recent, activity }
   const [error, setError] = useState(false);
 
+  const [nonce, setNonce] = useState(0); // bump to re-run the loader (backs the "Try again" button)
   useEffect(() => {
     let alive = true;
+    setError(false);
     api
       .get("/api/history", { getToken })
       .then((d) => alive && setData(d))
       .catch(() => alive && setError(true));
     return () => { alive = false; };
-  }, [getToken]);
+  }, [getToken, nonce]);
 
   if (error) {
     return (
       <Page>
-        <p style={{ color: "var(--text-dim)" }}>Couldn't load dashboard. Please try again.</p>
+        <p style={{ color: "var(--text-dim)" }}>
+          Couldn't load dashboard.{" "}
+          <RetryButton onClick={() => setNonce((n) => n + 1)} />
+        </p>
       </Page>
     );
   }

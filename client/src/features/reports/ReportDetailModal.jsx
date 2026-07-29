@@ -103,6 +103,12 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
   }));
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  // Screenshot load state — urlscan screenshots are best-effort and can 404/lag, so a broken <img>
+  // (grey box + broken-image glyph) used to show even though there's a real "No sandbox preview"
+  // placeholder right there. Mirror VerdictCard: retry once with a cache-buster, then hide → the
+  // existing placeholder shows instead. shotOk resets when the URL changes (see the effect below).
+  const [shotOk, setShotOk] = useState(true);
+  const [shotRetried, setShotRetried] = useState(false);
 
   // Fetch the full indicator detail on open (evidence, full verdict, confidence, domain).
   useEffect(() => {
@@ -154,6 +160,14 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
   const title = report.title || detail?.title || report.url;
   const url = report.url || detail?.domain || "";
   const screenshotUrl = detail?.screenshot_url ?? report.screenshot_url ?? null;
+  // Retry-once-then-hide for a lagging/404 screenshot (mirrors VerdictCard.handleShotError). We add a
+  // cache-buster on the single retry, then give up so the "No sandbox preview" placeholder shows.
+  const [shotSrc, setShotSrc] = useState(screenshotUrl);
+  useEffect(() => { setShotSrc(screenshotUrl); setShotOk(true); setShotRetried(false); }, [screenshotUrl]);
+  const handleShotError = () => {
+    if (!shotRetried && screenshotUrl) { setShotRetried(true); setTimeout(() => setShotSrc(`${screenshotUrl}?r=${Date.now()}`), 2500); }
+    else setShotOk(false);
+  };
   const aiScore = detail?.ai_score ?? report.ai_score ?? null;
   const orboKind = scoreKind(aiScore); // colors the "Orbo score" card only — always Orbo's own read
   // Full safety-analysis text: prefer the fuller ai_verdict, fall back to the card's description.
@@ -286,8 +300,8 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
               {url}
             </span>
           </div>
-          {screenshotUrl ? (
-            <img src={screenshotUrl} alt="Sandbox preview of where this link leads"
+          {screenshotUrl && shotOk ? (
+            <img src={shotSrc} alt="Sandbox preview of where this link leads" onError={handleShotError}
               style={{ display: "block", width: "100%", maxHeight: 320, objectFit: "cover", objectPosition: "top" }} />
           ) : (
             <div style={{ height: 200, background: "var(--border)", display: "grid", placeItems: "center",

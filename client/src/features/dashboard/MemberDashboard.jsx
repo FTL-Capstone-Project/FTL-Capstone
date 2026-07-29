@@ -18,6 +18,7 @@ import TeamConfirmed from "./TeamConfirmed.jsx";
 import RecentSubmissions from "./RecentSubmissions.jsx";
 import ActivityRail from "./ActivityRail.jsx";
 import DashboardEmpty from "./DashboardEmpty.jsx";
+import RetryButton from "../../components/RetryButton.jsx";
 
 const MemberDashboard = () => {
   const { orgName } = useOrbisRole();
@@ -25,8 +26,10 @@ const MemberDashboard = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
+  const [nonce, setNonce] = useState(0); // bump to re-run the loader (backs the "Try again" button)
   useEffect(() => {
     let alive = true;
+    setError(false);
     api
       .get("/api/dashboard")
       .then((d) => alive && setData(d))
@@ -34,12 +37,15 @@ const MemberDashboard = () => {
     return () => {
       alive = false;
     };
-  }, [api]);
+  }, [api, nonce]);
 
   if (error) {
     return (
       <Page>
-        <p style={{ color: "var(--text-dim)" }}>Couldn't load your dashboard. Please try again.</p>
+        <p style={{ color: "var(--text-dim)" }}>
+          Couldn't load your dashboard.{" "}
+          <RetryButton onClick={() => setNonce((n) => n + 1)} />
+        </p>
       </Page>
     );
   }

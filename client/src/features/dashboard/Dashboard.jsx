@@ -14,6 +14,7 @@ import ThreatTypesChart from "./ThreatTypesChart.jsx";
 import SafetySignals from "./SafetySignals.jsx";
 import RecentSubmissions from "./RecentSubmissions.jsx";
 import DashboardEmpty from "./DashboardEmpty.jsx";
+import RetryButton from "../../components/RetryButton.jsx";
 
 const Dashboard = () => {
   const { role } = useOrbisRole();
@@ -27,8 +28,12 @@ const Dashboard = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
+  // A named loader so the effect AND the "Try again" button share one path (was an inline effect
+  // with no way to retry but a full browser reload). `nonce` re-triggers it on demand.
+  const [nonce, setNonce] = useState(0);
   useEffect(() => {
     let alive = true;
+    setError(false);
     api
       .get("/api/dashboard")
       .then((d) => alive && setData(d))
@@ -36,12 +41,15 @@ const Dashboard = () => {
     return () => {
       alive = false;
     };
-  }, [api]);
+  }, [api, nonce]);
 
   if (error) {
     return (
       <Page>
-        <p style={{ color: "var(--text-dim)" }}>Couldn't load your dashboard. Please try again.</p>
+        <p style={{ color: "var(--text-dim)" }}>
+          Couldn't load your dashboard.{" "}
+          <RetryButton onClick={() => setNonce((n) => n + 1)} />
+        </p>
       </Page>
     );
   }

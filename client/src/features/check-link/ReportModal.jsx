@@ -22,16 +22,43 @@ const ReportModal = ({ indicatorId, currentCount = 0, onClose, onReported }) => 
   const [error, setError] = useState("");
   const dialogRef = useRef(null);
   const textRef = useRef(null);
+  const prevFocusRef = useRef(null); // element focused before open → restored on close
 
   const words = countWords(reason);
   const overLimit = words > WORD_LIMIT;
 
-  // Focus the textarea on open; close on Escape. (Mirrors ReportDetailModal's a11y basics.)
+  // Full modal a11y, mirroring ReportDetailModal: focus the textarea on open, RESTORE focus to the
+  // element that opened the modal on close, LOCK body scroll, and TRAP Tab/Shift+Tab inside the
+  // dialog so keyboard focus can't wander to the obscured page behind the overlay. (Previously this
+  // only focused the textarea + handled Escape — the two most important a11y behaviors were missing,
+  // and `dialogRef` was declared but unused.)
   useEffect(() => {
+    prevFocusRef.current = document.activeElement;
     textRef.current?.focus();
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKey = (e) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key !== "Tab") return;
+      const focusables = dialogRef.current?.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusables || focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+      prevFocusRef.current?.focus?.();
+    };
   }, [onClose]);
 
   const submit = async () => {

@@ -1,23 +1,31 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { SignedIn, SignedOut } from "@clerk/clerk-react";
 import ProtectedRoute from "./features/auth/ProtectedRoute.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import LoadingScreen from "./components/LoadingScreen.jsx";
 import AppShell from "./components/AppShell.jsx";
 import ComingSoon from "./components/ComingSoon.jsx";
 
+// Landing is the public first paint (no auth, no charts) → keep it EAGER so "/" renders instantly.
 import Landing from "./features/auth/Landing.jsx";
-import ChooseAccountType from "./features/auth/ChooseAccountType.jsx";
-import SignIn from "./features/auth/SignIn.jsx";
-import CreateAccount from "./features/auth/CreateAccount.jsx";
-import CreateTeam from "./features/auth/CreateTeam.jsx";
-import SsoCallback from "./features/auth/SsoCallback.jsx";
-import ExtensionInstall from "./features/auth/ExtensionInstall.jsx";
-import Home from "./features/check-link/Home.jsx";
-import Reports from "./features/reports/Reports.jsx";
-import CampaignDetail from "./features/reports/CampaignDetail.jsx";
-import Dashboard from "./features/dashboard/Dashboard.jsx";
-import Insights from "./features/insights/Insights.jsx";
-import Settings from "./features/settings/Settings.jsx";
+
+// Everything else is lazy-loaded (React.lazy + a Suspense fallback below). This splits the ~900KB
+// single bundle: the heavy, signed-in-only screens — especially the Recharts-powered Dashboard and
+// Insights — no longer ship to a visitor who only hits the landing/auth pages, and each route's code
+// arrives on demand. First paint of "/" gets dramatically lighter.
+const ChooseAccountType = lazy(() => import("./features/auth/ChooseAccountType.jsx"));
+const SignIn = lazy(() => import("./features/auth/SignIn.jsx"));
+const CreateAccount = lazy(() => import("./features/auth/CreateAccount.jsx"));
+const CreateTeam = lazy(() => import("./features/auth/CreateTeam.jsx"));
+const SsoCallback = lazy(() => import("./features/auth/SsoCallback.jsx"));
+const ExtensionInstall = lazy(() => import("./features/auth/ExtensionInstall.jsx"));
+const Home = lazy(() => import("./features/check-link/Home.jsx"));
+const Reports = lazy(() => import("./features/reports/Reports.jsx"));
+const CampaignDetail = lazy(() => import("./features/reports/CampaignDetail.jsx"));
+const Dashboard = lazy(() => import("./features/dashboard/Dashboard.jsx"));
+const Insights = lazy(() => import("./features/insights/Insights.jsx"));
+const Settings = lazy(() => import("./features/settings/Settings.jsx"));
 
 // Route map:
 //  Public:  /  (marketing Landing) → /get-started (account-type chooser) → /signin,
@@ -32,6 +40,9 @@ const App = () => {
     // One boundary around all routes: a render-time throw in any screen shows a recoverable
     // "something went wrong" fallback instead of unmounting the whole app to a blank screen.
     <ErrorBoundary>
+    {/* Suspense fallback for the lazy route chunks below — a lazy chunk that hasn't loaded yet
+        (slow network, cold cache) shows the branded loading screen instead of a blank frame. */}
+    <Suspense fallback={<LoadingScreen label="Loading…" />}>
     <Routes>
       {/* Public marketing + auth flow. */}
       <Route path="/" element={<Landing />} />
@@ -71,6 +82,7 @@ const App = () => {
         <Route path="*" element={<ComingSoon note="That page doesn't exist yet." />} />
       </Route>
     </Routes>
+    </Suspense>
     </ErrorBoundary>
   );
 };

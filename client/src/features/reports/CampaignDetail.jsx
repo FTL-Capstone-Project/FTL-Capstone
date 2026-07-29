@@ -4,6 +4,7 @@ import { Layers, ArrowLeft } from "lucide-react";
 import { api } from "../../lib/api.js";
 import ReportCard from "./ReportCard.jsx";
 import ReportDetailModal from "./ReportDetailModal.jsx";
+import RetryButton from "../../components/RetryButton.jsx";
 import { useStableToken } from "../../lib/useStableToken.js";
 
 // ── feature: reports · campaign detail page · owner: Ozias ── (extends card G1·06)
@@ -44,6 +45,10 @@ const CampaignDetail = () => {
   }, [numericId, validId, getToken]);
 
   useEffect(() => { load(); }, [load]);
+
+  // "Try again" from the error state: reset to the loading state first (load() only clears loading
+  // at the end, so without this the failed message would linger while the refetch ran), then reload.
+  const retry = () => { setLoading(true); setFailed(false); load(); };
 
   // Closing the modal reloads the campaign: if the analyst just saved a verdict, the row's
   // score/status behind the modal would otherwise still show the old values.
@@ -86,7 +91,8 @@ const CampaignDetail = () => {
         <p style={{ color: "var(--text-dim)" }}>Loading campaign…</p>
       ) : failed ? (
         <p style={{ color: "var(--text-dim)" }}>
-          We couldn't load that campaign — it may have been removed.
+          We couldn't load that campaign — it may have been removed.{" "}
+          <RetryButton onClick={retry} />
         </p>
       ) : indicators.length === 0 ? (
         <p style={{ color: "var(--text-dim)" }}>No reports are clustered in this campaign yet.</p>
