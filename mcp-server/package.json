@@ -1,0 +1,19 @@
+{
+  "name": "orbis-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server that lets an external client (e.g. Claude Desktop) ask Orbis's threat data in plain English, over the user's own Orbis API key.",
+  "bin": {
+    "orbis-mcp-server": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}
