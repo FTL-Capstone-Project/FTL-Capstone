@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/clerk-react";
-import { Sun, Moon, Monitor, Check, Puzzle, Copy, RefreshCw } from "lucide-react";
+import { Sun, Moon, Monitor, Check, KeyRound, Copy, RefreshCw } from "lucide-react";
 import { getThemePreference, setThemePreference } from "../../lib/theme.js";
 import { api } from "../../lib/api.js";
 
@@ -95,11 +95,12 @@ const Settings = () => {
         borderRadius: 16, padding: 24, boxShadow: "var(--shadow)", marginTop: 20 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--navy)", marginBottom: 4,
           display: "flex", alignItems: "center", gap: 8 }}>
-          <Puzzle size={18} /> Browser extension
+          <KeyRound size={18} /> API key
         </h2>
         <p style={{ color: "var(--text-dim)", fontSize: "0.9em", marginBottom: 18 }}>
-          Generate a key to sign the Orbis browser extension in to your account. Paste it into the
-          extension's Settings. Treat it like a password — anyone with it can check links as you.
+          Generate a key to connect your account to Orbis integrations — the browser extension, the
+          MCP server, or anything that calls the Orbis API on your behalf. Paste it wherever the key
+          is asked for. Treat it like a password — anyone with it can act as you.
         </p>
 
         {newKey ? (
