@@ -3,6 +3,14 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Safety net against horizontal scroll on phones. Inline-styled pages can accidentally introduce a
+   too-wide element (a non-wrapping button row, a wide grid), and one overflow makes the WHOLE page
+   pan left/right — which on the landing page pushed the login/CTA off-screen. Clamping the page box
+   to the viewport width contains any single offender instead of letting it drag the layout. Root
+   cause is still fixed per-element below; this just guarantees the page can never pan sideways.
+   (overflow-x only — vertical scrolling is untouched.) */
+html, body { max-width: 100%; overflow-x: hidden; }
+
 body {
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -36,7 +44,9 @@ a:hover { text-decoration: underline; }
    into slivers on tablets/phones. */
 .dashboard-page {
   --dash-rail: 420px;
-  max-width: 1320px;
+  /* +120px over the marketing section: the dashboard has a fixed rail eating into the content, so it
+     wants a little more room. Scales with --section-max on big displays (see tokens.css). */
+  max-width: calc(var(--section-max) + 120px);
   margin: 40px auto;
   padding: 0 24px;
 }
@@ -112,6 +122,10 @@ a:hover { text-decoration: underline; }
   .landing-grid-4 { grid-template-columns: 1fr !important; }
   /* Settings appearance cards stack on narrow screens. */
   .settings-theme-grid { grid-template-columns: 1fr !important; }
+  /* Phone nav: drop the two SECONDARY actions (Download, Login) so the logo + "Get Started" fit on
+     one row without overflowing. Both actions still live in the hero below (visible on first paint),
+     so nothing is lost — this just stops the bar from being wider than the screen. */
+  .landing-nav-secondary { display: none !important; }
 }
 
 /* ── Landing page motion (Apple-style fluid reveals) ──

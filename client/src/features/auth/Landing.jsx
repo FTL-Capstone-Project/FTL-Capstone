@@ -26,7 +26,10 @@ import OrboAvatar from "../../components/OrboAvatar.jsx";
 // behind prefers-reduced-motion in global.css and is VISIBLE BY DEFAULT, so the page is
 // fully accessible and works even if the reveal script never runs.
 
-const SECTION_MAX = 1200; // content column width (matches app shell feel)
+// Content column width — a CSS var (not a fixed number) so it STEPS UP on very large/projected
+// displays (see --section-max tiers in tokens.css); every section below uses it as maxWidth, so the
+// whole marketing page widens together on a 70-inch screen instead of sitting as a narrow strip.
+const SECTION_MAX = "var(--section-max)";
 
 // Reveal-on-scroll: attach `className="landing-reveal"` to anything that should glide in, then
 // call useReveal() once at the page root. ONE IntersectionObserver watches every .landing-reveal
@@ -119,9 +122,13 @@ const Nav = () => {
           ))}
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          {/* → /extension how-to-install page; swaps to the Chrome Web Store link once listed. */}
-          <Link to="/extension" style={outlineBtnStyle}><Download size={16} /> Download Extension</Link>
-          <Link to="/signin?type=personal" style={ghostBtnStyle}>Login</Link>
+          {/* → /extension how-to-install page; swaps to the Chrome Web Store link once listed.
+              The two SECONDARY actions hide on phones (.landing-nav-secondary) — three buttons + the
+              logo overflow a ~375px row and pushed "Get Started" off-screen (the horizontal-scroll
+              bug). Both stay reachable: Download + Login also live in the hero's button row just below,
+              which is visible on first paint. "Get Started" alone stays in the bar. */}
+          <Link to="/extension" className="landing-nav-secondary" style={outlineBtnStyle}><Download size={16} /> Download Extension</Link>
+          <Link to="/signin?type=personal" className="landing-nav-secondary" style={ghostBtnStyle}>Login</Link>
           <Link to="/get-started" style={primaryBtnStyle}>Get Started</Link>
         </div>
       </div>
