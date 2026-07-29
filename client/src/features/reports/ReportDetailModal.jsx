@@ -163,10 +163,20 @@ const ReportDetailModal = ({ report, isMember = false, isAnalyst = false, onClos
   // Retry-once-then-hide for a lagging/404 screenshot (mirrors VerdictCard.handleShotError). We add a
   // cache-buster on the single retry, then give up so the "No sandbox preview" placeholder shows.
   const [shotSrc, setShotSrc] = useState(screenshotUrl);
-  useEffect(() => { setShotSrc(screenshotUrl); setShotOk(true); setShotRetried(false); }, [screenshotUrl]);
+  const shotRetryTimer = useRef(null);
+  // Reset shot state when the URL changes (the detail fetch resolving swaps report.screenshot_url →
+  // detail.screenshot_url). Also CLEAR any pending retry from the old URL, so a retry scheduled for a
+  // previous screenshot can't fire a cache-buster against a URL we've since moved off of.
+  useEffect(() => {
+    if (shotRetryTimer.current) { clearTimeout(shotRetryTimer.current); shotRetryTimer.current = null; }
+    setShotSrc(screenshotUrl); setShotOk(true); setShotRetried(false);
+    return () => { if (shotRetryTimer.current) clearTimeout(shotRetryTimer.current); };
+  }, [screenshotUrl]);
   const handleShotError = () => {
-    if (!shotRetried && screenshotUrl) { setShotRetried(true); setTimeout(() => setShotSrc(`${screenshotUrl}?r=${Date.now()}`), 2500); }
-    else setShotOk(false);
+    if (!shotRetried && screenshotUrl) {
+      setShotRetried(true);
+      shotRetryTimer.current = setTimeout(() => setShotSrc(`${screenshotUrl}?r=${Date.now()}`), 2500);
+    } else setShotOk(false);
   };
   const aiScore = detail?.ai_score ?? report.ai_score ?? null;
   const orboKind = scoreKind(aiScore); // colors the "Orbo score" card only — always Orbo's own read

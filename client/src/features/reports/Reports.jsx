@@ -62,46 +62,44 @@ const MyChecks = ({ role }) => {
   const [showArchived, setShowArchived] = useState(false); // My History sub-view: active vs archived
   const [selected, setSelected] = useState(null); // the report whose detail modal is open (null = closed)
   const [pendingDelete, setPendingDelete] = useState(null); // report awaiting the "are you sure?" confirm
-  // Load status for the CURRENTLY-shown list. Without this a failed fetch was indistinguishable from
-  // "you have no reports" — a user with real history whose request errored got told to go start over.
-  // Start true so the first paint shows "Loading…", not an empty-state flash.
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-
   // Members see the closure chip + Team History toggle; solo individuals don't.
   // (Analysts never reach here — they get TriageQueue above.) FRONTEND role = what
   // to SHOW only; real security is the backend filtering by the verified session.
   const isMember = role === "member";
 
-  // Always load my own ACTIVE reports (the default "My History" view).
-  useEffect(() => {
-    setLoading(true); setLoadError(false);
-    api.get("/api/history?mine=1", { getToken })
-      .then((data) => setReports(data.reports ?? []))
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false));
-  }, [getToken]);
+  // Load status for the CURRENTLY-shown list. Without this a failed fetch was indistinguishable from
+  // "you have no reports" — a user with real history whose request errored got told to go start over.
+  // Start true so the first paint shows "Loading…", not an empty-state flash.
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0); // bump to re-fetch the active view ("Try again")
 
-  // Load my ARCHIVED reports only when I actually open the archived sub-view (lazy, like Team History).
-  useEffect(() => {
-    if (scope !== "mine" || !showArchived) return;
-    setLoading(true); setLoadError(false);
-    api.get("/api/history?mine=1&archived=1", { getToken })
-      .then((data) => setArchivedReports(data.reports ?? []))
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false));
-  }, [scope, showArchived, getToken]);
+  // Resolve the ONE list the user is currently looking at → its endpoint + setter. Everything below
+  // (the single fetch effect, the empty-state copy) keys off this, so scope/tab are the single source
+  // of truth. This replaces three separate fetch effects that shared ONE loading/error pair — which
+  // let a failure on (say) Team History bleed onto the My History tab and hide already-loaded reports.
+  const activeView = scope === "team"
+    ? { url: "/api/history?org=1", set: setTeamReports }
+    : showArchived
+      ? { url: "/api/history?mine=1&archived=1", set: setArchivedReports }
+      : { url: "/api/history?mine=1", set: setReports };
 
-  // Load the org-wide reports only for org members, and only when they actually
-  // open the Team History tab (don't fetch data the user may never look at).
+  // One fetch effect for the active view. Re-runs whenever the view changes (scope/tab) or on a
+  // manual retry (reloadNonce), so returning to a tab whose earlier fetch failed actually re-fetches
+  // instead of showing a stale error over stale data. The `cancelled` guard means a fast tab-switch
+  // can't let a superseded request flip loading/error or overwrite the newer view's data.
   useEffect(() => {
-    if (!isMember || scope !== "team") return;
+    let cancelled = false;
     setLoading(true); setLoadError(false);
-    api.get("/api/history?org=1", { getToken })
-      .then((data) => setTeamReports(data.reports ?? []))
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false));
-  }, [isMember, scope, getToken]);
+    api.get(activeView.url, { getToken })
+      .then((data) => { if (!cancelled) activeView.set(data.reports ?? []); })
+      .catch(() => { if (!cancelled) setLoadError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // activeView is derived from scope/showArchived/getToken; list those so the effect re-runs on a
+    // real view change, not on every render (a fresh activeView object each render would loop).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, showArchived, getToken, reloadNonce]);
 
   // Archive one of MY reports: hide it locally right away (optimistic), then persist. On failure,
   // reload from the server so the UI can't drift from the DB. Only ever hits my own rows (backend guard).
@@ -156,17 +154,8 @@ const MyChecks = ({ role }) => {
   const reloadArchived = () =>
     api.get("/api/history?mine=1&archived=1", { getToken }).then((d) => setArchivedReports(d.reports ?? [])).catch(() => {});
 
-  // Re-fetch whichever list is currently showing — backs the "Try again" button on the error state.
-  const reloadActive = () => {
-    const url = scope === "team" ? "/api/history?org=1"
-      : showArchived ? "/api/history?mine=1&archived=1" : "/api/history?mine=1";
-    const set = scope === "team" ? setTeamReports : showArchived ? setArchivedReports : setReports;
-    setLoading(true); setLoadError(false);
-    api.get(url, { getToken })
-      .then((d) => set(d.reports ?? []))
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false));
-  };
+  // "Try again" on the error state → re-run the single fetch effect for the active view.
+  const reloadActive = () => setReloadNonce((n) => n + 1);
 
   // Which dataset is active: Team History, my archived list, or my active list. Then apply the
   // selected filter on top of whichever is showing. "Forwarded" filters by report SOURCE (how it

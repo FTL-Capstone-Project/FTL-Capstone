@@ -100,6 +100,29 @@ describe("Reports role-router", () => {
     expect(apiGet).toHaveBeenCalledWith("/api/history?org=1", expect.any(Object));
   });
 
+  it("a Team History fetch failure does NOT bleed onto the (already-loaded) My History tab", async () => {
+    // Regression guard: loading/error is per-ACTIVE-VIEW, not one shared flag. A failed org fetch
+    // must not make the My History tab — whose reports already loaded — show an error or empty state.
+    mockRole.mockReturnValue({ role: "member" });
+    apiGet.mockImplementation((path) =>
+      path.includes("org=1") ? Promise.reject(new Error("team down")) : Promise.resolve(MINE_RESPONSE)
+    );
+    const user = userEvent.setup();
+    render(<Reports />);
+    await waitFor(() => expect(screen.getByText("Dangerous link")).toBeInTheDocument()); // mine loaded
+
+    // Go to Team History → it fails → error shows there.
+    await user.click(screen.getByRole("button", { name: /team history/i }));
+    await waitFor(() => expect(screen.getByText(/couldn't load your reports/i)).toBeInTheDocument());
+
+    // Back to My History → the real, already-loaded reports must show, NOT the stale team error or
+    // the "no checks yet" empty message.
+    await user.click(screen.getByRole("button", { name: /my history/i }));
+    await waitFor(() => expect(screen.getByText("Dangerous link")).toBeInTheDocument());
+    expect(screen.queryByText(/couldn't load your reports/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no checks yet/i)).not.toBeInTheDocument();
+  });
+
   it("individual → the verdict filter narrows the visible list", async () => {
     mockRole.mockReturnValue({ role: "individual" });
     const user = userEvent.setup();

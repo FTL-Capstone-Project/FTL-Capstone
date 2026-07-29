@@ -23,6 +23,12 @@ const ReportModal = ({ indicatorId, currentCount = 0, onClose, onReported }) => 
   const dialogRef = useRef(null);
   const textRef = useRef(null);
   const prevFocusRef = useRef(null); // element focused before open → restored on close
+  // Hold onClose in a ref so the a11y effect can run ONCE for the modal's lifetime ([] deps). The
+  // parent passes a fresh inline arrow each render, so keying the effect on onClose would re-run the
+  // whole setup/cleanup on any parent re-render — e.g. VerdictCard's screenshot-retry timer firing —
+  // which would yank focus back to the textarea mid-typing. Keep it stable; read the latest via ref.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const words = countWords(reason);
   const overLimit = words > WORD_LIMIT;
@@ -39,7 +45,7 @@ const ReportModal = ({ indicatorId, currentCount = 0, onClose, onReported }) => 
     document.body.style.overflow = "hidden";
 
     const onKey = (e) => {
-      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Escape") { onCloseRef.current(); return; }
       if (e.key !== "Tab") return;
       const focusables = dialogRef.current?.querySelectorAll(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -59,7 +65,7 @@ const ReportModal = ({ indicatorId, currentCount = 0, onClose, onReported }) => 
       document.body.style.overflow = prevOverflow;
       prevFocusRef.current?.focus?.();
     };
-  }, [onClose]);
+  }, []);
 
   const submit = async () => {
     if (submitting || overLimit) return;

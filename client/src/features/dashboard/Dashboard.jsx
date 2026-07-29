@@ -16,14 +16,23 @@ import RecentSubmissions from "./RecentSubmissions.jsx";
 import DashboardEmpty from "./DashboardEmpty.jsx";
 import RetryButton from "../../components/RetryButton.jsx";
 
+// Pure ROUTER: picks a dashboard variant by role and calls NO hooks of its own beyond useOrbisRole.
+// This matters — the personal variant below calls useApi/useState/useEffect, so if the role branch
+// lived in the SAME component (as it used to), a role change while mounted (accepting an org invite
+// / switching org in-page, now possible via the invite flow) would change the number of hooks
+// between renders and crash with React's "rendered fewer hooks than expected". Keeping the branch in
+// a hook-free router means each variant mounts/unmounts cleanly instead.
 const Dashboard = () => {
   const { role } = useOrbisRole();
-
-  // Role split: analysts get the org-wide triage dashboard, members get the team-aware
-  // dashboard, and individuals fall through to the personal one below.
   if (role === "analyst") return <AnalystDashboard />;
   if (role === "member") return <MemberDashboard />;
+  return <PersonalDashboard />;
+};
 
+// The individual (no-org) dashboard. All hooks run unconditionally at the top — safe because this
+// component is only ever mounted for the personal role (the router above never reaches its hooks for
+// a member/analyst).
+const PersonalDashboard = () => {
   const api = useApi();
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
