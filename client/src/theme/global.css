@@ -61,16 +61,18 @@ a:hover { text-decoration: underline; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
 }
-/* The 4-up stat-tile row. Uses min(160px, 100%) as the auto-fit floor — NOT a bare 160px. A bare
-   160px floor can't shrink, so on a ~347px-wide phone content area two 160px columns + the 16px gap
-   (336px) plus tile padding tip over the edge and the row overflows → the whole dashboard pans
-   sideways. min(160px, 100%) lets a tile shrink below 160px when there isn't room for two, so it
-   drops cleanly to one column instead of overflowing. */
+/* The 4-up stat-tile row. Uses EXPLICIT breakpoints with minmax(0, 1fr) columns — deliberately NOT
+   auto-fit with a px floor. auto-fit + minmax(160px,…) keeps a HARD 160px minimum that can't shrink,
+   so on a phone two columns + gap + padding overflow the row and the whole dashboard pans sideways
+   (and clipping it just hides the cards). minmax(0, 1fr) has a ZERO floor, so columns always shrink
+   to fit; the breakpoints just choose how many columns. 4 on desktop → 2 on tablet → 1 on phone. */
 .dash-stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
+@media (max-width: 768px) { .dash-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .dash-stat-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) {
   .dashboard-shell, .dash-two-col { grid-template-columns: minmax(0, 1fr); }
 }
