@@ -38,7 +38,7 @@ const ResultsDonut = ({ results }) => {
 
       <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
         {/* The ring */}
-        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label="Results breakdown">
+        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label="Results breakdown" style={{ flexShrink: 0, maxWidth: "100%" }}>
           <g transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}>
             {/* track (empty state or gaps) */}
             <circle
@@ -77,7 +77,11 @@ const ResultsDonut = ({ results }) => {
         </svg>
 
         {/* Legend */}
-        <div style={{ flex: 1, minWidth: 160, display: "grid", gap: 10 }}>
+        {/* minWidth was 160 — combined with the 180px ring + 24px gap, that forced the flex row's
+            min-content to ~364px, so on a ~375px phone (minus card padding) the row overflowed the
+            card and the page panned sideways. min-width:0 lets the legend shrink so the row always
+            wraps/fits; flex-basis 140 keeps it beside the ring on wide cards. */}
+        <div style={{ flex: "1 1 140px", minWidth: 0, display: "grid", gap: 10 }}>
           {arcs.map((a) => (
             <div key={a.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 10, height: 10, borderRadius: 3, background: a.color, flexShrink: 0 }} />
