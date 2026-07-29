@@ -213,13 +213,24 @@ const readOpenEmail = () => {
 
 // A stable signature of "which email is open" so we don't re-scan the same one on every DOM tick.
 let lastScanKey = "";
+let scanInFlight = false; // true while a scan (esp. the slow deep link scan) is running
 const scanOpenEmail = async () => {
   const found = readOpenEmail();
-  if (!found) { removeEmailBadge(); lastScanKey = ""; return; }
+  // TRANSIENT-NULL GUARD: Gmail re-renders the message pane constantly (and even more during a long
+  // deep scan), so readOpenEmail momentarily returns null mid-scan. We must NOT tear the badge down
+  // on that blip — doing so cleared lastScanKey, and the next tick then treated the same email as
+  // "new" and re-inserted the badge + re-scanned. THAT was the "badge going in and out" loop. Only
+  // clear when a scan is NOT in flight (i.e. the user genuinely navigated away from any open email).
+  if (!found) {
+    if (!scanInFlight) { removeEmailBadge(); lastScanKey = ""; }
+    return;
+  }
   // Key on sender + subject + link set (not the whole body) — enough to tell emails apart cheaply.
   const key = `${found.sender || ""}|${found.subject || ""}|${found.urls.join(",")}`;
-  if (key === lastScanKey) return; // same email already scanned
+  if (key === lastScanKey) return;  // same email — already scanned or currently scanning
+  if (scanInFlight) return;         // a scan is running; don't start a second for a transient re-read
   lastScanKey = key;
+  scanInFlight = true;
   // Content analysis calls the LLM (~1-3s) AND sandbox-scans each link (~10-45s per fresh link), so
   // show a "checking" badge first — telling the user when it's the slow deep link scan so a 30-45s
   // wait doesn't look frozen. This is Orbo actually READING the email + opening its links safely.
@@ -238,6 +249,16 @@ const scanOpenEmail = async () => {
     log("email analysis failed:", err.status || "", err.message);
     // Only clear the badge/key if THIS scan is still the current one (else we'd wipe a newer email's).
     if (key === lastScanKey) { removeEmailBadge(); lastScanKey = ""; }
+  } finally {
+    scanInFlight = false;
+    // If the user switched to a DIFFERENT email while this scan was running, that mutation was
+    // ignored (scanInFlight was true), so re-check now that we're free — otherwise the newly-opened
+    // email would never get scanned until some other DOM change happened to nudge the observer.
+    const now = readOpenEmail();
+    if (now) {
+      const nowKey = `${now.sender || ""}|${now.subject || ""}|${now.urls.join(",")}`;
+      if (nowKey !== lastScanKey) scheduleScan();
+    }
   }
 };
 
@@ -248,7 +269,19 @@ const scheduleScan = () => {
   clearTimeout(scanTimer);
   scanTimer = setTimeout(scanOpenEmail, 400);
 };
-const observer = new MutationObserver(scheduleScan);
+// IGNORE OUR OWN mutations: the badge lives in <body>, so inserting/removing it is itself a DOM
+// mutation that would re-fire this observer in a feedback loop. Skip any batch whose every record
+// is inside our badge, so only Gmail's real changes (opening/closing a message) schedule a scan.
+const isOwnMutation = (records) =>
+  records.every((r) => {
+    const n = r.target;
+    const el = n && n.nodeType === 1 ? n : n?.parentElement;
+    return el ? el.closest("[data-orbis-email-badge], [data-orbis-badge]") !== null : false;
+  });
+const observer = new MutationObserver((records) => {
+  if (isOwnMutation(records)) return;
+  scheduleScan();
+});
 observer.observe(document.body, { childList: true, subtree: true });
 log("content script loaded — watching for opened emails");
 scheduleScan(); // initial

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Orbis — Check with Orbo",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Orbo checks your email for phishing: an instant safe/warning/danger read when you open a message, plus a right-click check on any link or sender.",
   "permissions": ["contextMenus", "storage"],
   "host_permissions": [
