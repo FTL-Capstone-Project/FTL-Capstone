@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell, CheckCircle } from "lucide-react";
 import { useNotifications } from "../context/NotificationsContext.jsx";
 
@@ -27,6 +27,7 @@ const timeAgo = (value) => {
 const NotificationBell = () => {
   const { notifications, unreadCount, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false); // is the dropdown showing?
+  const bellRef = useRef(null);
 
   // Toggle the dropdown. When we OPEN it, mark everything read so the badge clears.
   const toggleOpen = () => {
@@ -34,14 +35,28 @@ const NotificationBell = () => {
     setOpen((prev) => !prev);
   }
 
+  // While open, Escape closes the dropdown and returns focus to the bell (so a keyboard user isn't
+  // stranded). Mirrors the RowActionsMenu pattern in ReportCard. Only bound while open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") { setOpen(false); bellRef.current?.focus(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   return (
     <div style={{ position: "relative" }}>
       <button
+        ref={bellRef}
         onClick={toggleOpen}
         className="orbis-press"
         style={{ position: "relative", background: "none", border: "none", cursor: "pointer",
           display: "flex", alignItems: "center", color: "var(--navy)" }}
         aria-label={`Notifications (${unreadCount} unread)`}
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         <Bell size={20} />
         {unreadCount > 0 && (

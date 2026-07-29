@@ -47,9 +47,11 @@ export const ThinkingBubble = ({ label = "Checking this link…" }) => {
       <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
       <div style={{ display: "flex", gap: 5 }}>
         {[0, 1, 2].map((i) => (
-          <span key={i} style={{
+          <span key={i} className="orbo-dot" style={{
             width: 7, height: 7, borderRadius: "50%", background: "var(--text-dim)",
-            animation: "orboDot 1.2s infinite ease-in-out", animationDelay: `${i * 0.2}s`,
+            // The stagger is fine inline — it's animation TIMING, not motion itself; the bounce
+            // animation is defined in the class (gated behind prefers-reduced-motion in global.css).
+            animationDelay: `${i * 0.2}s`,
           }} />
         ))}
       </div>

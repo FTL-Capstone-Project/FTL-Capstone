@@ -3,7 +3,7 @@ import { ShieldCheck, AlertTriangle, ShieldAlert } from "lucide-react";
 
 export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
-// How often CheckResult re-polls the indicator while a scan runs (ms). This one SHOULD be fast:
+// How often useIndicatorPoll re-polls the indicator while a scan runs (ms). This one SHOULD be fast:
 // the user is staring at a spinner waiting for a verdict, and the poll stops as soon as the scan
 // finishes (see useIndicatorPoll's MAX_POLLS cap), so it's short-lived by nature.
 export const VERDICT_POLL_MS = 1500;

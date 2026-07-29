@@ -80,7 +80,14 @@ a:hover { text-decoration: underline; }
 .report-card:hover { border-color: var(--primary); }
 .report-card__open:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-/* Orbo's "thinking" typing dots (used by ThinkingBubble). */
+/* Orbo's "thinking" typing dots (used by ThinkingBubble). The bounce is gated behind
+   prefers-reduced-motion (matching the app's convention: motion lives inside no-preference blocks,
+   never inline). Reduced-motion users still get a clear "working" indicator — the dots just sit at a
+   steady partial opacity instead of bouncing, so nothing looks frozen or hung. */
+.orbo-dot { opacity: 0.55; }
+@media (prefers-reduced-motion: no-preference) {
+  .orbo-dot { animation: orboDot 1.2s infinite ease-in-out; }
+}
 @keyframes orboDot {
   0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
   30%           { opacity: 1;    transform: translateY(-3px); }
