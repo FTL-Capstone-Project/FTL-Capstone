@@ -103,13 +103,7 @@ const AnalystDashboard = () => {
       <div className="dashboard-shell">
         <div style={{ display: "grid", gap: 20 }}>
           {/* ── Stat tiles ── */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-              gap: 16,
-            }}
-          >
+          <div className="dash-stat-grid">
             <StatTile
               label="Pending Review"
               value={pendingCount}

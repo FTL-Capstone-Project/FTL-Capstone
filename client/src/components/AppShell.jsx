@@ -274,8 +274,11 @@ const AppShell = () => {
             <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
           </header>
           {/* minWidth:0 lets the content shrink instead of pushing wide children (long
-              URLs / text) off-screen; overflow:auto makes this the page scroll area. */}
-          <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "auto", background: "var(--canvas)" }}><Outlet /></main>
+              URLs / text) off-screen. This is the app's OWN scroll area (overflowY:auto), so the
+              body's overflow-x guard can't reach inside it — clip X HERE too, so a too-wide page
+              (e.g. a dashboard grid that won't fit a phone) can't make the app pan sideways. Vertical
+              scroll stays; overflowX hidden is the safety net (per-element widths are the real fix). */}
+          <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", background: "var(--canvas)" }}><Outlet /></main>
         </div>
       </div>
     </NotificationsProvider>

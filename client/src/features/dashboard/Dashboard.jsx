@@ -92,13 +92,7 @@ const PersonalDashboard = () => {
       <div style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "grid", gap: 20 }}>
           {/* Top row: 4 stat tiles */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-              gap: 16,
-            }}
-          >
+          <div className="dash-stat-grid">
             <StatTile
               label="My Checks This Week"
               value={stats.checksThisWeek.value}
