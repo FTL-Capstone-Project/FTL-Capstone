@@ -31,6 +31,42 @@ import { extractEmailAddress } from "./inboundEmail.js";
 // forged sender / disguised link scores its full weight — reproducibly, injection-proof.
 const TEXT_UNVERIFIABLE_SIGNALS = new Set(["link_mismatch", "sender_mismatch"]);
 
+// A message that DELIVERS a one-time code / reset link (legit transactional mail: "your code is
+// 481920", "here is your verification code", "we sent you a reset link") is NOT a phishing ask — but
+// the LLM keeps firing `sensitive_info` on it, because that catalog entry's text mentions "a 2FA/one-
+// time code". This was the single biggest false-positive source (a real Google/GitHub/bank code email
+// scored REVIEW/DANGER). detectCodeDelivery() spots the DELIVERY shape so we can strip a guessed
+// `sensitive_info` — but ONLY when the text does NOT also SOLICIT secret data. FN-safe by construction:
+// we never touch `credentials`/`payment`, the link leg, or the sender leg, so "here's your code, now
+// confirm your password at <link>" still scores dangerous on those independent signals. Pure → testable.
+const CODE_DELIVERY = /\b(your|the)\s+(one[-\s]?time\s+|verification\s+|security\s+|login\s+|access\s+|confirmation\s+|authentication\s+|2fa\s+|otp\s+)*code\s+(is\b|:)|here('?s| is)\s+your\s+(one[-\s]?time\s+)?(verification\s+|security\s+)?code\b|\bcode\s*[:#]?\s*\d{4,8}\b|\bwe('?ve| have)?\s*(just\s+)?sent\s+you\s+a\s+(one[-\s]?time\s+)?(code|link|verification code)\b|\byour\s+(password\s+)?reset\s+link\b/i;
+// Asks the user to HAND OVER a secret to the SENDER (the genuine phishing shape). If present, we do NOT
+// treat the mail as a benign code delivery even if it also contains a code-shaped phrase.
+// NOTE (deliberately narrow to stay FN-safe WITHOUT eating legit delivery language): "enter this code to
+// verify your account" is NORMAL delivery wording, so `verify` is NOT a solicitation verb here. We flag
+// only asks for a REUSABLE credential (password/PIN/SSN/card/bank), a request to SEND/REPLY-WITH a code
+// (a code should be entered on a site, never emailed back — that's the scam tell), or an explicit
+// "log in to verify/restore" lure.
+const SECRET_SOLICITATION = /\b(enter|confirm|provide|update|re-?enter|give\s+us|verify)\b[^.?!]{0,40}\b(password|login\s+credential|credential|ssn|social\s+security|card\s+number|full\s+card|bank|routing|account\s+number|\bpin\b)\b|\b(reply\s+with|send\s+(us|me)|share|text\s+(us|me)|read\s+back|forward)\b[^.?!]{0,40}\b(code|password|pin|otp|verification\s+code|one[-\s]?time)\b|\blog\s?in\s+(here\s+)?to\s+(verify|confirm|restore|secure|reactivate|unlock)\b|\bverify\s+your\s+(identity|login\s+credentials)\b/i;
+export const detectCodeDelivery = (subject = "", body = "") => {
+  const text = `${subject || ""}\n${body || ""}`;
+  return CODE_DELIVERY.test(text) && !SECRET_SOLICITATION.test(text);
+};
+
+// The LLM was FABRICATING `generic_greeting` rows — claiming "Dear customer" on emails that literally
+// open "Hello Sofia" / "Dear Robert" (the blind review caught this: a scary "why" row that contradicts
+// the email). We can verify it deterministically: if the body opens with a PERSONAL greeting (a
+// salutation + a capitalized name that isn't a generic placeholder like "Customer"), the generic-
+// greeting claim is false and gets dropped. FN-safe: `generic_greeting` is a soft weight-8 signal, so
+// removing a false firing can only reduce over-flagging, never hide a scam. Pure → testable.
+const PERSONAL_GREETING = /\b(hi|hello|dear|hey|greetings)\s+([A-Za-z][a-z]+)/i;
+const GENERIC_NAME_TOKEN = /^(customer|client|user|users|member|members|valued|account|holder|sir|madam|subscriber|applicant|employee|team|there|all|everyone|colleague|colleagues|friend|guest|recipient)$/i;
+export const hasPersonalGreeting = (subject = "", body = "") => {
+  const match = String(body || "").match(PERSONAL_GREETING);
+  // A real name after the salutation (not a generic placeholder like "Customer"/"there") = personal.
+  return Boolean(match && !GENERIC_NAME_TOKEN.test(match[2]));
+};
+
 // Build the closed red-flag guide from the shared catalog so it can never drift from the scorer.
 // We only offer the model the signals that are genuinely observable in forwarded plain text (i.e.
 // the catalog MINUS the unverifiable ones above), so it can't reach for a flag it can't support.
@@ -289,13 +325,26 @@ export const analyzeEmailBody = async ({ from = "", subject = "", body = "", sen
     "Use an empty array when you see no red flags. Report only flags you can actually observe.\n\n" +
     `EMAIL:\n${text}`;
 
+  // CONTEXT the LLM keeps getting wrong, verified deterministically here so code (not a guess) decides:
+  //   - a code/link DELIVERY is not a `sensitive_info` ask (unless the mail ALSO solicits a secret), and
+  //   - a personal greeting ("Hello Sofia") is not a `generic_greeting`.
+  // Both were confirmed false-positive sources in the scoring audit. We only ever DROP a model-guessed
+  // soft/mis-fired signal here — never add danger — so this cannot turn a real scam safe (FN-safe).
+  const isCodeDelivery = detectCodeDelivery(subject, body);
+  const isPersonalGreeting = hasPersonalGreeting(subject, body);
+
   try {
     const out = await chatJSON({ system, user: prompt, maxTokens: 500, temperature: 0 });
     // Drop any unverifiable-from-text flags even if the model returned them anyway (it was told
     // not to, but belt-and-suspenders — a hallucinated link_mismatch must not move the score). The
     // ONLY way those two flags enter the score is when CODE proved them (proven.signals above).
+    // Also strip context-corrected mis-fires: `sensitive_info` on a pure code DELIVERY, and
+    // `generic_greeting` on a mail that actually greets the recipient by name.
     const modelSignals = (Array.isArray(out?.signals) ? out.signals : [])
-      .filter((s) => !TEXT_UNVERIFIABLE_SIGNALS.has(String(s || "").trim().toLowerCase()));
+      .map((s) => String(s || "").trim().toLowerCase())
+      .filter((s) => !TEXT_UNVERIFIABLE_SIGNALS.has(s))
+      .filter((s) => !(s === "sensitive_info" && isCodeDelivery))
+      .filter((s) => !(s === "generic_greeting" && isPersonalGreeting));
     return build({
       modelSignals,
       modelVerdict: typeof out?.verdict === "string" ? out.verdict : "",

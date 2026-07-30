@@ -21,6 +21,8 @@ const {
   reconcileLegScores,
   reconcileEvidence,
   buildLegsRow,
+  detectCodeDelivery,
+  hasPersonalGreeting,
 } = await import("./emailAnalysis.js");
 
 // Helper: a body leg the way analyzeEmailBody produces it — raw score + signalMeta (drives the
@@ -160,6 +162,69 @@ describe("analyzeEmailBody", () => {
   it("still returns null with no LLM key AND no deterministic signal", async () => {
     env.llmApiKey = "";
     expect(await analyzeEmailBody({ body: "hi", senderIdentity: { displayName: "Bob", address: "bob@bob-personal.com" } })).toBeNull();
+  });
+});
+
+describe("detectCodeDelivery (deterministic — a code DELIVERY is not a sensitive_info ask)", () => {
+  it("recognizes legit one-time-code / reset-link DELIVERY", () => {
+    expect(detectCodeDelivery("Your verification code", "Your verification code is 481920. Please enter this code to verify your account.")).toBe(true);
+    expect(detectCodeDelivery("Your code", "Here is your one-time verification code: 481920. Enter it to finish signing in.")).toBe(true);
+    expect(detectCodeDelivery("", "Your code is 481920. Please use this code to verify your account.")).toBe(true);
+    expect(detectCodeDelivery("", "Your password reset link is ready to use.")).toBe(true);
+  });
+  it("does NOT treat a SECRET SOLICITATION as a benign delivery (stays FN-safe)", () => {
+    // These must fall through so `sensitive_info` / credentials still count and the scam scores dangerous.
+    expect(detectCodeDelivery("", "Please confirm your password and card number at this link.")).toBe(false);
+    expect(detectCodeDelivery("", "Reply with your verification code to verify your identity.")).toBe(false);
+    expect(detectCodeDelivery("", "Log in here to verify your account or it will be suspended.")).toBe(false);
+    expect(detectCodeDelivery("", "Your code is 481920. Now confirm your password at http://x.")).toBe(false); // delivery + solicit → not benign
+    expect(detectCodeDelivery("", "Send us your one-time code so we can verify it.")).toBe(false);
+  });
+  it("returns false when there is no code at all", () => {
+    expect(detectCodeDelivery("Hi", "Just checking in about your training this week.")).toBe(false);
+  });
+});
+
+describe("hasPersonalGreeting (deterministic — kills the fabricated 'Dear customer' row)", () => {
+  it("recognizes a greeting to a real name (any salutation case)", () => {
+    expect(hasPersonalGreeting("", "Hello Sofia, your code is ready.")).toBe(true);
+    expect(hasPersonalGreeting("", "Dear Robert,\n\nYour statement is ready.")).toBe(true);
+    expect(hasPersonalGreeting("", "Hi Maria, please find the invoice attached.")).toBe(true);
+  });
+  it("treats generic placeholders as NOT personal (so generic_greeting still fires)", () => {
+    expect(hasPersonalGreeting("", "Dear Customer, your account is limited.")).toBe(false);
+    expect(hasPersonalGreeting("", "Dear Valued Member, ...")).toBe(false);
+    expect(hasPersonalGreeting("", "Hello there, ...")).toBe(false);
+    expect(hasPersonalGreeting("", "Dear Employee, enrollment closes Friday.")).toBe(false);
+  });
+});
+
+describe("analyzeEmailBody — context fixes strip the two audited false-positive signals", () => {
+  it("strips a model-guessed sensitive_info on a pure code DELIVERY (the OTP false positive)", async () => {
+    // The LLM keeps firing sensitive_info + urgency on "here is your code" mail. On a DELIVERY with no
+    // solicitation, the crown-jewel sensitive_info (weight 35) is stripped — so the body leg is no longer
+    // the 47 that forced REVIEW. Only the soft, uncorroborated urgency remains (soloWeight 6 → 94, SAFE),
+    // and crownCount drops to 0 so the combine can't escalate on it.
+    chatJSON.mockResolvedValue({ signals: ["sensitive_info", "urgency"], verdict: "Code email.", title: "Code" });
+    const report = await analyzeEmailBody({ from: "noreply@github.com", subject: "Your code", body: "Hello Sam, your verification code is 481920. Enter it to sign in." });
+    expect(report.ai_score).toBe(94);                  // was 47 before the fix — now safely in the SAFE band
+    expect(report.signalMeta.crownCount).toBe(0);      // the crown-jewel sensitive_info is gone
+  });
+  it("KEEPS sensitive_info when the mail also SOLICITS a secret (no false negative)", async () => {
+    chatJSON.mockResolvedValue({ signals: ["sensitive_info"], verdict: "Phish.", title: "Phish" });
+    const report = await analyzeEmailBody({ from: "x@y.com", subject: "verify", body: "Your code is 123456. Now reply with your one-time code and confirm your password." });
+    expect(report.signalMeta.crownCount).toBe(1);      // solicitation present → sensitive_info survives
+    expect(report.ai_score).toBeLessThan(70);
+  });
+  it("strips a fabricated generic_greeting when the email greets the recipient by name", async () => {
+    chatJSON.mockResolvedValue({ signals: ["generic_greeting"], verdict: "x", title: "x" });
+    const report = await analyzeEmailBody({ from: "no-reply@gusto.com", subject: "Reminder", body: "Hello Maria, enrollment closes Friday." });
+    expect(report.signalMeta.count).toBe(0);           // the false row is gone
+  });
+  it("KEEPS generic_greeting on a real 'Dear Customer' email", async () => {
+    chatJSON.mockResolvedValue({ signals: ["generic_greeting"], verdict: "x", title: "x" });
+    const report = await analyzeEmailBody({ from: "x@y.com", subject: "s", body: "Dear Customer, your account needs attention." });
+    expect(report.signalMeta.count).toBe(1);           // still fires — placeholder greeting is real
   });
 });
 
