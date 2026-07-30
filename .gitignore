@@ -33,3 +33,8 @@ CLAUDE.md
 personalNotes.md
 file.txt
 myNotes.txt
+
+# Local scratch — generated test-run output (regenerable by re-running the harness)
+scripts/out/
+# Slide decks are heavy binaries; keep them out of git
+*.pptx

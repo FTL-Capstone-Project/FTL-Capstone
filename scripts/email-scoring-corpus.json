@@ -1,0 +1,3583 @@
+[
+  {
+    "id": "sofia-receipt-01",
+    "persona": "sofia",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Tuition payment receipt from Coursera",
+    "from": "noreply@coursera.org",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Tuition Payment Receipt",
+    "body": "---------- Forwarded message ---------\nFrom: Coursera <noreply@coursera.org>\nDate: Oct 1, 2023\nSubject: Tuition Payment Receipt\nTo: orbischecks+sofia@gmail.com\n\nDear Sofia,\n\nThank you for your payment! Here is your tuition receipt for the course you enrolled in. \n\nBest regards,\nCoursera Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "Legitimate sender with a real domain and a clear transactional context."
+  },
+  {
+    "id": "sofia-shipping-02",
+    "persona": "sofia",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Shipping confirmation from Amazon",
+    "from": "shipping@amazon.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Your Amazon Order Shipping Confirmation",
+    "body": "---------- Forwarded message ---------\nFrom: Amazon <shipping@amazon.com>\nDate: Oct 2, 2023\nSubject: Your Amazon Order Shipping Confirmation\nTo: orbischecks+sofia@gmail.com\n\nHello Sofia,\n\nYour order has shipped! Track your shipment here: [Track Order]\n\nThank you for shopping with us!\nAmazon Customer Service",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "The email comes from a reputable source and contains shipping details for a legitimate purchase."
+  },
+  {
+    "id": "sofia-refund-03",
+    "persona": "sofia",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Financial aid refund notification from NY.gov",
+    "from": "support@ny.gov",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Financial Aid Refund Notification",
+    "body": "---------- Forwarded message ---------\nFrom: NY Financial Aid <support@ny.gov>\nDate: Oct 3, 2023\nSubject: Financial Aid Refund Notification\nTo: orbischecks+sofia@gmail.com\n\nDear Sofia,\n\nYour financial aid refund has been processed successfully. You can view the details here: [Refund Details]\n\nRegards,\nNY Financial Aid Office",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      92
+    ],
+    "expectNotes": "This is a legitimate notification about a financial transaction from a government source."
+  },
+  {
+    "id": "sofia-code-04",
+    "persona": "sofia",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "One-time code for account verification from Google",
+    "from": "noreply@google.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Your Google Verification Code",
+    "body": "---------- Forwarded message ---------\nFrom: Google <noreply@google.com>\nDate: Oct 4, 2023\nSubject: Your Google Verification Code\nTo: orbischecks+sofia@gmail.com\n\nHello Sofia,\n\nYour verification code is 481920. Please enter this code to verify your account.\n\nThank you,\nGoogle Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "This email contains a secure verification code from a trusted source."
+  },
+  {
+    "id": "sofia-internship-05",
+    "persona": "sofia",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Internship offer letter from Handshake",
+    "from": "noreply@handshake.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Internship Offer Letter",
+    "body": "---------- Forwarded message ---------\nFrom: Handshake <noreply@handshake.com>\nDate: Oct 5, 2023\nSubject: Internship Offer Letter\nTo: orbischecks+sofia@gmail.com\n\nDear Sofia,\n\nCongratulations! You have been selected for the internship position. Please review the offer details here: [View Offer]\n\nBest,\nHandshake Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      88
+    ],
+    "expectNotes": "A legitimate internship offer from a recognized platform in the education sector."
+  },
+  {
+    "id": "sofia-statement-06",
+    "persona": "sofia",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Monthly statement from PayPal",
+    "from": "statement@paypal.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Your Monthly PayPal Statement",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal <statement@paypal.com>\nDate: Oct 6, 2023\nSubject: Your Monthly PayPal Statement\nTo: orbischecks+sofia@gmail.com\n\nHi Sofia,\n\nYour monthly statement is ready. Review it here: [View Statement]\n\nThank you for using PayPal!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "This is a legitimate statement from a recognized financial service."
+  },
+  {
+    "id": "sofia-job-07",
+    "persona": "sofia",
+    "archetype": "legit-transactional",
+    "expect": "REVIEW",
+    "desc": "Job application confirmation from Indeed",
+    "from": "noreply@indeed.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Your Job Application Confirmation",
+    "body": "---------- Forwarded message ---------\nFrom: Indeed <noreply@indeed.com>\nDate: Oct 7, 2023\nSubject: Your Job Application Confirmation\nTo: orbischecks+sofia@gmail.com\n\nHello Sofia,\n\nYou have successfully applied for the position. Check your application status here: [Check Status]\n\nBest,\nIndeed Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      68
+    ],
+    "expectNotes": "The email is legitimate, but the application status link requires a closer inspection."
+  },
+  {
+    "id": "sofia-survey-08",
+    "persona": "sofia",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Course feedback request from Coursera",
+    "from": "feedback@coursera.org",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Course Feedback Request",
+    "body": "---------- Forwarded message ---------\nFrom: Coursera <feedback@coursera.org>\nDate: Oct 8, 2023\nSubject: Course Feedback Request\nTo: orbischecks+sofia@gmail.com\n\nHi Sofia,\n\nWe value your feedback! Please fill out this survey to help us improve: [Take Survey]\n\nThank you,\nCoursera Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      85
+    ],
+    "expectNotes": "This is a legitimate feedback request from a recognized educational platform."
+  },
+  {
+    "id": "sofia-course-01",
+    "persona": "sofia",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Course enrollment reminder from Coursera.",
+    "from": "sofia@coursera.org",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Reminder: Course Enrollment Deadline Approaching!",
+    "body": "---------- Forwarded message ---------\nFrom: Coursera Support <support@coursera.org>\nDate: 2023-10-01\nSubject: Reminder: Course Enrollment Deadline Approaching!\nTo: sofia@coursera.org\n\nDear Customer,\n\nThis is a friendly reminder that the enrollment deadline for your course is approaching. Don't miss out!\n\nBest,\nCoursera Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "Legitimate sender with a real domain and a relevant subject."
+  },
+  {
+    "id": "sofia-intern-02",
+    "persona": "sofia",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Internship opportunities newsletter from Handshake.",
+    "from": "updates@handshake.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: New Internship Opportunities for You!",
+    "body": "---------- Forwarded message ---------\nFrom: Handshake Updates <updates@handshake.com>\nDate: 2023-10-02\nSubject: New Internship Opportunities for You!\nTo: sofia@handshake.com\n\nDear Customer,\n\nCheck out the latest internships that match your profile! Apply before the deadline.\n\nCheers,\nHandshake Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "The email comes from a recognized domain providing internship information."
+  },
+  {
+    "id": "sofia-financial-03",
+    "persona": "sofia",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Financial aid reminder from NY.gov.",
+    "from": "info@ny.gov",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Financial Aid Application Reminder",
+    "body": "---------- Forwarded message ---------\nFrom: NY Financial Aid <info@ny.gov>\nDate: 2023-10-03\nSubject: Financial Aid Application Reminder\nTo: sofia@ny.gov\n\nDear Customer,\n\nThis is a reminder to submit your financial aid application by the deadline. Ensure you have everything ready!\n\nBest regards,\nNY Financial Aid Office",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      92
+    ],
+    "expectNotes": "Relevant content from a government domain with real urgency."
+  },
+  {
+    "id": "sofia-newsletter-04",
+    "persona": "sofia",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Weekly newsletter from LinkedIn.",
+    "from": "newsletter@linkedin.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Your Weekly LinkedIn Update!",
+    "body": "---------- Forwarded message ---------\nFrom: LinkedIn Newsletter <newsletter@linkedin.com>\nDate: 2023-10-04\nSubject: Your Weekly LinkedIn Update!\nTo: sofia@linkedin.com\n\nDear Customer,\n\nHere’s your weekly update on job opportunities and new connections. Stay informed!\n\nBest,\nLinkedIn Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      93
+    ],
+    "expectNotes": "Legitimate newsletter from a trusted professional network."
+  },
+  {
+    "id": "sofia-refund-05",
+    "persona": "sofia",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Tuition refund notice from PayPal.",
+    "from": "support@paypal.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Tuition Refund Processed",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal Support <support@paypal.com>\nDate: 2023-10-05\nSubject: Tuition Refund Processed\nTo: sofia@paypal.com\n\nDear Customer,\n\nYour tuition refund has been successfully processed. Check your account for details.\n\nRegards,\nPayPal Customer Service",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "A legitimate notice from PayPal regarding a refund."
+  },
+  {
+    "id": "sofia-course-06",
+    "persona": "sofia",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "New course recommendations from Coursera.",
+    "from": "recommendations@coursera.org",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Recommended Courses Just for You!",
+    "body": "---------- Forwarded message ---------\nFrom: Coursera Recommendations <recommendations@coursera.org>\nDate: 2023-10-06\nSubject: Recommended Courses Just for You!\nTo: sofia@coursera.org\n\nDear Customer,\n\nExplore these new courses tailored for your interests. Enroll today!\n\nBest,\nCoursera Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      94
+    ],
+    "expectNotes": "Personalized content from a known educational platform."
+  },
+  {
+    "id": "sofia-job-07",
+    "persona": "sofia",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Job alerts from Indeed.",
+    "from": "alerts@indeed.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: New Job Alerts for You!",
+    "body": "---------- Forwarded message ---------\nFrom: Indeed Alerts <alerts@indeed.com>\nDate: 2023-10-07\nSubject: New Job Alerts for You!\nTo: sofia@indeed.com\n\nDear Customer,\n\nWe have found new job listings that match your criteria. Check them out now!\n\nBest,\nIndeed Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      91
+    ],
+    "expectNotes": "Timely job alerts from a recognized job search platform."
+  },
+  {
+    "id": "sofia-update-08",
+    "persona": "sofia",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Course completion updates from GitHub.",
+    "from": "no-reply@github.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Your Course Completion Certificate is Ready!",
+    "body": "---------- Forwarded message ---------\nFrom: GitHub Learning <no-reply@github.com>\nDate: 2023-10-08\nSubject: Your Course Completion Certificate is Ready!\nTo: sofia@github.com\n\nDear Customer,\n\nCongratulations! Your course completion certificate is now available for download. Access it through your profile.\n\nBest,\nGitHub Learning Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      96
+    ],
+    "expectNotes": "Official notification from GitHub with a relevant certificate update."
+  },
+  {
+    "id": "sofia-cred-01",
+    "persona": "sofia",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing email pretending to be from a financial aid service.",
+    "from": "sofia.finances@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Important: Confirm Your Financial Aid Status",
+    "body": "---------- Forwarded message ---------\nFrom: Financial Aid Department <info@financialaid-secure.com>\nDate: 2023-10-01\nSubject: Important: Confirm Your Financial Aid Status\nTo: sofia.finances@gmail.com\n\nDear Sofia,\n\nWe need you to confirm your password to maintain access to your financial aid account. Please log in through the link below:\n\n[Verify Now](http://financialaid-secure.com/verify)\n\nThank you.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "The domain 'financialaid-secure.com' is a throwaway domain, indicating phishing."
+  },
+  {
+    "id": "sofia-cred-02",
+    "persona": "sofia",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Email impersonating a student portal request.",
+    "from": "sofia.courses@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Action Required: Verify Your Course Enrollment",
+    "body": "---------- Forwarded message ---------\nFrom: Course Enrollment <support@courseeverify.com>\nDate: 2023-10-02\nSubject: Action Required: Verify Your Course Enrollment\nTo: sofia.courses@gmail.com\n\nHello Sofia,\n\nTo ensure your course enrollment is accurate, please verify your identity by logging in at the following link:\n\n[Log In Here](http://courseeverify.com/login)\n\nBest regards.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "The domain 'courseeverify.com' is suspicious and likely a phishing attempt."
+  },
+  {
+    "id": "sofia-cred-03",
+    "persona": "sofia",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing email pretending to be from a job application site.",
+    "from": "sofia.jobs@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Urgent: Verify Your Job Application",
+    "body": "---------- Forwarded message ---------\nFrom: Job Application Team <no-reply@jobapply-secure.com>\nDate: 2023-10-03\nSubject: Urgent: Verify Your Job Application\nTo: sofia.jobs@gmail.com\n\nDear Applicant,\n\nWe need you to confirm your password to proceed with your job application. Click the link below to verify:\n\n[Confirm Now](http://jobapply-secure.com/confirm)\n\nThank you for your prompt attention.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The domain 'jobapply-secure.com' is a throwaway domain, indicative of phishing."
+  },
+  {
+    "id": "sofia-cred-04",
+    "persona": "sofia",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Email from a fake scholarship service.",
+    "from": "sofia.scholarships@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Confirmation Needed for Your Scholarship Application",
+    "body": "---------- Forwarded message ---------\nFrom: Scholarship Services <support@scholarshipverify.com>\nDate: 2023-10-04\nSubject: Confirmation Needed for Your Scholarship Application\nTo: sofia.scholarships@gmail.com\n\nDear Sofia,\n\nTo continue processing your scholarship application, please log in to confirm your details:\n\n[Login Here](http://scholarshipverify.com/login)\n\nBest regards.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      18
+    ],
+    "expectNotes": "The domain 'scholarshipverify.com' is not legitimate, marking this as a phishing attempt."
+  },
+  {
+    "id": "sofia-cred-05",
+    "persona": "sofia",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing attempt posing as a refund request.",
+    "from": "sofia.refunds@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Verify Your Tuition Refund",
+    "body": "---------- Forwarded message ---------\nFrom: Tuition Refund <noreply@tuitionrefund-secure.com>\nDate: 2023-10-05\nSubject: Verify Your Tuition Refund\nTo: sofia.refunds@gmail.com\n\nHi Sofia,\n\nYou have a pending tuition refund. Please confirm your identity by logging in via the link below:\n\n[Verify Refund](http://tuitionrefund-secure.com/verify)\n\nThank you.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "The domain 'tuitionrefund-secure.com' is a lookalike domain, indicative of a phishing scheme."
+  },
+  {
+    "id": "sofia-cred-06",
+    "persona": "sofia",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Fake notification about course access.",
+    "from": "sofia.courses@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Immediate Action Required: Course Access",
+    "body": "---------- Forwarded message ---------\nFrom: Course Access Team <support@courseaccess-secure.com>\nDate: 2023-10-06\nSubject: Immediate Action Required: Course Access\nTo: sofia.courses@gmail.com\n\nDear Sofia,\n\nYour course access is about to expire. Please confirm your password through the link below:\n\n[Confirm Access](http://courseaccess-secure.com/confirm)\n\nBest regards.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      17
+    ],
+    "expectNotes": "The domain 'courseaccess-secure.com' is not legitimate, thus it's a phishing attempt."
+  },
+  {
+    "id": "sofia-cred-07",
+    "persona": "sofia",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing email regarding job verification.",
+    "from": "sofia.jobs@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Verification Needed for Your Job Profile",
+    "body": "---------- Forwarded message ---------\nFrom: Job Verification <info@jobverify-secure.com>\nDate: 2023-10-07\nSubject: Verification Needed for Your Job Profile\nTo: sofia.jobs@gmail.com\n\nHello Sofia,\n\nTo ensure your job profile is up-to-date, please confirm your details by logging in through:\n\n[Verify Profile](http://jobverify-secure.com/verify)\n\nThank you.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      13
+    ],
+    "expectNotes": "The domain 'jobverify-secure.com' is a throwaway domain, confirming it's a phishing attempt."
+  },
+  {
+    "id": "sofia-cred-08",
+    "persona": "sofia",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Fake email requesting financial verification.",
+    "from": "sofia.finance@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Verify Your Financial Information",
+    "body": "---------- Forwarded message ---------\nFrom: Financial Information <support@finverify-secure.com>\nDate: 2023-10-08\nSubject: Verify Your Financial Information\nTo: sofia.finance@gmail.com\n\nDear Sofia,\n\nWe need you to confirm your password to secure your financial information. Please log in at:\n\n[Secure Your Info](http://finverify-secure.com/secure)\n\nBest regards.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      11
+    ],
+    "expectNotes": "The domain 'finverify-secure.com' is a lookalike domain, marking this as a phishing attempt."
+  },
+  {
+    "id": "sofia-fwd-01",
+    "persona": "sofia",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Phishing attempt for PayPal credentials.",
+    "from": "sofia@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Important: Your PayPal Account Needs Verification",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal Support <support@paypa1-secure.com>\nDate: 2023-10-01\nSubject: Important: Your PayPal Account Needs Verification\nTo: sofia@gmail.com\n\nDear Sofia,\n\nWe noticed unusual activity in your account. Please verify your identity by clicking the link below:\n\n[Verify Now](http://paypa1-secure.com/verify)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "The domain paypa1-secure.com is a lookalike of PayPal, signaling a phishing attempt."
+  },
+  {
+    "id": "sofia-fwd-02",
+    "persona": "sofia",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Attempt to harvest Microsoft account credentials.",
+    "from": "sofia@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Your Microsoft Account is at Risk",
+    "body": "---------- Forwarded message ---------\nFrom: Microsoft Security <alert@microsoft-verify.com>\nDate: 2023-10-01\nSubject: Your Microsoft Account is at Risk\nTo: sofia@gmail.com\n\nDear Sofia,\n\nWe detected a login attempt from an unrecognized device. To secure your account, please confirm your identity:\n\n[Secure My Account](http://microsoft-verify.com/secure)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The domain microsoft-verify.com is a fraudulent lookalike of Microsoft, indicating a phishing scheme."
+  },
+  {
+    "id": "sofia-fwd-03",
+    "persona": "sofia",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fraudulent refund request for tuition fees.",
+    "from": "sofia@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Tuition Refund Processed",
+    "body": "---------- Forwarded message ---------\nFrom: University Billing <billing@tuition-refund.com>\nDate: 2023-10-01\nSubject: Tuition Refund Processed\nTo: sofia@gmail.com\n\nHello Sofia,\n\nYour recent tuition refund has been processed. To view details and confirm your account details, click below:\n\n[View Refund](http://tuition-refund.com/details)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "The domain tuition-refund.com is not legitimate and aims to collect sensitive information."
+  },
+  {
+    "id": "sofia-fwd-04",
+    "persona": "sofia",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Phishing email mimicking an internship platform.",
+    "from": "sofia@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Internship Application Status Update",
+    "body": "---------- Forwarded message ---------\nFrom: Handshake Support <support@handshake-update.com>\nDate: 2023-10-01\nSubject: Internship Application Status Update\nTo: sofia@gmail.com\n\nDear Sofia,\n\nYour application status has been updated. Please verify your account to view details:\n\n[Check Status](http://handshake-update.com/status)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      18
+    ],
+    "expectNotes": "The domain handshake-update.com is a fake lookalike aiming to steal login credentials."
+  },
+  {
+    "id": "sofia-fwd-05",
+    "persona": "sofia",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fake IRS tax refund email.",
+    "from": "sofia@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Your IRS Tax Refund is Ready",
+    "body": "---------- Forwarded message ---------\nFrom: IRS Notification <notify@irs-refund.com>\nDate: 2023-10-01\nSubject: Your IRS Tax Refund is Ready\nTo: sofia@gmail.com\n\nDear Sofia,\n\nYour tax refund has been processed. Please confirm your details to receive the funds:\n\n[Claim Refund](http://irs-refund.com/claim)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "The domain irs-refund.com is a deceptive lookalike, indicating a phishing attempt."
+  },
+  {
+    "id": "sofia-fwd-06",
+    "persona": "sofia",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Attempt to harvest credentials for a Dropbox account.",
+    "from": "sofia@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Action Required: Dropbox Account Verification",
+    "body": "---------- Forwarded message ---------\nFrom: Dropbox Team <team@dropbox-secure.com>\nDate: 2023-10-01\nSubject: Action Required: Dropbox Account Verification\nTo: sofia@gmail.com\n\nDear Sofia,\n\nWe need you to verify your Dropbox account to avoid suspension. Click the link below:\n\n[Verify Now](http://dropbox-secure.com/verify)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      11
+    ],
+    "expectNotes": "The domain dropbox-secure.com is a fraudulent variant, indicating a phishing attempt."
+  },
+  {
+    "id": "sofia-fwd-07",
+    "persona": "sofia",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Phishing email for scholarship verification.",
+    "from": "sofia@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Scholarship Verification Required",
+    "body": "---------- Forwarded message ---------\nFrom: Scholarship Office <office@scholarship-verification.com>\nDate: 2023-10-01\nSubject: Scholarship Verification Required\nTo: sofia@gmail.com\n\nDear Sofia,\n\nTo continue receiving your scholarship, please verify your information:\n\n[Verify Here](http://scholarship-verification.com/confirm)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      16
+    ],
+    "expectNotes": "The domain scholarship-verification.com is a deceptive lookalike, indicating a phishing attempt."
+  },
+  {
+    "id": "sofia-fwd-08",
+    "persona": "sofia",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fraudulent email mimicking a financial aid service.",
+    "from": "sofia@gmail.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Financial Aid Update Required",
+    "body": "---------- Forwarded message ---------\nFrom: Financial Aid <aid@financial-update.com>\nDate: 2023-10-01\nSubject: Financial Aid Update Required\nTo: sofia@gmail.com\n\nDear Sofia,\n\nYour financial aid information needs to be updated. Please click the link below to proceed:\n\n[Update Info](http://financial-update.com/update)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      13
+    ],
+    "expectNotes": "The domain financial-update.com is a fraudulent lookalike aimed at stealing user credentials."
+  },
+  {
+    "id": "robert-receipt-01",
+    "persona": "robert",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Chase bank statement receipt.",
+    "from": "robert@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Your Chase Statement is Ready",
+    "body": "---------- Forwarded message ---------\nFrom: Chase Bank <notifications@chase.com>\nDate: 2023-10-01\nSubject: Your Chase Statement is Ready\nTo: robert@gmail.com\n\nDear Robert,\n\nYour monthly statement is now available for review. Please find it attached to this email.\n\nBest regards,\nChase Bank.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "The sender is a legitimate bank domain and the content is a standard notification."
+  },
+  {
+    "id": "robert-delivery-02",
+    "persona": "robert",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "UPS package delivery confirmation.",
+    "from": "robert@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: UPS Delivery Notification",
+    "body": "---------- Forwarded message ---------\nFrom: UPS <no-reply@ups.com>\nDate: 2023-10-02\nSubject: UPS Delivery Notification\nTo: robert@gmail.com\n\nHello Robert,\n\nYour package has been shipped and is scheduled for delivery on 2023-10-05. Your tracking number is 1Z9999999999999999.\n\nThank you for choosing UPS!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      92
+    ],
+    "expectNotes": "Legitimate sender with real tracking information."
+  },
+  {
+    "id": "robert-code-03",
+    "persona": "robert",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "One-time code for account verification.",
+    "from": "robert@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Your Verification Code",
+    "body": "---------- Forwarded message ---------\nFrom: Fidelity <alerts@fidelity.com>\nDate: 2023-10-03\nSubject: Your Verification Code\nTo: robert@gmail.com\n\nDear Robert,\n\nYour verification code is 481920. Please enter this code to verify your account.\n\nThank you, Fidelity.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "The email contains a legitimate verification code from a trusted financial institution."
+  },
+  {
+    "id": "robert-shipping-04",
+    "persona": "robert",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "FedEx shipping confirmation email.",
+    "from": "robert@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: FedEx Shipping Confirmation",
+    "body": "---------- Forwarded message ---------\nFrom: FedEx <tracking@fedex.com>\nDate: 2023-10-04\nSubject: FedEx Shipping Confirmation\nTo: robert@gmail.com\n\nDear Robert,\n\nYour package has been shipped. Tracking number: 123456789012. You can track your shipment at fedex.com.\n\nBest,\nFedEx Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      93
+    ],
+    "expectNotes": "Real domain and standard shipping notice from FedEx."
+  },
+  {
+    "id": "robert-receipt-05",
+    "persona": "robert",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Amazon order receipt.",
+    "from": "robert@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Your Amazon Order Receipt",
+    "body": "---------- Forwarded message ---------\nFrom: Amazon <order-update@amazon.com>\nDate: 2023-10-05\nSubject: Your Amazon Order Receipt\nTo: robert@gmail.com\n\nHello Robert,\n\nThank you for your order! Your receipt is attached for your records.\n\nSincerely,\nAmazon.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      94
+    ],
+    "expectNotes": "Amazon's receipt is a common and expected email for online purchases."
+  },
+  {
+    "id": "robert-alert-06",
+    "persona": "robert",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Google account security alert.",
+    "from": "robert@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Google Account Security Alert",
+    "body": "---------- Forwarded message ---------\nFrom: Google <security-alerts@google.com>\nDate: 2023-10-06\nSubject: Google Account Security Alert\nTo: robert@gmail.com\n\nDear Robert,\n\nWe noticed a new sign-in to your account from a device not typically used. If this was you, no further action is needed. If not, please secure your account.\n\nBest,\nGoogle",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      91
+    ],
+    "expectNotes": "Google's security alert is a standard safety communication."
+  },
+  {
+    "id": "robert-review-07",
+    "persona": "robert",
+    "archetype": "legit-transactional",
+    "expect": "REVIEW",
+    "desc": "Potentially ambiguous email from DocuSign.",
+    "from": "robert@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Document for Review",
+    "body": "---------- Forwarded message ---------\nFrom: DocuSign <notifications@docusign.net>\nDate: 2023-10-07\nSubject: Document for Review\nTo: robert@gmail.com\n\nHello Robert,\n\nYou have a document waiting for your review. Please check your DocuSign account for details.\n\nRegards,\nDocuSign",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      75
+    ],
+    "expectNotes": "The domain is legitimate, but the email lacks specific details about the document."
+  },
+  {
+    "id": "robert-invoice-08",
+    "persona": "robert",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Mailchimp invoice notification.",
+    "from": "robert@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Mailchimp Invoice",
+    "body": "---------- Forwarded message ---------\nFrom: Mailchimp <invoices@mailchimp.com>\nDate: 2023-10-08\nSubject: Mailchimp Invoice\nTo: robert@gmail.com\n\nHi Robert,\n\nYour invoice for the recent Mailchimp campaign is attached. Please review it at your convenience.\n\nBest,\nMailchimp Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      88
+    ],
+    "expectNotes": "Mailchimp's invoice is a standard transactional email."
+  },
+  {
+    "id": "robert-delivery-01",
+    "persona": "robert",
+    "archetype": "delivery-fee",
+    "expect": "DANGER",
+    "desc": "Package held for redelivery fee.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Important: Package Delivery Fee Required",
+    "body": "---------- Forwarded message ---------\nFrom: USPS Support <support@usps-delivery-fee.com>\nDate: Mon, Oct 23 2023\nSubject: Important: Package Delivery Fee Required\nTo: robert.thrifter@gmail.com\n\nDear Customer,\nYour package is currently on hold due to an outstanding redelivery fee. Please click the link below to resolve this issue and ensure your delivery.\n[Pay Fee Now](http://usps-delivery-fee.com/resolution)\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The link points to a suspicious domain that mimics USPS, indicating a scam."
+  },
+  {
+    "id": "robert-delivery-02",
+    "persona": "robert",
+    "archetype": "delivery-fee",
+    "expect": "DANGER",
+    "desc": "Urgent: Pay your package delivery fee now.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Urgent: Action Required for Your Package",
+    "body": "---------- Forwarded message ---------\nFrom: FedEx Customer Service <service@fedex-delivery-fee.com>\nDate: Tue, Oct 24 2023\nSubject: Urgent: Action Required for Your Package\nTo: robert.thrifter@gmail.com\n\nHello,\nYour FedEx package is pending due to an unpaid delivery fee. Please click here to make the payment and avoid any delays.\n[Pay Now](http://fedex-delivery-fee.com/payment)\nBest regards,\nFedEx Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "The domain used is not a legitimate FedEx domain, indicating a phishing attempt."
+  },
+  {
+    "id": "robert-delivery-03",
+    "persona": "robert",
+    "archetype": "delivery-fee",
+    "expect": "DANGER",
+    "desc": "Action needed: Pay your USPS delivery fee.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Package Delivery Fee Notification",
+    "body": "---------- Forwarded message ---------\nFrom: USPS Notification <notify@usps-recharge.com>\nDate: Wed, Oct 25 2023\nSubject: Package Delivery Fee Notification\nTo: robert.thrifter@gmail.com\n\nDear Robert,\nYour package is being held due to an unpaid delivery fee. Please settle this to ensure timely delivery.\n[Pay Delivery Fee](http://usps-recharge.com/settle)\nThank you for your prompt attention!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "The link leads to a domain that is not associated with USPS, marking it as a scam."
+  },
+  {
+    "id": "robert-delivery-04",
+    "persona": "robert",
+    "archetype": "delivery-fee",
+    "expect": "DANGER",
+    "desc": "Your package is on hold due to fee.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Action Required: Package Fee",
+    "body": "---------- Forwarded message ---------\nFrom: UPS Alert <alert@ups-delivery-fee.com>\nDate: Thu, Oct 26 2023\nSubject: Action Required: Package Fee\nTo: robert.thrifter@gmail.com\n\nDear Customer,\nTo release your package, please pay the outstanding fee now.\n[Click Here](http://ups-delivery-fee.com/release)\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "The domain is fake and mimics UPS, making it a clear phishing attempt."
+  },
+  {
+    "id": "robert-delivery-05",
+    "persona": "robert",
+    "archetype": "delivery-fee",
+    "expect": "DANGER",
+    "desc": "Pay your redelivery fee immediately.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Immediate Action Required for Your Package",
+    "body": "---------- Forwarded message ---------\nFrom: Delivery Service <service@usps-fee.com>\nDate: Fri, Oct 27 2023\nSubject: Immediate Action Required for Your Package\nTo: robert.thrifter@gmail.com\n\nDear Robert,\nYour package is on hold due to an unpaid delivery fee. Please pay immediately to avoid return to sender.\n[Pay Here](http://usps-fee.com/payment)\nBest regards,\nUSPS",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      18
+    ],
+    "expectNotes": "The domain is suspicious and closely resembles USPS, indicating it is a phishing email."
+  },
+  {
+    "id": "robert-delivery-06",
+    "persona": "robert",
+    "archetype": "delivery-fee",
+    "expect": "DANGER",
+    "desc": "Package delivery fee outstanding.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Action Required: Delivery Fee",
+    "body": "---------- Forwarded message ---------\nFrom: FedEx Notification <notify@fedex-delivery-fee.com>\nDate: Sat, Oct 28 2023\nSubject: Action Required: Delivery Fee\nTo: robert.thrifter@gmail.com\n\nHello,\nYour package cannot be delivered until the outstanding fee is paid. Please click the link below to settle the payment.\n[Settle Fee](http://fedex-delivery-fee.com/settle)\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      17
+    ],
+    "expectNotes": "The link redirects to a deceptive domain posing as FedEx, marking it as a scam."
+  },
+  {
+    "id": "robert-delivery-07",
+    "persona": "robert",
+    "archetype": "delivery-fee",
+    "expect": "DANGER",
+    "desc": "Redelivery fee required for your package.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Important: Redelivery Fee",
+    "body": "---------- Forwarded message ---------\nFrom: USPS Updates <updates@usps-fee-update.com>\nDate: Sun, Oct 29 2023\nSubject: Important: Redelivery Fee\nTo: robert.thrifter@gmail.com\n\nDear Customer,\nYour package is pending due to an unpaid redelivery fee. Please click the link below to make the payment.\n[Pay Now](http://usps-fee-update.com/payment)\nRegards,\nUSPS Updates",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      16
+    ],
+    "expectNotes": "The domain used is not legitimate, indicating a phishing attempt."
+  },
+  {
+    "id": "robert-delivery-08",
+    "persona": "robert",
+    "archetype": "delivery-fee",
+    "expect": "REVIEW",
+    "desc": "Possible redelivery fee request.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Action Needed: Package Delivery Fee",
+    "body": "---------- Forwarded message ---------\nFrom: FedEx Service <service@fedex-delivery.com>\nDate: Mon, Oct 30 2023\nSubject: Action Needed: Package Delivery Fee\nTo: robert.thrifter@gmail.com\n\nDear Robert,\nYour package requires a delivery fee to be paid. Please follow the link below to complete the payment.\n[Pay Here](http://fedex-delivery.com/payment)\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      60
+    ],
+    "expectNotes": "While the domain is close to legitimate, it may still be a phishing attempt due to unusual context."
+  },
+  {
+    "id": "robert-pkg-01",
+    "persona": "robert",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Suspicious package delivery notice from a lookalike domain.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Your package has been shipped!",
+    "body": "---------- Forwarded message ---------\nFrom: USPS Notification <noreply@usps-secure.com>\nDate: Mon, 23 Oct 2023 10:15:30 -0400\nSubject: Your package has been shipped!\nTo: robert.thrifter@gmail.com\n\nDear Robert,\n\nYour package has been shipped and will arrive shortly. Please verify your shipping address here: https://usps-secure.com/verify-address.\n\nThank you,\nUSPS",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "The email uses a lookalike domain 'usps-secure.com', which is not legitimate."
+  },
+  {
+    "id": "robert-bank-02",
+    "persona": "robert",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Phishing attempt for bank account verification.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Important: Your Chase account needs verification",
+    "body": "---------- Forwarded message ---------\nFrom: Chase Security <security@chase-verify.net>\nDate: Tue, 24 Oct 2023 14:45:12 -0400\nSubject: Important: Your Chase account needs verification\nTo: robert.thrifter@gmail.com\n\nDear Customer,\n\nWe noticed unusual activity in your account. Please verify your identity to keep your account secure: https://chase-verify.net/secure-login.\n\nBest,\nChase Security Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "The domain 'chase-verify.net' is a lookalike and not a legitimate Chase domain."
+  },
+  {
+    "id": "robert-deals-03",
+    "persona": "robert",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fake deal alert from a phishing site.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Exclusive offer just for you!",
+    "body": "---------- Forwarded message ---------\nFrom: Best Deals <info@deals-offer.com>\nDate: Wed, 25 Oct 2023 08:30:50 -0400\nSubject: Exclusive offer just for you!\nTo: robert.thrifter@gmail.com\n\nDear Robert,\n\nYou have been selected for an exclusive deal! Claim your discount here: https://deals-offer.com/claim-now.\n\nHurry, this offer expires soon!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The domain 'deals-offer.com' is not a recognized legitimate source."
+  },
+  {
+    "id": "robert-prize-04",
+    "persona": "robert",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Prize scam email using a lookalike domain.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Congratulations! You've won a prize!",
+    "body": "---------- Forwarded message ---------\nFrom: Prize Notification <win@prize-secure.com>\nDate: Thu, 26 Oct 2023 09:00:00 -0400\nSubject: Congratulations! You've won a prize!\nTo: robert.thrifter@gmail.com\n\nDear Robert,\n\nYou are a lucky winner! Claim your prize here: https://prize-secure.com/claim.\n\nBest wishes,\nPrize Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      18
+    ],
+    "expectNotes": "The domain 'prize-secure.com' resembles legitimate domains but is not valid."
+  },
+  {
+    "id": "robert-pkg-05",
+    "persona": "robert",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fake shipment notification from a phishing sender.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Your shipment is on the way!",
+    "body": "---------- Forwarded message ---------\nFrom: FedEx <update@fedex-shipping.com>\nDate: Fri, 27 Oct 2023 11:15:00 -0400\nSubject: Your shipment is on the way!\nTo: robert.thrifter@gmail.com\n\nHello Robert,\n\nYour shipment is scheduled for delivery. Track it here: https://fedex-shipping.com/track.\n\nThank you for choosing FedEx!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "The domain 'fedex-shipping.com' is a fraudulent lookalike."
+  },
+  {
+    "id": "robert-bank-06",
+    "persona": "robert",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Phishing attempt for bank account details.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Action Required: Verify your Fidelity account",
+    "body": "---------- Forwarded message ---------\nFrom: Fidelity Alert <alert@fidelity-accounts.com>\nDate: Sat, 28 Oct 2023 15:45:50 -0400\nSubject: Action Required: Verify your Fidelity account\nTo: robert.thrifter@gmail.com\n\nDear Robert,\n\nPlease verify your account information to prevent suspension: https://fidelity-accounts.com/verify.\n\nRegards,\nFidelity Support",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      9
+    ],
+    "expectNotes": "The domain 'fidelity-accounts.com' is a dangerous lookalike."
+  },
+  {
+    "id": "robert-deals-07",
+    "persona": "robert",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Unsolicited email claiming to offer discounts.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Limited Time Offer Just for You!",
+    "body": "---------- Forwarded message ---------\nFrom: Special Offers <offers@exclusive-deals.com>\nDate: Sun, 29 Oct 2023 12:30:12 -0400\nSubject: Limited Time Offer Just for You!\nTo: robert.thrifter@gmail.com\n\nHello Robert,\n\nDon’t miss out on this limited-time offer! Click here to redeem: https://exclusive-deals.com/redeem.\n\nCheers,\nExclusive Deals Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      11
+    ],
+    "expectNotes": "The domain 'exclusive-deals.com' is fabricated and poses a risk."
+  },
+  {
+    "id": "robert-prize-08",
+    "persona": "robert",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fake prize notification from a fraudulent source.",
+    "from": "robert.thrifter@gmail.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: You're a winner! Claim your prize now!",
+    "body": "---------- Forwarded message ---------\nFrom: Winning Notification <notify@winner-secure.com>\nDate: Mon, 30 Oct 2023 10:00:00 -0400\nSubject: You're a winner! Claim your prize now!\nTo: robert.thrifter@gmail.com\n\nDear Robert,\n\nYou have won a fantastic prize! Claim it now at: https://winner-secure.com/claim.\n\nCongratulations!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      13
+    ],
+    "expectNotes": "The domain 'winner-secure.com' is a deceptive lookalike."
+  },
+  {
+    "id": "robert-email-01",
+    "persona": "robert",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing email pretending to be from Chase.",
+    "from": "robert@example.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Important: Your Chase Account Needs Verification",
+    "body": "---------- Forwarded message ---------\nFrom: Chase Security <support@chase-verify.net>\nDate: October 1, 2023\nSubject: Important: Your Chase Account Needs Verification\nTo: robert@example.com\n\nDear Customer,\n\nWe've detected unusual activity in your account. Please log in to verify your identity and confirm your password at the following link: https://chase-verify.net/security-check.\n\nThank you,\nChase Security Team.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "The domain chase-verify.net is a known phishing domain, indicating a high risk."
+  },
+  {
+    "id": "robert-email-02",
+    "persona": "robert",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Fake FedEx email requesting login confirmation.",
+    "from": "robert@example.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: FedEx Delivery Issue - Action Required",
+    "body": "---------- Forwarded message ---------\nFrom: FedEx Support <support@fedex-delivery-info.com>\nDate: October 2, 2023\nSubject: FedEx Delivery Issue - Action Required\nTo: robert@example.com\n\nDear Robert,\n\nWe encountered an issue with your recent shipment. Please confirm your identity by logging in here: https://fedex-delivery-info.com/confirm.\n\nBest,\nFedEx Customer Service.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "The domain fedex-delivery-info.com is not a legitimate FedEx domain."
+  },
+  {
+    "id": "robert-email-03",
+    "persona": "robert",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing email mimicking Chase account verification.",
+    "from": "robert@example.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Account Security Alert from Chase",
+    "body": "---------- Forwarded message ---------\nFrom: Chase Alerts <alerts@chase-verify.com>\nDate: October 3, 2023\nSubject: Account Security Alert from Chase\nTo: robert@example.com\n\nDear User,\n\nTo ensure your account remains secure, please verify your password by logging in at: https://chase-verify.com/login.\n\nRegards,\nChase Alerts Team.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The domain chase-verify.com is a fraudulent domain posing as Chase."
+  },
+  {
+    "id": "robert-email-04",
+    "persona": "robert",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Fake notification about a PayPal account issue.",
+    "from": "robert@example.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: PayPal Account Verification Required",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal Support <support@paypa1-secure.com>\nDate: October 4, 2023\nSubject: PayPal Account Verification Required\nTo: robert@example.com\n\nDear Customer,\n\nYour PayPal account has been temporarily locked. Please verify your password here: https://paypa1-secure.com/verify.\n\nThank you,\nPayPal Support.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      8
+    ],
+    "expectNotes": "The domain paypa1-secure.com is a known phishing site."
+  },
+  {
+    "id": "robert-email-05",
+    "persona": "robert",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing email from fake Amazon account verification.",
+    "from": "robert@example.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Action Required: Verify Your Amazon Account",
+    "body": "---------- Forwarded message ---------\nFrom: Amazon Service <service@amazon-verification.com>\nDate: October 5, 2023\nSubject: Action Required: Verify Your Amazon Account\nTo: robert@example.com\n\nDear Customer,\n\nTo continue using your Amazon account, please verify your email and password at: https://amazon-verification.com/account-check.\n\nSincerely,\nAmazon Customer Service.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      9
+    ],
+    "expectNotes": "The domain amazon-verification.com is not a legitimate Amazon domain."
+  },
+  {
+    "id": "robert-email-06",
+    "persona": "robert",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Fake email from UPS about package delivery.",
+    "from": "robert@example.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: UPS Package Delivery Confirmation",
+    "body": "---------- Forwarded message ---------\nFrom: UPS Notification <notification@ups-delivery-alerts.com>\nDate: October 6, 2023\nSubject: UPS Package Delivery Confirmation\nTo: robert@example.com\n\nHello,\n\nThere was an issue with your package delivery. Please log in to your account for more details: https://ups-delivery-alerts.com/track.\n\nThank you,\nUPS Team.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      20
+    ],
+    "expectNotes": "The domain ups-delivery-alerts.com is a fraudulent site imitating UPS."
+  },
+  {
+    "id": "robert-email-07",
+    "persona": "robert",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing attempt claiming to be from Fidelity.",
+    "from": "robert@example.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Fidelity Account Verification Required",
+    "body": "---------- Forwarded message ---------\nFrom: Fidelity Investments <support@fidelity-account-info.com>\nDate: October 7, 2023\nSubject: Fidelity Account Verification Required\nTo: robert@example.com\n\nDear Robert,\n\nTo protect your account, please verify your login details at: https://fidelity-account-info.com/verify.\n\nBest Regards,\nFidelity Team.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      18
+    ],
+    "expectNotes": "The domain fidelity-account-info.com is fraudulent and used for phishing."
+  },
+  {
+    "id": "robert-email-08",
+    "persona": "robert",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Fake email regarding a Chase account lock.",
+    "from": "robert@example.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Action Required: Your Chase Account is Locked",
+    "body": "---------- Forwarded message ---------\nFrom: Chase Notifications <notification@chase-security.net>\nDate: October 8, 2023\nSubject: Action Required: Your Chase Account is Locked\nTo: robert@example.com\n\nDear Customer,\n\nYour Chase account has been locked due to suspicious activity. Please verify your identity here: https://chase-security.net/lock.\n\nThank you,\nChase Notifications Team.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "The domain chase-security.net is not a legitimate Chase domain."
+  },
+  {
+    "id": "maria-resume-01",
+    "persona": "maria",
+    "archetype": "legit-personal",
+    "expect": "SAFE",
+    "desc": "A forwarded resume from a colleague.",
+    "from": "maria.hr@example.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Resume for John Doe",
+    "body": "---------- Forwarded message ---------\nFrom: Sarah Smith <sarah.smith@gmail.com>\nDate: October 1, 2023\nSubject: Resume for John Doe\nTo: maria.hr@example.com\n\nHi Maria,\n\nPlease find attached the resume for John Doe. He is interested in the HR position. Let me know what you think!\n\nBest,\nSarah",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      []
+    ],
+    "expectNotes": "The email is from a known colleague with a personal Gmail account, which is common in this context."
+  },
+  {
+    "id": "maria-invoice-02",
+    "persona": "maria",
+    "archetype": "legit-personal",
+    "expect": "SAFE",
+    "desc": "A forwarded invoice from a vendor.",
+    "from": "maria.hr@example.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Invoice #12345 from ABC Supplies",
+    "body": "---------- Forwarded message ---------\nFrom: ABC Supplies <invoices@abcsupplies.com>\nDate: October 2, 2023\nSubject: Invoice #12345 from ABC Supplies\nTo: maria.hr@example.com\n\nDear Maria,\n\nAttached is the invoice for the supplies delivered last month. Please let me know if you have any questions.\n\nThank you,\nJohn",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      []
+    ],
+    "expectNotes": "The email is from a legitimate business vendor, and the invoice is related to a recent purchase."
+  },
+  {
+    "id": "maria-benefits-03",
+    "persona": "maria",
+    "archetype": "legit-personal",
+    "expect": "SAFE",
+    "desc": "A forwarded benefits update from HR.",
+    "from": "maria.hr@example.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Important Benefits Update",
+    "body": "---------- Forwarded message ---------\nFrom: HR Department <hr@company.com>\nDate: October 3, 2023\nSubject: Important Benefits Update\nTo: maria.hr@example.com\n\nHi Team,\n\nPlease see the attached document regarding updates to our benefits plans for the upcoming year.\n\nBest,\nHR",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      []
+    ],
+    "expectNotes": "The email is from the HR department, which is a legitimate sender regarding benefits information."
+  },
+  {
+    "id": "maria-docusign-04",
+    "persona": "maria",
+    "archetype": "legit-personal",
+    "expect": "SAFE",
+    "desc": "A forwarded Docusign request.",
+    "from": "maria.hr@example.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Please sign the document",
+    "body": "---------- Forwarded message ---------\nFrom: Docusign Notification <notification@docusign.net>\nDate: October 4, 2023\nSubject: Please sign the document\nTo: maria.hr@example.com\n\nHi Maria,\n\nYou have a document pending your signature. Please review and sign at your earliest convenience.\n\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      []
+    ],
+    "expectNotes": "The email is a legitimate Docusign notification, which is a common tool used for document signatures."
+  },
+  {
+    "id": "maria-review-05",
+    "persona": "maria",
+    "archetype": "legit-personal",
+    "expect": "REVIEW",
+    "desc": "An ambiguous email from a colleague with a personal address.",
+    "from": "maria.hr@example.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Possible candidate recommendation",
+    "body": "---------- Forwarded message ---------\nFrom: Alex Johnson <alex.johnson@randommail.com>\nDate: October 5, 2023\nSubject: Possible candidate recommendation\nTo: maria.hr@example.com\n\nHey Maria,\n\nI came across a candidate that might be a good fit for us. I've attached his details for your review. Let me know your thoughts.\n\nCheers,\nAlex",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      []
+    ],
+    "expectNotes": "The sender has a personal email address, which raises some ambiguity despite the content being work-related."
+  },
+  {
+    "id": "maria-updates-06",
+    "persona": "maria",
+    "archetype": "legit-personal",
+    "expect": "SAFE",
+    "desc": "A forwarded company update email.",
+    "from": "maria.hr@example.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Company Policy Updates",
+    "body": "---------- Forwarded message ---------\nFrom: Company Updates <updates@company.com>\nDate: October 6, 2023\nSubject: Company Policy Updates\nTo: maria.hr@example.com\n\nDear Team,\n\nPlease find attached the latest updates to our company policies. It's important that everyone reviews these changes.\n\nBest,\nHR",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      []
+    ],
+    "expectNotes": "The email is from a legitimate company domain, providing important policy updates."
+  },
+  {
+    "id": "maria-zoom-07",
+    "persona": "maria",
+    "archetype": "legit-personal",
+    "expect": "SAFE",
+    "desc": "A forwarded Zoom meeting invite.",
+    "from": "maria.hr@example.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Zoom Meeting Scheduled",
+    "body": "---------- Forwarded message ---------\nFrom: Zoom Invitation <invitation@zoom.us>\nDate: October 7, 2023\nSubject: Zoom Meeting Scheduled\nTo: maria.hr@example.com\n\nHi Maria,\n\nYou have a Zoom meeting scheduled for next week. Please find the details attached.\n\nThanks!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      []
+    ],
+    "expectNotes": "The email is from Zoom, a legitimate service for scheduling meetings."
+  },
+  {
+    "id": "maria-linkedin-08",
+    "persona": "maria",
+    "archetype": "legit-personal",
+    "expect": "SAFE",
+    "desc": "A forwarded LinkedIn connection request.",
+    "from": "maria.hr@example.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: New Connection Request on LinkedIn",
+    "body": "---------- Forwarded message ---------\nFrom: LinkedIn <notification@linkedin.com>\nDate: October 8, 2023\nSubject: New Connection Request on LinkedIn\nTo: maria.hr@example.com\n\nHi Maria,\n\nYou have a new connection request from Jane Doe. Check her profile for more information.\n\nBest,\nLinkedIn",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      []
+    ],
+    "expectNotes": "The email is from LinkedIn, a legitimate platform for professional networking."
+  },
+  {
+    "id": "maria-resume-01",
+    "persona": "maria",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Resume submission from a candidate.",
+    "from": "maria.hr@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Resume for HR Coordinator Position",
+    "body": "---------- Forwarded message ---------\nFrom: John Doe <johndoe@gmail.com>\nDate: October 1, 2023\nSubject: Resume for HR Coordinator Position\nTo: maria.hr@gmail.com\n\nDear Maria,\n\nPlease find my resume attached for the HR Coordinator position. I look forward to your response.\n\nBest regards,\nJohn Doe",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "The sender is a candidate, and the email contains a resume submission."
+  },
+  {
+    "id": "maria-invoice-02",
+    "persona": "maria",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Invoice for services rendered.",
+    "from": "maria.hr@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Invoice #12345 from ABC Services",
+    "body": "---------- Forwarded message ---------\nFrom: ABC Services <billing@abcservices.com>\nDate: October 2, 2023\nSubject: Invoice #12345 from ABC Services\nTo: maria.hr@gmail.com\n\nDear Maria,\n\nAttached is invoice #12345 for the services rendered in September. Please let us know if you have any questions.\n\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Legitimate invoice from a known service provider."
+  },
+  {
+    "id": "maria-benefits-03",
+    "persona": "maria",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Benefits enrollment reminder.",
+    "from": "maria.hr@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Benefits Enrollment Deadline Reminder",
+    "body": "---------- Forwarded message ---------\nFrom: Gusto <no-reply@gusto.com>\nDate: October 3, 2023\nSubject: Benefits Enrollment Deadline Reminder\nTo: maria.hr@gmail.com\n\nHello Maria,\n\nThis is a reminder that the benefits enrollment period ends on October 15th. Please log in to Gusto to review your options.\n\nBest regards,\nGusto Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Official reminder from the benefits provider."
+  },
+  {
+    "id": "maria-docusign-04",
+    "persona": "maria",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Document to sign via DocuSign.",
+    "from": "maria.hr@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Please Sign Document",
+    "body": "---------- Forwarded message ---------\nFrom: DocuSign <no-reply@docusign.net>\nDate: October 4, 2023\nSubject: Please Sign Document\nTo: maria.hr@gmail.com\n\nHi Maria,\n\nYou have a document waiting for your signature. Please review and sign at your earliest convenience.\n\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Legitimate request to sign a document."
+  },
+  {
+    "id": "maria-code-05",
+    "persona": "maria",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "One-time code delivery.",
+    "from": "maria.hr@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Your One-Time Code",
+    "body": "---------- Forwarded message ---------\nFrom: Google <no-reply@google.com>\nDate: October 5, 2023\nSubject: Your One-Time Code\nTo: maria.hr@gmail.com\n\nHello Maria,\n\nYour code is 481920. Please use this code to verify your account.\n\nBest, \nGoogle Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "A legitimate one-time code for account verification."
+  },
+  {
+    "id": "maria-vendor-06",
+    "persona": "maria",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Notification of vendor bank change.",
+    "from": "maria.hr@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Important Update: Vendor Bank Change",
+    "body": "---------- Forwarded message ---------\nFrom: XYZ Supply <info@xyzsupply.com>\nDate: October 6, 2023\nSubject: Important Update: Vendor Bank Change\nTo: maria.hr@gmail.com\n\nDear Maria,\n\nWe would like to inform you that our bank details have changed. Please update your records accordingly.\n\nBest regards,\nXYZ Supply Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Legitimate update from a trusted vendor."
+  },
+  {
+    "id": "maria-review-07",
+    "persona": "maria",
+    "archetype": "legit-transactional",
+    "expect": "REVIEW",
+    "desc": "Ambiguous shipping confirmation from Amazon.",
+    "from": "maria.hr@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Your Amazon Order Confirmation",
+    "body": "---------- Forwarded message ---------\nFrom: Amazon <confirmation@amazon.com>\nDate: October 7, 2023\nSubject: Your Amazon Order Confirmation\nTo: maria.hr@gmail.com\n\nHi Maria,\n\nThank you for your order! Your order number is 987654321. If you have any questions, feel free to contact us.\n\nBest, \nAmazon Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Order confirmation seems legitimate but requires verification due to potential ambiguity."
+  },
+  {
+    "id": "maria-statement-08",
+    "persona": "maria",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Monthly statement from PayPal.",
+    "from": "maria.hr@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Your PayPal Monthly Statement",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal <statement@paypal.com>\nDate: October 8, 2023\nSubject: Your PayPal Monthly Statement\nTo: maria.hr@gmail.com\n\nHello Maria,\n\nAttached is your monthly statement for your PayPal account. Please review it at your convenience.\n\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "A legitimate monthly statement from PayPal."
+  },
+  {
+    "id": "maria-invoice-01",
+    "persona": "maria",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Invoice with changed bank details and urgency",
+    "from": "maria.cleveland@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Urgent: Updated Payment Instructions for Invoice #12345",
+    "body": "---------- Forwarded message ---------\nFrom: Acme Billing <billing@acme-billing-updates.com>\nDate: Oct 10, 2023\nSubject: Urgent: Updated Payment Instructions for Invoice #12345\nTo: maria.cleveland@gmail.com\n\nDear Maria,\n\nPlease note that our bank details have changed. Kindly update your records and wire the payment to:\n\nNew Bank: XYZ Bank\nAccount Number: 987654321\n\nThank you for your prompt attention to this matter.\n\nBest,\nAcme Billing Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "The sender is using a lookalike domain with urgency to change bank information."
+  },
+  {
+    "id": "maria-invoice-02",
+    "persona": "maria",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Vendor invoice with urgency and attachment",
+    "from": "maria.cleveland@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Important: Payment Required for Invoice #67890",
+    "body": "---------- Forwarded message ---------\nFrom: Invoice Dept <invoices@paypa1-secure.com>\nDate: Oct 12, 2023\nSubject: Important: Payment Required for Invoice #67890\nTo: maria.cleveland@gmail.com\n\nDear Maria,\n\nAttached is Invoice #67890. Please process the payment immediately using the new bank details provided in the document.\n\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The email claims urgency and contains a potentially malicious attachment."
+  },
+  {
+    "id": "maria-invoice-03",
+    "persona": "maria",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Invoice with urgency and bank detail changes",
+    "from": "maria.cleveland@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Immediate Action Required: Invoice Payment",
+    "body": "---------- Forwarded message ---------\nFrom: Payment Updates <updates@chase-verify.net>\nDate: Oct 11, 2023\nSubject: Immediate Action Required: Invoice Payment\nTo: maria.cleveland@gmail.com\n\nHello Maria,\n\nPlease be informed that our payment details have changed. Ensure you use the following information for future payments:\n\nBank: New Bank Corp\nAccount: 1122334455\n\nThank you for your quick response!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "The email uses urgency to prompt a change in bank details, with a suspicious domain."
+  },
+  {
+    "id": "maria-invoice-04",
+    "persona": "maria",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Urgent payment request with forged sender",
+    "from": "maria.cleveland@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Action Needed: Payment for Invoice #54321",
+    "body": "---------- Forwarded message ---------\nFrom: Billing Team <billing@acme-billing-updates.com>\nDate: Oct 13, 2023\nSubject: Action Needed: Payment for Invoice #54321\nTo: maria.cleveland@gmail.com\n\nDear Maria,\n\nThis is a reminder that your payment is overdue. Please wire funds to the new account below:\n\nBank: Future Bank\nAccount: 2233445566\n\nWe appreciate your immediate attention to this matter.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      8
+    ],
+    "expectNotes": "Sender uses a forged domain with a high-pressure tactic to change bank details."
+  },
+  {
+    "id": "maria-invoice-05",
+    "persona": "maria",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Invoice with changed bank details and urgency",
+    "from": "maria.cleveland@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Payment Instructions Updated for Invoice #13579",
+    "body": "---------- Forwarded message ---------\nFrom: Finance Dept <finance@paypa1-secure.com>\nDate: Oct 14, 2023\nSubject: Payment Instructions Updated for Invoice #13579\nTo: maria.cleveland@gmail.com\n\nHi Maria,\n\nPlease find the updated payment instructions for Invoice #13579. Our bank details have changed to the following:\n\nBank: Secure Bank\nAccount No: 9988776655\n\nThank you for your urgent attention!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      18
+    ],
+    "expectNotes": "The email uses a fake domain and claims urgency for a bank detail change."
+  },
+  {
+    "id": "maria-invoice-06",
+    "persona": "maria",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Urgent invoice with altered bank info",
+    "from": "maria.cleveland@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Immediate Payment Required for Invoice #24680",
+    "body": "---------- Forwarded message ---------\nFrom: Accounts Payable <billing@chase-verify.net>\nDate: Oct 15, 2023\nSubject: Immediate Payment Required for Invoice #24680\nTo: maria.cleveland@gmail.com\n\nDear Maria,\n\nThis is a reminder that your payment for Invoice #24680 is due. Please update your records as our bank details are now:\n\nBank: New Bank Ltd.\nAccount: 5566443322\n\nWe appreciate your prompt response!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      11
+    ],
+    "expectNotes": "The email uses a forged domain and pressures for immediate action on bank details."
+  },
+  {
+    "id": "maria-invoice-07",
+    "persona": "maria",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Vendor invoice with urgency and attachment",
+    "from": "maria.cleveland@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: New Payment Instructions for Invoice #35791",
+    "body": "---------- Forwarded message ---------\nFrom: Vendor Services <services@acme-billing-updates.com>\nDate: Oct 16, 2023\nSubject: New Payment Instructions for Invoice #35791\nTo: maria.cleveland@gmail.com\n\nHi Maria,\n\nAttached you will find Invoice #35791. Please wire the payment to the new bank account provided.\n\nThanks for your cooperation!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      9
+    ],
+    "expectNotes": "The sender uses a suspicious domain and includes an attachment for payment."
+  },
+  {
+    "id": "maria-invoice-08",
+    "persona": "maria",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Invoice with urgency and fake sender",
+    "from": "maria.cleveland@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Action Required: Invoice Payment Due",
+    "body": "---------- Forwarded message ---------\nFrom: Billing Notifications <notifications@paypa1-secure.com>\nDate: Oct 17, 2023\nSubject: Action Required: Invoice Payment Due\nTo: maria.cleveland@gmail.com\n\nHello Maria,\n\nYour payment for the attached invoice is now overdue. Please update your bank details to:\n\nBank: New Payments Bank\nAccount No: 3344556677\n\nThanks for your prompt attention!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "The email contains a fake sender and requests urgent payment with altered bank information."
+  },
+  {
+    "id": "maria-cred-01",
+    "persona": "maria",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing attempt posing as Google account verification.",
+    "from": "maria@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Important: Confirm Your Google Account",
+    "body": "---------- Forwarded message ---------\nFrom: Google Support <support@google-verification.com>\nDate: 2023-10-01\nSubject: Important: Confirm Your Google Account\nTo: maria@gmail.com\n\nDear User,\n\nWe noticed unusual activity on your account. Please confirm your password to secure your account: https://google-verification.com/confirm\n\nThank you,\nGoogle Support",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      5
+    ],
+    "expectNotes": "The domain google-verification.com is a throwaway domain, indicating a phishing attempt."
+  },
+  {
+    "id": "maria-cred-02",
+    "persona": "maria",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Impersonating ADP to harvest credentials.",
+    "from": "maria@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Action Required: Verify Your ADP Account",
+    "body": "---------- Forwarded message ---------\nFrom: ADP Security <security@adp-secure.com>\nDate: 2023-10-02\nSubject: Action Required: Verify Your ADP Account\nTo: maria@gmail.com\n\nDear Maria,\n\nTo maintain the security of your ADP account, please verify your login credentials: https://adp-secure.com/verify\n\nBest regards,\nADP Security Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "The domain adp-secure.com is a deceptive domain, indicating a phishing attempt."
+  },
+  {
+    "id": "maria-cred-03",
+    "persona": "maria",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Fake DocuSign email asking for password confirmation.",
+    "from": "maria@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Urgent: Document Signature Required",
+    "body": "---------- Forwarded message ---------\nFrom: DocuSign Alert <alert@docusign-verify.com>\nDate: 2023-10-03\nSubject: Urgent: Document Signature Required\nTo: maria@gmail.com\n\nHello Maria,\n\nYou have a pending document that requires your signature. Please log in to confirm your identity: https://docusign-verify.com/login\n\nThanks,\nDocuSign Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The domain docusign-verify.com is not legitimate, indicating a phishing attempt."
+  },
+  {
+    "id": "maria-cred-04",
+    "persona": "maria",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing email posing as Workday.",
+    "from": "maria@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Verify Your Workday Credentials",
+    "body": "---------- Forwarded message ---------\nFrom: Workday Support <support@workday-portal.com>\nDate: 2023-10-04\nSubject: Verify Your Workday Credentials\nTo: maria@gmail.com\n\nDear Maria,\n\nTo continue accessing your Workday account, please verify your credentials at: https://workday-portal.com/verify\n\nSincerely,\nWorkday Support",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      8
+    ],
+    "expectNotes": "The domain workday-portal.com is a suspicious domain, indicating a phishing attempt."
+  },
+  {
+    "id": "maria-cred-05",
+    "persona": "maria",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Invoice phishing targeting HR roles.",
+    "from": "maria@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Invoice Due - Action Required",
+    "body": "---------- Forwarded message ---------\nFrom: Invoice Department <billing@invoice-secure.com>\nDate: 2023-10-05\nSubject: Invoice Due - Action Required\nTo: maria@gmail.com\n\nDear Maria,\n\nYour invoice is overdue. Please confirm your payment details to avoid penalties: https://invoice-secure.com/pay\n\nThank you,\nInvoice Department",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "The domain invoice-secure.com is a throwaway domain, indicating a phishing attempt."
+  },
+  {
+    "id": "maria-cred-06",
+    "persona": "maria",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Fake PayPal email requesting login verification.",
+    "from": "maria@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Verify Your PayPal Account",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal Support <support@paypal-verify.com>\nDate: 2023-10-06\nSubject: Verify Your PayPal Account\nTo: maria@gmail.com\n\nDear Maria,\n\nWe need you to verify your PayPal account to continue using our services. Please log in here: https://paypal-verify.com/login\n\nBest,\nPayPal Support",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      9
+    ],
+    "expectNotes": "The domain paypal-verify.com is misleading and indicates a phishing attempt."
+  },
+  {
+    "id": "maria-cred-07",
+    "persona": "maria",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Phishing email mimicking BambooHR.",
+    "from": "maria@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Action Required: BambooHR Account Verification",
+    "body": "---------- Forwarded message ---------\nFrom: BambooHR Team <support@bamboohr-secure.com>\nDate: 2023-10-07\nSubject: Action Required: BambooHR Account Verification\nTo: maria@gmail.com\n\nHello Maria,\n\nTo protect your BambooHR account, please confirm your credentials by logging in here: https://bamboohr-secure.com/confirm\n\nThank you,\nBambooHR Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      11
+    ],
+    "expectNotes": "The domain bamboohr-secure.com is a deceptive domain, indicating a phishing attempt."
+  },
+  {
+    "id": "maria-cred-08",
+    "persona": "maria",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Impersonating Gusto for credential harvesting.",
+    "from": "maria@gmail.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Verify Your Gusto Account Information",
+    "body": "---------- Forwarded message ---------\nFrom: Gusto Support <support@gusto-update.com>\nDate: 2023-10-08\nSubject: Verify Your Gusto Account Information\nTo: maria@gmail.com\n\nDear Maria,\n\nWe noticed a change to your account. Please verify your information by logging in: https://gusto-update.com/verify\n\nBest,\nGusto Support",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "The domain gusto-update.com is a throwaway domain, indicating a phishing attempt."
+  },
+  {
+    "id": "deshawn-receipt-01",
+    "persona": "deshawn",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Stripe payment receipt for your transaction.",
+    "from": "deshawn@startup.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Your Receipt from Stripe",
+    "body": "---------- Forwarded message ---------\nFrom: Stripe <receipt@stripe.com>\nDate: 2023-10-15\nSubject: Your Receipt from Stripe\nTo: deshawn@startup.com\n\nThank you for your payment. Your receipt is attached.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "Legit receipt from a well-known payment processor."
+  },
+  {
+    "id": "deshawn-shipping-02",
+    "persona": "deshawn",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Shipping confirmation from UPS.",
+    "from": "deshawn@startup.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Your UPS Shipping Confirmation",
+    "body": "---------- Forwarded message ---------\nFrom: UPS <notifications@ups.com>\nDate: 2023-10-14\nSubject: Your UPS Shipping Confirmation\nTo: deshawn@startup.com\n\nYour package has shipped! Track your shipment here: [UPS Tracking Link]",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "Legitimate shipping confirmation from UPS."
+  },
+  {
+    "id": "deshawn-doc-03",
+    "persona": "deshawn",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Shared document notification from Dropbox.",
+    "from": "deshawn@startup.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Document Shared via Dropbox",
+    "body": "---------- Forwarded message ---------\nFrom: Dropbox <no-reply@dropbox.com>\nDate: 2023-10-13\nSubject: Document Shared via Dropbox\nTo: deshawn@startup.com\n\nYou have received a new document shared with you. View it here: [Dropbox Link]",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      92
+    ],
+    "expectNotes": "Dropbox notification for a shared document."
+  },
+  {
+    "id": "deshawn-giftcard-04",
+    "persona": "deshawn",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Gift card from CEO.",
+    "from": "deshawn@startup.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Your Gift Card from the CEO",
+    "body": "---------- Forwarded message ---------\nFrom: CEO <ceo@startup.com>\nDate: 2023-10-12\nSubject: Your Gift Card from the CEO\nTo: deshawn@startup.com\n\nCongratulations! Here’s your gift card: [Gift Card Link]",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      88
+    ],
+    "expectNotes": "Legitimate gift card email from the company CEO."
+  },
+  {
+    "id": "deshawn-calendar-05",
+    "persona": "deshawn",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Calendar invite for team meeting.",
+    "from": "deshawn@startup.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Team Meeting Invitation",
+    "body": "---------- Forwarded message ---------\nFrom: Google Calendar <calendar@google.com>\nDate: 2023-10-11\nSubject: Team Meeting Invitation\nTo: deshawn@startup.com\n\nYou are invited to a team meeting. Join here: [Google Meet Link]",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      94
+    ],
+    "expectNotes": "Legitimate Google Calendar invitation."
+  },
+  {
+    "id": "deshawn-code-06",
+    "persona": "deshawn",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "One-time code delivery.",
+    "from": "deshawn@startup.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Your One-Time Code",
+    "body": "---------- Forwarded message ---------\nFrom: NoReply <noreply@google.com>\nDate: 2023-10-10\nSubject: Your One-Time Code\nTo: deshawn@startup.com\n\nYour one-time code is 481920. Please use this to verify your account.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      97
+    ],
+    "expectNotes": "Delivery of a one-time code from a trusted source."
+  },
+  {
+    "id": "deshawn-statement-07",
+    "persona": "deshawn",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Bank statement from Chase.",
+    "from": "deshawn@startup.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Your Monthly Bank Statement",
+    "body": "---------- Forwarded message ---------\nFrom: Chase Bank <statement@chase.com>\nDate: 2023-10-09\nSubject: Your Monthly Bank Statement\nTo: deshawn@startup.com\n\nAttached is your monthly bank statement. Please review it.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      91
+    ],
+    "expectNotes": "Official bank statement from Chase."
+  },
+  {
+    "id": "deshawn-review-08",
+    "persona": "deshawn",
+    "archetype": "legit-transactional",
+    "expect": "REVIEW",
+    "desc": "Ambiguous email from Mailchimp.",
+    "from": "deshawn@startup.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Email Campaign Report",
+    "body": "---------- Forwarded message ---------\nFrom: Mailchimp <reports@mailchimp.com>\nDate: 2023-10-08\nSubject: Email Campaign Report\nTo: deshawn@startup.com\n\nHere’s your report for the recent email campaign: [Mailchimp Link]",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      60
+    ],
+    "expectNotes": "Potentially ambiguous email that may require further verification."
+  },
+  {
+    "id": "deshawn-news1-01",
+    "persona": "deshawn",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Monthly newsletter from fitness brand.",
+    "from": "deshawn@legionathletics.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Your September Legion Athletics Newsletter",
+    "body": "---------- Forwarded message ---------\nFrom: Legion Athletics <newsletter@legionathletics.com>\nDate: September 1, 2023\nSubject: Your September Legion Athletics Newsletter\nTo: deshawn@legionathletics.com\n\nHello! Check out our latest products and exclusive offers just for you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "Legit marketing email from a known brand."
+  },
+  {
+    "id": "deshawn-reminder1-02",
+    "persona": "deshawn",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Reminder for upcoming webinar.",
+    "from": "deshawn@zoom.us",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Reminder: Upcoming Webinar on Sales Strategies",
+    "body": "---------- Forwarded message ---------\nFrom: Zoom Webinars <webinars@zoom.us>\nDate: September 5, 2023\nSubject: Reminder: Upcoming Webinar on Sales Strategies\nTo: deshawn@zoom.us\n\nDear Customer, don’t forget to join our webinar this Friday!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "Contains a reminder for a scheduled event, typical for legitimate marketing."
+  },
+  {
+    "id": "deshawn-promo1-03",
+    "persona": "deshawn",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Exclusive promotional offer.",
+    "from": "deshawn@paypal.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Exclusive Offer: Get 20% Off Your Next Purchase!",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal Promotions <promo@paypal.com>\nDate: September 10, 2023\nSubject: Exclusive Offer: Get 20% Off Your Next Purchase!\nTo: deshawn@paypal.com\n\nDear Customer, we’re excited to offer you a special discount!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      92
+    ],
+    "expectNotes": "Promotional emails are common, and this one is from a legitimate domain."
+  },
+  {
+    "id": "deshawn-update1-04",
+    "persona": "deshawn",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Update on account features.",
+    "from": "deshawn@mailchimp.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Important Update on Your Mailchimp Account",
+    "body": "---------- Forwarded message ---------\nFrom: Mailchimp <updates@mailchimp.com>\nDate: September 15, 2023\nSubject: Important Update on Your Mailchimp Account\nTo: deshawn@mailchimp.com\n\nDear Customer, we’ve made some changes to improve your experience!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      88
+    ],
+    "expectNotes": "Account update emails typically come from the service provider."
+  },
+  {
+    "id": "deshawn-webinar2-05",
+    "persona": "deshawn",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Follow-up on webinar attendance.",
+    "from": "deshawn@coursera.org",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Thank You for Attending Our Webinar!",
+    "body": "---------- Forwarded message ---------\nFrom: Coursera <webinars@coursera.org>\nDate: September 20, 2023\nSubject: Thank You for Attending Our Webinar!\nTo: deshawn@coursera.org\n\nDear Participant, we appreciate your attendance and hope you found it valuable!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "Follow-up emails are standard after webinars, confirming legitimacy."
+  },
+  {
+    "id": "deshawn-news2-06",
+    "persona": "deshawn",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Monthly newsletter from project management tool.",
+    "from": "deshawn@docusign.net",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Your Monthly DocuSign Update",
+    "body": "---------- Forwarded message ---------\nFrom: DocuSign <newsletter@docusign.net>\nDate: September 25, 2023\nSubject: Your Monthly DocuSign Update\nTo: deshawn@docusign.net\n\nHello! Here’s what’s new in your account this month!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      93
+    ],
+    "expectNotes": "Legit email providing updates from a recognized service."
+  },
+  {
+    "id": "deshawn-alert1-07",
+    "persona": "deshawn",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Alert about account activity.",
+    "from": "deshawn@stripe.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Important Alert: Unusual Activity Detected",
+    "body": "---------- Forwarded message ---------\nFrom: Stripe <alerts@stripe.com>\nDate: September 30, 2023\nSubject: Important Alert: Unusual Activity Detected\nTo: deshawn@stripe.com\n\nDear Customer, we noticed some unusual activity on your account. Please verify your recent transactions.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "Alerts from financial services are legitimate and require attention."
+  },
+  {
+    "id": "deshawn-event1-08",
+    "persona": "deshawn",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Invitation to virtual event.",
+    "from": "deshawn@dropbox.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: You’re Invited to Our Virtual Networking Event!",
+    "body": "---------- Forwarded message ---------\nFrom: Dropbox Events <events@dropbox.com>\nDate: October 5, 2023\nSubject: You’re Invited to Our Virtual Networking Event!\nTo: deshawn@dropbox.com\n\nDear Customer, join us for a virtual networking event with industry leaders!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      91
+    ],
+    "expectNotes": "Invitations to networking events are common and from a trusted source."
+  },
+  {
+    "id": "deshawn-gift1-01",
+    "persona": "deshawn",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Urgent request for gift card purchase.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Quick task for you",
+    "body": "---------- Forwarded message ---------\nFrom: John Smith <john.smith@paypa1-secure.com>\nDate: Oct 10, 2023\nSubject: Quick task for you\nTo: deshawn@example.com\n\nHey Deshawn,\n\nI need you to purchase some gift cards for an important meeting. Please keep this confidential.\n\nThanks!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Sender uses a fake domain, requesting secrecy in gift card purchase."
+  },
+  {
+    "id": "deshawn-gift2-02",
+    "persona": "deshawn",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Request for wire transfer disguised as CEO message.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Immediate action required",
+    "body": "---------- Forwarded message ---------\nFrom: CEO Mike <mike.ceo@chase-verify.net>\nDate: Oct 11, 2023\nSubject: Immediate action required\nTo: deshawn@example.com\n\nDeshawn,\n\nPlease wire transfer $5000 to our vendor immediately. This is urgent and needs to be kept private.\n\nBest, Mike",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Fake CEO request for a wire transfer using a lookalike domain."
+  },
+  {
+    "id": "deshawn-gift3-03",
+    "persona": "deshawn",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Gift card request with emphasis on confidentiality.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Confidential gift card request",
+    "body": "---------- Forwarded message ---------\nFrom: Sarah <sarah.manager@acme-billing-updates.com>\nDate: Oct 12, 2023\nSubject: Confidential gift card request\nTo: deshawn@example.com\n\nHi Deshawn,\n\nI need you to get some gift cards for our team. It's important that this remains confidential.\n\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Secrecy in gift card purchase request raises red flags, uses a suspicious domain."
+  },
+  {
+    "id": "deshawn-gift4-04",
+    "persona": "deshawn",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Urgent wire transfer request from fake CEO.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Urgent wire transfer needed",
+    "body": "---------- Forwarded message ---------\nFrom: Mark <mark.ceo@paypa1-security.com>\nDate: Oct 13, 2023\nSubject: Urgent wire transfer needed\nTo: deshawn@example.com\n\nDeshawn,\n\nI need you to transfer $3000 to our supplier ASAP. Keep this under wraps.\n\nThanks!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Urgent request with a hidden agenda, coming from a suspicious domain."
+  },
+  {
+    "id": "deshawn-gift5-05",
+    "persona": "deshawn",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Request for gift cards with secrecy request.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Discreet gift card purchase",
+    "body": "---------- Forwarded message ---------\nFrom: Tom <tom.ceo@chase-verify.net>\nDate: Oct 14, 2023\nSubject: Discreet gift card purchase\nTo: deshawn@example.com\n\nHi Deshawn,\n\nPlease buy some gift cards and keep this discreet. It’s important!\n\nBest, Tom",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Misleading sender name and secrecy in the message indicate a scam."
+  },
+  {
+    "id": "deshawn-gift6-06",
+    "persona": "deshawn",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Urgent request for payment via wire transfer.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Immediate payment required",
+    "body": "---------- Forwarded message ---------\nFrom: Lisa <lisa.boss@acme-billing.com>\nDate: Oct 15, 2023\nSubject: Immediate payment required\nTo: deshawn@example.com\n\nDeshawn,\n\nWe need to process a wire transfer of $2000 today. Please keep this confidential.\n\nThanks!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Imminent payment request with confidentiality request and suspicious domain."
+  },
+  {
+    "id": "deshawn-gift7-07",
+    "persona": "deshawn",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Gift card purchase request from fake domain.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Quick purchase needed",
+    "body": "---------- Forwarded message ---------\nFrom: Alex <alex.ceo@paypa1-secure.com>\nDate: Oct 16, 2023\nSubject: Quick purchase needed\nTo: deshawn@example.com\n\nDeshawn,\n\nCan you buy a few gift cards and keep this to yourself? It’s very important.\n\nThanks!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Urgent request for secrecy in gift card purchases from a lookalike domain."
+  },
+  {
+    "id": "deshawn-gift8-08",
+    "persona": "deshawn",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Confidential wire transfer request.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Confidential wire transfer",
+    "body": "---------- Forwarded message ---------\nFrom: James <james.ceo@chase-verify.net>\nDate: Oct 17, 2023\nSubject: Confidential wire transfer\nTo: deshawn@example.com\n\nDeshawn,\n\nI need you to wire $4000 to our partner today. This is very confidential.\n\nRegards, James",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "Confidentiality request and fake CEO email indicate this is a dangerous phishing attempt."
+  },
+  {
+    "id": "deshawn-impersonation-01",
+    "persona": "deshawn",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Phishing attempt mimicking PayPal.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Action Required: Your PayPal Account",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal Support <support@paypa1-secure.com>\nDate: 2023-10-01\nSubject: Action Required: Your PayPal Account\nTo: deshawn@example.com\n\nDear User,\nYour account has been temporarily suspended due to suspicious activity. Please verify your identity by clicking the link below:\n[Verify Now](http://paypa1-secure.com/verify)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      8
+    ],
+    "expectNotes": "The sender domain is a known lookalike of PayPal, indicating a phishing attempt."
+  },
+  {
+    "id": "deshawn-impersonation-02",
+    "persona": "deshawn",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fake Microsoft login request.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Important Security Update for Your Account",
+    "body": "---------- Forwarded message ---------\nFrom: Microsoft Support <account-alerts@micros0ft-verify.com>\nDate: 2023-10-02\nSubject: Important Security Update for Your Account\nTo: deshawn@example.com\n\nDear Deshawn,\nWe noticed unusual sign-in attempts on your account. Please confirm your identity by clicking the link below:\n[Secure Your Account](http://micros0ft-verify.com/login)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "The domain is a close imitation of Microsoft, signaling a phishing attempt."
+  },
+  {
+    "id": "deshawn-impersonation-03",
+    "persona": "deshawn",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Spoofed DocuSign document request.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Document Signing Request",
+    "body": "---------- Forwarded message ---------\nFrom: DocuSign Notification <notification@docusign-secure.com>\nDate: 2023-10-03\nSubject: Document Signing Request\nTo: deshawn@example.com\n\nDear Deshawn,\nYou have a document that requires your signature. Please review it by clicking the link below:\n[Sign Document](http://docusign-secure.com/sign)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The domain mimics DocuSign, indicating a phishing attempt."
+  },
+  {
+    "id": "deshawn-impersonation-04",
+    "persona": "deshawn",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fake Zoom meeting link.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Upcoming Zoom Meeting",
+    "body": "---------- Forwarded message ---------\nFrom: Zoom Meetings <meetings@zoom-secure.com>\nDate: 2023-10-04\nSubject: Upcoming Zoom Meeting Invitation\nTo: deshawn@example.com\n\nHi Deshawn,\nYou are invited to a Zoom meeting. Please join us by clicking the link below:\n[Join Meeting](http://zoom-secure.com/join)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "The domain is a deceptive variant of Zoom, indicating a phishing attempt."
+  },
+  {
+    "id": "deshawn-impersonation-05",
+    "persona": "deshawn",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Spoofed Stripe receipt.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Your Recent Stripe Receipt",
+    "body": "---------- Forwarded message ---------\nFrom: Stripe <receipt@stripe-secure.com>\nDate: 2023-10-05\nSubject: Your Recent Stripe Receipt\nTo: deshawn@example.com\n\nDear Deshawn,\nThank you for your payment. Please review your receipt by clicking the link below:\n[View Receipt](http://stripe-secure.com/receipt)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      18
+    ],
+    "expectNotes": "The domain is a fake version of Stripe, indicating a phishing attempt."
+  },
+  {
+    "id": "deshawn-impersonation-06",
+    "persona": "deshawn",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Impersonation email about a gift card.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Congratulations! You've Received a Gift Card",
+    "body": "---------- Forwarded message ---------\nFrom: Gift Card Team <info@giftcard-secure.com>\nDate: 2023-10-06\nSubject: Congratulations! You've Received a Gift Card\nTo: deshawn@example.com\n\nDear Deshawn,\nYou've received a gift card! Claim it by clicking the link below:\n[Claim Your Gift](http://giftcard-secure.com/claim)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      25
+    ],
+    "expectNotes": "The domain is a scam imitation, indicating a phishing attempt."
+  },
+  {
+    "id": "deshawn-impersonation-07",
+    "persona": "deshawn",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fake account verification from a BEC attempt.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Immediate Account Verification Needed",
+    "body": "---------- Forwarded message ---------\nFrom: Account Services <verification@account-secure.com>\nDate: 2023-10-07\nSubject: Immediate Account Verification Needed\nTo: deshawn@example.com\n\nDear Deshawn,\nYour account requires immediate verification. Please follow the link below:\n[Verify Account](http://account-secure.com/verify)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      20
+    ],
+    "expectNotes": "The domain is a deceptive variant, indicating a phishing attempt."
+  },
+  {
+    "id": "deshawn-impersonation-08",
+    "persona": "deshawn",
+    "archetype": "lookalike-impersonation",
+    "expect": "REVIEW",
+    "desc": "Ambiguous email about a shared document.",
+    "from": "deshawn@example.com",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Document Shared for Review",
+    "body": "---------- Forwarded message ---------\nFrom: DocuShare <share@docushare-secure.com>\nDate: 2023-10-08\nSubject: Document Shared for Review\nTo: deshawn@example.com\n\nHi Deshawn,\nA document has been shared with you for review. Please check it here:\n[View Document](http://docushare-secure.com/view)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      30
+    ],
+    "expectNotes": "The domain looks suspicious but may not be clearly malicious; requires further verification."
+  },
+  {
+    "id": "priya-receipt-01",
+    "persona": "priya",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Order receipt from Amazon",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Your Amazon Order Receipt",
+    "body": "---------- Forwarded message ---------\nFrom: Amazon <no-reply@amazon.com>\nDate: 2023-10-15\nSubject: Your Amazon Order Receipt\nTo: priya@example.com\n\nThank you for your purchase! Your order number is 123-4567890-1234567. If you have any questions, please visit our help page.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "Legit Amazon domain and receipt format."
+  },
+  {
+    "id": "priya-shipment-02",
+    "persona": "priya",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Shipping confirmation from UPS",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Your UPS Shipment Confirmation",
+    "body": "---------- Forwarded message ---------\nFrom: UPS <notifications@ups.com>\nDate: 2023-10-14\nSubject: Your UPS Shipment Confirmation\nTo: priya@example.com\n\nYour package is on the way! Tracking number: 1Z9999999999999999. Track your shipment here: https://www.ups.com/track.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "Legit UPS domain and standard shipping confirmation."
+  },
+  {
+    "id": "priya-payroll-03",
+    "persona": "priya",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Payroll statement from ADP",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Your ADP Payroll Statement",
+    "body": "---------- Forwarded message ---------\nFrom: ADP <no-reply@adp.com>\nDate: 2023-10-13\nSubject: Your ADP Payroll Statement\nTo: priya@example.com\n\nYour payroll statement is ready for review. Access it here: https://portal.adp.com/payroll.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "Legit ADP domain and payroll statement access."
+  },
+  {
+    "id": "priya-code-04",
+    "persona": "priya",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "One-time code from Google",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Your Google Verification Code",
+    "body": "---------- Forwarded message ---------\nFrom: Google <no-reply@google.com>\nDate: 2023-10-12\nSubject: Your Google Verification Code\nTo: priya@example.com\n\nYour verification code is 481920. Enter this code to verify your account.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "Legit Google domain delivering a one-time code."
+  },
+  {
+    "id": "priya-invoice-05",
+    "persona": "priya",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Invoice from Mailchimp",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Your Mailchimp Invoice",
+    "body": "---------- Forwarded message ---------\nFrom: Mailchimp <billing@mailchimp.com>\nDate: 2023-10-11\nSubject: Your Mailchimp Invoice\nTo: priya@example.com\n\nHere is your invoice for the recent Mailchimp subscription: Invoice #12345. View it here: https://mailchimp.com/invoice.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      93
+    ],
+    "expectNotes": "Legit Mailchimp domain with proper invoice format."
+  },
+  {
+    "id": "priya-reminder-06",
+    "persona": "priya",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Meeting reminder from Calendly",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Upcoming Meeting Reminder",
+    "body": "---------- Forwarded message ---------\nFrom: Calendly <no-reply@calendly.com>\nDate: 2023-10-10\nSubject: Upcoming Meeting Reminder\nTo: priya@example.com\n\nThis is a reminder for your upcoming meeting scheduled on October 15 at 2 PM. Join here: https://calendly.com/meeting-link.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "Legit Calendly domain with meeting details."
+  },
+  {
+    "id": "priya-statement-07",
+    "persona": "priya",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Bank statement from Chase",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Your Chase Bank Statement",
+    "body": "---------- Forwarded message ---------\nFrom: Chase <no-reply@chase.com>\nDate: 2023-10-09\nSubject: Your Chase Bank Statement\nTo: priya@example.com\n\nYour bank statement is available for download. Access it here: https://chase.com/statement.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "Legit Chase domain providing bank statement access."
+  },
+  {
+    "id": "priya-update-08",
+    "persona": "priya",
+    "archetype": "legit-transactional",
+    "expect": "REVIEW",
+    "desc": "Account update from GitHub",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Important Update from GitHub",
+    "body": "---------- Forwarded message ---------\nFrom: GitHub <noreply@github.com>\nDate: 2023-10-08\nSubject: Important Update from GitHub\nTo: priya@example.com\n\nWe’ve made some updates to our terms of service. Please review them here: https://github.com/terms.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      85
+    ],
+    "expectNotes": "Legit GitHub domain but requires a review for potential sensitivity."
+  },
+  {
+    "id": "priya-phish-01",
+    "persona": "priya",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Impersonation of PayPal with a phishing link.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Important PayPal Account Update",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal Support <support@paypa1-secure.com>\nDate: 2023-10-01\nSubject: Important PayPal Account Update\nTo: priya@example.com\n\nDear User, your PayPal account has been temporarily suspended due to suspicious activity. Please verify your account immediately at the link below:\n[Verify Now](http://paypa1-secure.com/verify)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "Sender domain is a lookalike of PayPal, indicating phishing."
+  },
+  {
+    "id": "priya-phish-02",
+    "persona": "priya",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Impersonation of Microsoft with a dangerous link.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Urgent: Microsoft Account Verification Required",
+    "body": "---------- Forwarded message ---------\nFrom: Microsoft Support <support@micros0ft-verify.com>\nDate: 2023-10-02\nSubject: Urgent: Microsoft Account Verification Required\nTo: priya@example.com\n\nHello Priya, we noticed unusual login attempts on your Microsoft account. Please confirm your identity by clicking the link below:\n[Verify Your Account](http://micros0ft-verify.com/confirm)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "Sending domain resembles Microsoft, which is a clear indicator of a phishing attempt."
+  },
+  {
+    "id": "priya-phish-03",
+    "persona": "priya",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fake GitHub notification for credential harvesting.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: GitHub Security Alert",
+    "body": "---------- Forwarded message ---------\nFrom: GitHub Security <alert@github-secure.com>\nDate: 2023-10-03\nSubject: GitHub Security Alert\nTo: priya@example.com\n\nDear Priya, we detected a security issue on your GitHub account. Please follow the link below to secure your account:\n[Secure My Account](http://github-secure.com/security)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The domain used is a lookalike of GitHub, which is suspicious."
+  },
+  {
+    "id": "priya-phish-04",
+    "persona": "priya",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Phishing attempt masquerading as a Stripe notification.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Action Required: Stripe Payment Issue",
+    "body": "---------- Forwarded message ---------\nFrom: Stripe Support <support@stripe-secure.com>\nDate: 2023-10-04\nSubject: Action Required: Stripe Payment Issue\nTo: priya@example.com\n\nHello, we encountered a problem with your recent payment. To resolve this, click the link below:\n[Resolve Payment Issue](http://stripe-secure.com/payment)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      17
+    ],
+    "expectNotes": "The domain is a slight variation of Stripe, indicating a phishing attempt."
+  },
+  {
+    "id": "priya-phish-05",
+    "persona": "priya",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fake LinkedIn message for credential harvesting.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: LinkedIn Account Verification Needed",
+    "body": "---------- Forwarded message ---------\nFrom: LinkedIn Support <support@linkd1n-alert.com>\nDate: 2023-10-05\nSubject: LinkedIn Account Verification Needed\nTo: priya@example.com\n\nDear Priya, we need you to verify your account to maintain your LinkedIn profile. Please verify here:\n[Verify Account](http://linkd1n-alert.com/verify)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "Sender domain closely resembles LinkedIn, indicating potential phishing."
+  },
+  {
+    "id": "priya-phish-06",
+    "persona": "priya",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Impersonation email from a fake payroll system.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Payroll Update Required",
+    "body": "---------- Forwarded message ---------\nFrom: Payroll Dept <payroll@payroll-update.com>\nDate: 2023-10-06\nSubject: Payroll Update Required\nTo: priya@example.com\n\nDear Employee, we need you to update your payroll information immediately. Click the link below:\n[Update Now](http://payroll-update.com)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      20
+    ],
+    "expectNotes": "The domain is clearly a phishing attempt with a lookalike format."
+  },
+  {
+    "id": "priya-phish-07",
+    "persona": "priya",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Fake notification regarding a pending Amazon order.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Your Amazon Order Needs Attention",
+    "body": "---------- Forwarded message ---------\nFrom: Amazon Customer Service <service@amazon-secure.com>\nDate: 2023-10-07\nSubject: Your Amazon Order Needs Attention\nTo: priya@example.com\n\nHello, there’s an issue with your recent order. Please click the link below to resolve:\n[Resolve Issue](http://amazon-secure.com/order)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      11
+    ],
+    "expectNotes": "The domain is a lookalike of Amazon, which is a clear phishing attempt."
+  },
+  {
+    "id": "priya-phish-08",
+    "persona": "priya",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "Impersonation of a fake document signing service.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Document Signature Required",
+    "body": "---------- Forwarded message ---------\nFrom: DocuSign Alert <alert@docusign-secure.com>\nDate: 2023-10-08\nSubject: Document Signature Required\nTo: priya@example.com\n\nDear Priya, please sign the document attached. To proceed, click here:\n[Sign Document](http://docusign-secure.com/sign)",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      19
+    ],
+    "expectNotes": "The domain closely mimics DocuSign, signaling a phishing attempt."
+  },
+  {
+    "id": "priya-phish-01",
+    "persona": "priya",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Urgent account verification needed.",
+    "from": "priya@gmail.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Important: Verify your PayPal account",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal Support <support@paypa1-secure.com>\nDate: 2023-10-10\nSubject: Important: Verify your PayPal account\nTo: priya@gmail.com\n\nDear User,\nYour account will be limited unless you log in to verify your information. Please confirm your password at the link below:\nhttp://paypa1-secure.com/verify",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "The email originates from a throwaway domain (paypa1-secure.com) and prompts for password confirmation."
+  },
+  {
+    "id": "priya-phish-02",
+    "persona": "priya",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Microsoft account verification request.",
+    "from": "priya@gmail.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Action Required: Verify your Microsoft Account",
+    "body": "---------- Forwarded message ---------\nFrom: Microsoft Support <support@microsoft-verify.com>\nDate: 2023-10-09\nSubject: Action Required: Verify your Microsoft Account\nTo: priya@gmail.com\n\nDear User,\nWe noticed unusual activity in your account. Please log in to verify your credentials:\nhttp://microsoft-verify.com/login",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "Uses a fake domain (microsoft-verify.com) to lure users into providing login details."
+  },
+  {
+    "id": "priya-phish-03",
+    "persona": "priya",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Urgent payroll information update required.",
+    "from": "priya@gmail.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Immediate Action Required: Payroll Update",
+    "body": "---------- Forwarded message ---------\nFrom: Payroll Department <payroll@acme-billing-updates.com>\nDate: 2023-10-08\nSubject: Immediate Action Required: Payroll Update\nTo: priya@gmail.com\n\nDear Employee,\nYou must verify your payroll information to ensure timely payments. Click the link to confirm:\nhttp://acme-billing-updates.com/confirm",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      18
+    ],
+    "expectNotes": "The sender uses a deceptive domain (acme-billing-updates.com) requesting sensitive payroll information."
+  },
+  {
+    "id": "priya-phish-04",
+    "persona": "priya",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Verify your GitHub account details.",
+    "from": "priya@gmail.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: GitHub Account Verification Needed",
+    "body": "---------- Forwarded message ---------\nFrom: GitHub Support <support@github-verify.com>\nDate: 2023-10-07\nSubject: GitHub Account Verification Needed\nTo: priya@gmail.com\n\nHello,\nTo maintain security, please verify your account by logging in here:\nhttp://github-verify.com/confirm",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "Email comes from a spoofed domain (github-verify.com) prompting for login details."
+  },
+  {
+    "id": "priya-phish-05",
+    "persona": "priya",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Urgent action needed for your Stripe account.",
+    "from": "priya@gmail.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Action Required: Stripe Account Verification",
+    "body": "---------- Forwarded message ---------\nFrom: Stripe Support <support@stripe-verification.com>\nDate: 2023-10-06\nSubject: Action Required: Stripe Account Verification\nTo: priya@gmail.com\n\nDear User,\nWe need you to verify your account. Please log in here:\nhttp://stripe-verification.com/verify",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      16
+    ],
+    "expectNotes": "The link directs to a fraudulent domain (stripe-verification.com) designed to harvest credentials."
+  },
+  {
+    "id": "priya-phish-06",
+    "persona": "priya",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Verify your LinkedIn profile.",
+    "from": "priya@gmail.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: LinkedIn Profile Verification Needed",
+    "body": "---------- Forwarded message ---------\nFrom: LinkedIn Support <support@linkedin-confirm.com>\nDate: 2023-10-05\nSubject: LinkedIn Profile Verification Needed\nTo: priya@gmail.com\n\nHello Priya,\nTo enhance your security, please verify your profile:\nhttp://linkedin-confirm.com/verify",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      19
+    ],
+    "expectNotes": "This email is from a lookalike domain (linkedin-confirm.com) requesting sensitive information."
+  },
+  {
+    "id": "priya-phish-07",
+    "persona": "priya",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Important: Verify your account now.",
+    "from": "priya@gmail.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Important: Account Verification Required",
+    "body": "---------- Forwarded message ---------\nFrom: Account Security <security@paypal-alerts.com>\nDate: 2023-10-04\nSubject: Important: Account Verification Required\nTo: priya@gmail.com\n\nDear User,\nYour account has been flagged for review. Please verify your identity:\nhttp://paypal-alerts.com/verify",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      13
+    ],
+    "expectNotes": "The email is sent from a fraudulent domain (paypal-alerts.com) requesting account verification."
+  },
+  {
+    "id": "priya-phish-08",
+    "persona": "priya",
+    "archetype": "credential-harvest",
+    "expect": "REVIEW",
+    "desc": "Unclear legitimacy of the email source.",
+    "from": "priya@gmail.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Verify Your Account Information",
+    "body": "---------- Forwarded message ---------\nFrom: Account Services <service@chase-verify.net>\nDate: 2023-10-03\nSubject: Verify Your Account Information\nTo: priya@gmail.com\n\nDear Customer,\nTo ensure your account remains secure, please verify your information by clicking the link:\nhttp://chase-verify.net/verify",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      50
+    ],
+    "expectNotes": "The email is from a potentially dangerous domain (chase-verify.net) that resembles a legitimate sender."
+  },
+  {
+    "id": "priya-bec-01",
+    "persona": "priya",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Urgent request for payment processing.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Immediate Payment Needed",
+    "body": "---------- Forwarded message ---------\nFrom: John Doe <johndoe123@paypa1-secure.com>\nDate: 2023-10-15\nSubject: Immediate Payment Needed\nTo: priya@example.com\n\nHi Priya,\n\nI need you to process a payment urgently. Please buy gift cards and send me the codes. This is confidential, so keep it to yourself.\n\nThanks,\nJohn",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "sender uses a lookalike domain with a request for gift cards and secrecy."
+  },
+  {
+    "id": "priya-bec-02",
+    "persona": "priya",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Request for funds transfer with urgency.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Quick Funds Transfer",
+    "body": "---------- Forwarded message ---------\nFrom: CEO Office <ceo@chase-verify.net>\nDate: 2023-10-14\nSubject: Quick Funds Transfer\nTo: priya@example.com\n\nHello Priya,\n\nI need you to transfer $5,000 to a vendor immediately. This needs to remain confidential. Let me know once it's done.\n\nBest,\nCEO",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "the email uses a spoofed domain and pressures for a confidential funds transfer."
+  },
+  {
+    "id": "priya-bec-03",
+    "persona": "priya",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Secretive request for gift card purchase.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Confidential Purchase Needed",
+    "body": "---------- Forwarded message ---------\nFrom: Mark Smith <marksmith@acme-billing-updates.com>\nDate: 2023-10-10\nSubject: Confidential Purchase Needed\nTo: priya@example.com\n\nHi Priya,\n\nI need you to buy some gift cards for an urgent project. Please keep it under wraps. Let me know when you get the codes.\n\nThanks!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "the sender demands secrecy with a gift card request from a suspicious domain."
+  },
+  {
+    "id": "priya-bec-04",
+    "persona": "priya",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Payment request with urgency and secrecy.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Urgent Payment Required",
+    "body": "---------- Forwarded message ---------\nFrom: Finance Dept <finance@paypa1-secure.com>\nDate: 2023-10-12\nSubject: Urgent Payment Required\nTo: priya@example.com\n\nDear Priya,\n\nPlease arrange a payment of $2,000 to our supplier at your earliest convenience. This is confidential and must not be shared.\n\nThank you.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "the urgency and confidentiality signal a malicious intent from a fake domain."
+  },
+  {
+    "id": "priya-bec-05",
+    "persona": "priya",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Request for immediate payment using gift cards.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Immediate Action Required",
+    "body": "---------- Forwarded message ---------\nFrom: HR Manager <hr@chase-verify.net>\nDate: 2023-10-13\nSubject: Immediate Action Required\nTo: priya@example.com\n\nHi Priya,\n\nWe need you to purchase gift cards for a client immediately. Keep this matter private. Let me know once you have the information.\n\nBest Regards,",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "the email requests a private gift card purchase from a lookalike domain."
+  },
+  {
+    "id": "priya-bec-06",
+    "persona": "priya",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Secretive request for funds urgently.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Quick Response Needed",
+    "body": "---------- Forwarded message ---------\nFrom: Project Lead <projectlead@acme-billing-updates.com>\nDate: 2023-10-11\nSubject: Quick Response Needed\nTo: priya@example.com\n\nHello Priya,\n\nWe need a quick payment of $3,000 for our project. This is highly confidential, please do not share this request.\n\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "the email pressures for a quick payment under confidentiality from a suspicious sender."
+  },
+  {
+    "id": "priya-bec-07",
+    "persona": "priya",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Urgent request for wire transfer.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Urgent Wire Transfer",
+    "body": "---------- Forwarded message ---------\nFrom: Admin <admin@paypa1-secure.com>\nDate: 2023-10-09\nSubject: Urgent Wire Transfer\nTo: priya@example.com\n\nHi Priya,\n\nI need you to wire $4,500 to a new vendor. This must be kept confidential. Confirm when it's done.\n\nThanks!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "the urgency and request for confidentiality signal a phishing attempt from a fake domain."
+  },
+  {
+    "id": "priya-bec-08",
+    "persona": "priya",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "Request for immediate gift card purchase.",
+    "from": "priya@example.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Immediate Gift Card Needed",
+    "body": "---------- Forwarded message ---------\nFrom: Team Lead <teamlead@chase-verify.net>\nDate: 2023-10-08\nSubject: Immediate Gift Card Needed\nTo: priya@example.com\n\nDear Priya,\n\nPlease purchase gift cards for an urgent matter. This is highly confidential, so do not mention this to anyone.\n\nBest,",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [],
+    "expectNotes": "the email requests gift cards urgently with secrecy from a fraudulent domain."
+  },
+  {
+    "id": "tom-receipt-01",
+    "persona": "tom",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Shipping receipt from UPS",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Your UPS Shipment Receipt",
+    "body": "---------- Forwarded message ---------\nFrom: UPS <no-reply@ups.com>\nDate: 2023-10-01\nSubject: Your UPS Shipment Receipt\nTo: tom@nonprofit.org\n\nThank you for using UPS. Your shipment has been processed. Receipt: 1234567890.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "The sender is UPS, a legitimate shipping company."
+  },
+  {
+    "id": "tom-code-02",
+    "persona": "tom",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "One-time code from GitHub",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Your GitHub Code",
+    "body": "---------- Forwarded message ---------\nFrom: GitHub <no-reply@github.com>\nDate: 2023-10-01\nSubject: Your GitHub Code\nTo: tom@nonprofit.org\n\nYour one-time code is 481920. Use this code to complete your verification process.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "The sender is GitHub, a trusted platform for developers."
+  },
+  {
+    "id": "tom-statement-03",
+    "persona": "tom",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Monthly statement from PayPal",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Your Monthly PayPal Statement",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal <service@paypal.com>\nDate: 2023-10-01\nSubject: Your Monthly PayPal Statement\nTo: tom@nonprofit.org\n\nAttached is your monthly statement for September 2023.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      92
+    ],
+    "expectNotes": "The sender is PayPal, which is a legitimate payment platform."
+  },
+  {
+    "id": "tom-code-04",
+    "persona": "tom",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "One-time code from Microsoft",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Your Microsoft Verification Code",
+    "body": "---------- Forwarded message ---------\nFrom: Microsoft <no-reply@microsoft.com>\nDate: 2023-10-01\nSubject: Your Microsoft Verification Code\nTo: tom@nonprofit.org\n\nYour code is 481920. Please enter this code to confirm your identity.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      88
+    ],
+    "expectNotes": "The sender is Microsoft, a well-known tech company."
+  },
+  {
+    "id": "tom-donor-05",
+    "persona": "tom",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Grant confirmation from NY.gov",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Your Grant Confirmation",
+    "body": "---------- Forwarded message ---------\nFrom: NY.gov <grants@ny.gov>\nDate: 2023-10-01\nSubject: Your Grant Confirmation\nTo: tom@nonprofit.org\n\nCongratulations! Your grant application has been approved. Please find the details attached.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      91
+    ],
+    "expectNotes": "The sender is NY.gov, a legitimate government entity."
+  },
+  {
+    "id": "tom-bamboo-06",
+    "persona": "tom",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "New payroll information from BambooHR",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Your Updated Payroll Information",
+    "body": "---------- Forwarded message ---------\nFrom: BambooHR <notifications@bamboohr.com>\nDate: 2023-10-01\nSubject: Your Updated Payroll Information\nTo: tom@nonprofit.org\n\nYour payroll information has been updated successfully. Please review the changes.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      89
+    ],
+    "expectNotes": "The sender is BambooHR, a reputable HR software."
+  },
+  {
+    "id": "tom-zoom-07",
+    "persona": "tom",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Meeting confirmation from Zoom",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Zoom Meeting Confirmation",
+    "body": "---------- Forwarded message ---------\nFrom: Zoom <no-reply@zoom.us>\nDate: 2023-10-01\nSubject: Zoom Meeting Confirmation\nTo: tom@nonprofit.org\n\nYour Zoom meeting is scheduled for October 5, 2023. Meeting ID: 123 456 7890.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      94
+    ],
+    "expectNotes": "The sender is Zoom, a legitimate video conferencing platform."
+  },
+  {
+    "id": "tom-calendly-08",
+    "persona": "tom",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Event reminder from Calendly",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Upcoming Event Reminder",
+    "body": "---------- Forwarded message ---------\nFrom: Calendly <reminder@calendly.com>\nDate: 2023-10-01\nSubject: Upcoming Event Reminder\nTo: tom@nonprofit.org\n\nThis is a reminder for your upcoming event scheduled for October 10, 2023.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      93
+    ],
+    "expectNotes": "The sender is Calendly, a recognized scheduling tool."
+  },
+  {
+    "id": "tom-benefits-01",
+    "persona": "tom",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Reminder about your upcoming benefits enrollment.",
+    "from": "benefits@adp.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Reminder: Benefits Enrollment Deadline Approaching",
+    "body": "---------- Forwarded message ---------\nFrom: ADP Benefits <no-reply@adp.com>\nDate: 2023-10-01\nSubject: Reminder: Benefits Enrollment Deadline Approaching\nTo: tom@yournonprofit.org\n\nDear Customer,\n\nThis is a friendly reminder that the deadline for benefits enrollment is approaching. Please ensure that you complete your enrollment before October 15.\n\nBest,\nADP Benefits Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "The sender is a legitimate domain (adp.com) regarding benefits enrollment."
+  },
+  {
+    "id": "tom-donor-grant-02",
+    "persona": "tom",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Information about your recent grant application status.",
+    "from": "noreply@ny.gov",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Update on Your Grant Application",
+    "body": "---------- Forwarded message ---------\nFrom: NY State Grants <grants@ny.gov>\nDate: 2023-10-02\nSubject: Update on Your Grant Application\nTo: tom@yournonprofit.org\n\nDear Customer,\n\nWe are pleased to inform you that your grant application is currently under review. You will receive further updates soon.\n\nThank you,\nNY State Grants Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "The sender is a legitimate government domain (ny.gov) regarding grant applications."
+  },
+  {
+    "id": "tom-payroll-03",
+    "persona": "tom",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Your payroll details have been updated.",
+    "from": "payroll@adp.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Important: Payroll Update Notification",
+    "body": "---------- Forwarded message ---------\nFrom: ADP Payroll <updates@adp.com>\nDate: 2023-10-03\nSubject: Important: Payroll Update Notification\nTo: tom@yournonprofit.org\n\nDear Customer,\n\nWe wanted to inform you that your payroll details have been successfully updated. For any further inquiries, please contact our support team.\n\nBest regards,\nADP Payroll Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      92
+    ],
+    "expectNotes": "The sender is a legitimate domain (adp.com) regarding payroll updates."
+  },
+  {
+    "id": "tom-github-04",
+    "persona": "tom",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Verify your recent account activity at GitHub.",
+    "from": "support@github.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Action Required: Verify Your GitHub Account Activity",
+    "body": "---------- Forwarded message ---------\nFrom: GitHub Support <support@github.com>\nDate: 2023-10-04\nSubject: Action Required: Verify Your GitHub Account Activity\nTo: tom@yournonprofit.org\n\nDear Customer,\n\nWe noticed some unusual activity on your GitHub account. Please review and verify your recent account activity to maintain your security.\n\nThank you,\nGitHub Support Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      95
+    ],
+    "expectNotes": "The sender is a legitimate domain (github.com) regarding account activity."
+  },
+  {
+    "id": "tom-microsoft-05",
+    "persona": "tom",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Reminder to secure your Microsoft account.",
+    "from": "noreply@microsoft.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Action Needed: Secure Your Microsoft Account",
+    "body": "---------- Forwarded message ---------\nFrom: Microsoft Security <security@microsoft.com>\nDate: 2023-10-05\nSubject: Action Needed: Secure Your Microsoft Account\nTo: tom@yournonprofit.org\n\nDear Customer,\n\nWe detected some changes to your Microsoft account. Please take a moment to secure your account by following the necessary steps.\n\nBest,\nMicrosoft Security Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      88
+    ],
+    "expectNotes": "The sender is a legitimate domain (microsoft.com) regarding account security."
+  },
+  {
+    "id": "tom-fedex-06",
+    "persona": "tom",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Your FedEx shipment is on the way.",
+    "from": "updates@fedex.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Your FedEx Shipment Tracking Information",
+    "body": "---------- Forwarded message ---------\nFrom: FedEx Tracking <tracking@fedex.com>\nDate: 2023-10-06\nSubject: Your FedEx Shipment Tracking Information\nTo: tom@yournonprofit.org\n\nDear Customer,\n\nYour shipment is on its way! Use the tracking link below to see the latest updates on your delivery.\n\nThank you,\nFedEx Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "The sender is a legitimate domain (fedex.com) regarding shipment tracking."
+  },
+  {
+    "id": "tom-calendar-07",
+    "persona": "tom",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Reminder for your upcoming calendar event.",
+    "from": "no-reply@calendly.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Reminder: Upcoming Event Scheduled",
+    "body": "---------- Forwarded message ---------\nFrom: Calendly <reminder@calendly.com>\nDate: 2023-10-07\nSubject: Reminder: Upcoming Event Scheduled\nTo: tom@yournonprofit.org\n\nDear Customer,\n\nDon't forget about your upcoming event scheduled for next week. Please mark your calendar!\n\nBest,\nCalendly Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      91
+    ],
+    "expectNotes": "The sender is a legitimate domain (calendly.com) regarding event reminders."
+  },
+  {
+    "id": "tom-stripe-08",
+    "persona": "tom",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Your recent payment confirmation from Stripe.",
+    "from": "noreply@stripe.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Payment Confirmation from Stripe",
+    "body": "---------- Forwarded message ---------\nFrom: Stripe Payments <payments@stripe.com>\nDate: 2023-10-08\nSubject: Payment Confirmation from Stripe\nTo: tom@yournonprofit.org\n\nDear Customer,\n\nThank you for your recent payment. Your transaction has been successfully processed. If you have any questions, feel free to reach out.\n\nBest regards,\nStripe Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      94
+    ],
+    "expectNotes": "The sender is a legitimate domain (stripe.com) regarding payment confirmation."
+  },
+  {
+    "id": "tom-invoice-01",
+    "persona": "tom",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Urgent invoice with updated payment details.",
+    "from": "tom@example.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Invoice #12345 - Immediate Attention Required",
+    "body": "---------- Forwarded message ---------\nFrom: Acme Billing <billing@acme-billing-updates.com>\nDate: October 25, 2023\nSubject: Invoice #12345 - Immediate Attention Required\nTo: tom@example.com\n\nDear Tom,\n\nPlease find attached the invoice for services rendered. Note that the bank details have changed. Ensure payment is made promptly to avoid any disruptions.\n\nThank you,\nAcme Billing Team\n\nAttachment: invoice_12345.pdf",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      8
+    ],
+    "expectNotes": "Sender domain acme-billing-updates.com is a lookalike, indicating potential fraud."
+  },
+  {
+    "id": "tom-invoice-02",
+    "persona": "tom",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Fake invoice requiring immediate wire transfer.",
+    "from": "tom@example.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Important: Updated Invoice Payment Instructions",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal Security <support@paypa1-secure.com>\nDate: October 26, 2023\nSubject: Important: Updated Invoice Payment Instructions\nTo: tom@example.com\n\nDear Tom,\n\nWe have updated our payment instructions. Please process the attached invoice immediately to avoid penalties.\n\nRegards,\nPayPal Security Team\n\nAttachment: updated_invoice.pdf",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "Using a fraudulent domain paypa1-secure.com, signaling a scam."
+  },
+  {
+    "id": "tom-invoice-03",
+    "persona": "tom",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Urgent payment request with altered bank info.",
+    "from": "tom@example.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Payment Required for Invoice #98765",
+    "body": "---------- Forwarded message ---------\nFrom: Billing Dept <billing@chase-verify.net>\nDate: October 27, 2023\nSubject: Payment Required for Invoice #98765\nTo: tom@example.com\n\nDear Tom,\n\nPlease review the attached invoice. The payment details have changed. Immediate action is required to ensure continued service.\n\nBest,\nBilling Department",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "Sender domain chase-verify.net is a lookalike, indicating a high risk of fraud."
+  },
+  {
+    "id": "tom-invoice-04",
+    "persona": "tom",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Invoice with urgent payment notice and attachment.",
+    "from": "tom@example.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Invoice #54321 - Action Needed",
+    "body": "---------- Forwarded message ---------\nFrom: Invoice Notifications <notifications@acme-billing-updates.com>\nDate: October 28, 2023\nSubject: Invoice #54321 - Action Needed\nTo: tom@example.com\n\nHi Tom,\n\nAttached is Invoice #54321. Please note the change in bank details and ensure prompt payment to avoid late fees.\n\nRegards,\nInvoice Notifications",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The domain acme-billing-updates.com is a fraudulent lookalike, marking it as a scam."
+  },
+  {
+    "id": "tom-invoice-05",
+    "persona": "tom",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Urgent invoice with changed payment information.",
+    "from": "tom@example.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Immediate Payment Required for Invoice",
+    "body": "---------- Forwarded message ---------\nFrom: Payment Solutions <info@paypa1-secure.com>\nDate: October 29, 2023\nSubject: Immediate Payment Required for Invoice\nTo: tom@example.com\n\nDear Tom,\n\nPlease find the attached invoice that requires immediate payment. The bank account details have been updated, so please verify before sending.\n\nThank you!",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      9
+    ],
+    "expectNotes": "Fraudulent domain paypa1-secure.com suggests it's a phishing attempt."
+  },
+  {
+    "id": "tom-invoice-06",
+    "persona": "tom",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Invoice with a sense of urgency and altered details.",
+    "from": "tom@example.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Urgent: Invoice #67890 Payment Update",
+    "body": "---------- Forwarded message ---------\nFrom: Account Services <support@chase-verify.net>\nDate: October 30, 2023\nSubject: Urgent: Invoice #67890 Payment Update\nTo: tom@example.com\n\nHello Tom,\n\nAttached is Invoice #67890. Please note the urgent need for payment and the updated banking information.\n\nBest,\nAccount Services",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "Chase-verify.net is a lookalike domain, indicating potential fraud."
+  },
+  {
+    "id": "tom-invoice-07",
+    "persona": "tom",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Invoice with request for immediate action on payment.",
+    "from": "tom@example.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Action Required: Invoice Payment Needed",
+    "body": "---------- Forwarded message ---------\nFrom: Billing Alerts <billing@acme-billing-updates.com>\nDate: October 31, 2023\nSubject: Action Required: Invoice Payment Needed\nTo: tom@example.com\n\nDear Tom,\n\nPlease review the attached invoice. The payment instructions have changed, and immediate action is required to avoid service disruption.\n\nThank you.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      11
+    ],
+    "expectNotes": "Using acme-billing-updates.com suggests this is a scam attempt."
+  },
+  {
+    "id": "tom-invoice-08",
+    "persona": "tom",
+    "archetype": "invoice-wire-fraud",
+    "expect": "REVIEW",
+    "desc": "Ambiguous invoice request with potential issues.",
+    "from": "tom@example.com",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Review Invoice #12345 ASAP",
+    "body": "---------- Forwarded message ---------\nFrom: Invoice Team <team@legionathletics.com>\nDate: November 1, 2023\nSubject: Review Invoice #12345 ASAP\nTo: tom@example.com\n\nHi Tom,\n\nAttached is Invoice #12345. Please review and confirm if the payment details are correct. The bank info seems different.\n\nBest,\nInvoice Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      50
+    ],
+    "expectNotes": "Legitimate domain, but suspicious request for confirmation indicates potential fraud."
+  },
+  {
+    "id": "tom-credharvest-01",
+    "persona": "tom",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Urgent password verification request.",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Action Required: Verify Your Account",
+    "body": "---------- Forwarded message ---------\nFrom: Support Team <support@secure-update.com>\nDate: 2023-10-01\nSubject: Action Required: Verify Your Account\nTo: tom@nonprofit.org\n\nDear User,\n\nWe noticed unusual activity on your account. Please confirm your password to verify your identity: https://secure-update.com/verify\n\nThank you,\nSupport Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "The domain 'secure-update.com' is a throwaway domain used for phishing."
+  },
+  {
+    "id": "tom-credharvest-02",
+    "persona": "tom",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Account security alert requiring password confirmation.",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Important Security Update",
+    "body": "---------- Forwarded message ---------\nFrom: Security Alert <alert@account-verify.net>\nDate: 2023-10-02\nSubject: Important Security Update\nTo: tom@nonprofit.org\n\nDear Tom,\n\nTo ensure the safety of your account, please log in to confirm your password: https://account-verify.net/authenticate\n\nBest,\nSecurity Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      15
+    ],
+    "expectNotes": "The domain 'account-verify.net' is a suspicious lookalike domain."
+  },
+  {
+    "id": "tom-credharvest-03",
+    "persona": "tom",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Request to confirm credentials urgently.",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Your Account Needs Attention",
+    "body": "---------- Forwarded message ---------\nFrom: Admin <admin@log-in-validate.com>\nDate: 2023-10-03\nSubject: Your Account Needs Attention\nTo: tom@nonprofit.org\n\nHello,\n\nWe need you to confirm your password immediately to prevent your account from being suspended: https://log-in-validate.com/confirm\n\nRegards,\nAdmin",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "The domain 'log-in-validate.com' is not a legitimate service and is likely malicious."
+  },
+  {
+    "id": "tom-credharvest-04",
+    "persona": "tom",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Password confirmation needed due to suspicious activity.",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Urgent: Verify Your Identity",
+    "body": "---------- Forwarded message ---------\nFrom: Helpdesk <help@account-secure.xyz>\nDate: 2023-10-04\nSubject: Urgent: Verify Your Identity\nTo: tom@nonprofit.org\n\nDear User,\n\nYour account has been flagged. Please confirm your password here: https://account-secure.xyz/check\n\nThank you for your attention.",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      18
+    ],
+    "expectNotes": "The domain 'account-secure.xyz' is a throwaway domain commonly used in phishing."
+  },
+  {
+    "id": "tom-credharvest-05",
+    "persona": "tom",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Action needed for account verification.",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Verify Your Account Information",
+    "body": "---------- Forwarded message ---------\nFrom: Verification Team <verify@secure-login.org>\nDate: 2023-10-05\nSubject: Verify Your Account Information\nTo: tom@nonprofit.org\n\nDear Tom,\n\nTo maintain your account, please log in and confirm your password: https://secure-login.org/verification\n\nBest regards,\nVerification Team",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      14
+    ],
+    "expectNotes": "The domain 'secure-login.org' is not a recognized entity and is likely to be malicious."
+  },
+  {
+    "id": "tom-credharvest-06",
+    "persona": "tom",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Immediate action required for account security.",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Account Security Alert",
+    "body": "---------- Forwarded message ---------\nFrom: Account Security <security@log-in-check.org>\nDate: 2023-10-06\nSubject: Account Security Alert\nTo: tom@nonprofit.org\n\nDear User,\n\nPlease confirm your password immediately to secure your account: https://log-in-check.org/secure\n\nThank you,\nAccount Security",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      11
+    ],
+    "expectNotes": "The domain 'log-in-check.org' is a throwaway and indicative of phishing attempts."
+  },
+  {
+    "id": "tom-credharvest-07",
+    "persona": "tom",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Password reset required due to account issues.",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Action Required: Password Reset",
+    "body": "---------- Forwarded message ---------\nFrom: IT Support <support@update-account.info>\nDate: 2023-10-07\nSubject: Action Required: Password Reset\nTo: tom@nonprofit.org\n\nDear Tom,\n\nYour account needs immediate attention. Please reset your password here: https://update-account.info/reset\n\nSincerely,\nIT Support",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      13
+    ],
+    "expectNotes": "The domain 'update-account.info' is indicative of a phishing scheme."
+  },
+  {
+    "id": "tom-credharvest-08",
+    "persona": "tom",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Verify your login credentials urgently.",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Verify Your Login Information",
+    "body": "---------- Forwarded message ---------\nFrom: User Support <support@confirm-logins.com>\nDate: 2023-10-08\nSubject: Verify Your Login Information\nTo: tom@nonprofit.org\n\nHello,\n\nWe require you to confirm your password to avoid account suspension: https://confirm-logins.com/verify\n\nRegards,\nUser Support",
+    "html": null,
+    "headers": null,
+    "replyTo": null,
+    "linkScores": [
+      5
+    ],
+    "expectNotes": "The domain 'confirm-logins.com' is a throwaway domain used for credential harvesting."
+  },
+  {
+    "id": "sofia-aid-legit-01",
+    "persona": "sofia",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "NY State financial-aid notice via govdelivery ESP — the exact FP class the fix targeted",
+    "from": "sofia@example.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Your 2026-27 TAP application has been received",
+    "body": "---------- Forwarded message ---------\nFrom: HESC Information <HESC.Information@public.govdelivery.com>\nDate: Mon, Jul 27, 2026 at 9:02 AM\nSubject: Your 2026-27 TAP application has been received\nTo: <sofia@example.com>\n\nNew York State Higher Education Services Corporation\n\nWe received your 2026-27 Tuition Assistance Program (TAP) application. You can view your award status and any outstanding requirements by signing in to your HESC account.\n\nIf you have questions, contact us at 1-888-697-4372, Monday through Friday.",
+    "linkScores": [
+      88
+    ],
+    "expectNotes": "Reputable ESP sender + clean/transactional body + safe link. Must reach SAFE, not REVIEW."
+  },
+  {
+    "id": "sofia-scholarship-scam-01",
+    "persona": "sofia",
+    "archetype": "credential-harvest",
+    "expect": "DANGER",
+    "desc": "Fake scholarship portal asking for bank login to 'receive' award — student-targeted",
+    "from": "sofia@example.com",
+    "to": "orbischecks+sofia@gmail.com",
+    "subject": "Fwd: Congratulations! Claim your $5,000 scholarship now",
+    "body": "---------- Forwarded message ---------\nFrom: Scholarship Awards <awards@scholarship-grants-portal.com>\nDate: Tue, Jul 28, 2026 at 3:14 PM\nSubject: Congratulations! Claim your $5,000 scholarship now\nTo: <sofia@example.com>\n\nDear Student,\n\nYou have been selected for a $5,000 merit scholarship. To receive your funds, you must verify your identity and enter your bank account login so we can deposit the award within 24 hours. This offer expires today.\n\nVerify and claim now.",
+    "linkScores": [
+      12
+    ],
+    "expectNotes": "credential/payment ask + urgency + dangerous link. Must be DANGER."
+  },
+  {
+    "id": "robert-usps-smish-01",
+    "persona": "robert",
+    "archetype": "delivery-fee",
+    "expect": "DANGER",
+    "desc": "USPS 'redelivery fee' lookalike-domain scam — classic retiree target",
+    "from": "robert@example.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Your package could not be delivered",
+    "body": "---------- Forwarded message ---------\nFrom: USPS Delivery <tracking@usps-delivery-fee.com>\nSubject: Your package could not be delivered\nTo: robert@example.com\n\nYour package is being held because a $2.99 redelivery fee is unpaid. Pay now to release your parcel or it will be returned to sender within 48 hours.\n\nPay the fee here.",
+    "linkScores": [
+      10
+    ],
+    "expectNotes": "Display name 'USPS' on usps-delivery-fee.com → sender_mismatch; dangerous link. DANGER."
+  },
+  {
+    "id": "robert-bank-legit-01",
+    "persona": "robert",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Genuine Chase statement-ready notice from the real chase.com domain",
+    "from": "robert@example.com",
+    "to": "orbischecks+robert@gmail.com",
+    "subject": "Fwd: Your statement is ready",
+    "body": "---------- Forwarded message ---------\nFrom: Chase <no.reply.alerts@chase.com>\nSubject: Your statement is ready\nTo: robert@example.com\n\nYour monthly account statement is now available. Sign in to chase.com or the Chase Mobile app to view it. We will never ask for your password or PIN by email.",
+    "linkScores": [
+      90
+    ],
+    "expectNotes": "Real brand domain + transactional 'statement ready' + safe link. crown-jewel must NOT fire (no solicitation). SAFE."
+  },
+  {
+    "id": "maria-invoice-fraud-01",
+    "persona": "maria",
+    "archetype": "invoice-wire-fraud",
+    "expect": "DANGER",
+    "desc": "Vendor-impersonation invoice with changed bank details (BEC) from a lookalike domain",
+    "from": "maria@acme.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Updated remittance details for invoice #4471",
+    "body": "---------- Forwarded message ---------\nFrom: Acme Supplies Billing <billing@acme-supplies-invoicing.com>\nSubject: Updated remittance details for invoice #4471\nTo: maria@acme.com\n\nHello,\n\nPlease note our banking details have changed. Kindly remit payment for the attached invoice to our new account. Wire the balance today to avoid a late fee. Open the attached invoice for the updated account and routing number.",
+    "headers": "Authentication-Results: mx.google.com; dkim=fail header.i=@acme-supplies-invoicing.com; spf=softfail; dmarc=fail",
+    "linkScores": [],
+    "expectNotes": "payment/wire + attachment + DKIM/DMARC fail (forged). No link. Must be DANGER on sender+body+auth alone."
+  },
+  {
+    "id": "maria-resume-legit-01",
+    "persona": "maria",
+    "archetype": "legit-personal",
+    "expect": "SAFE",
+    "desc": "A real job applicant emailing a resume — unfamiliar sender, benign",
+    "from": "maria@acme.com",
+    "to": "orbischecks+maria@gmail.com",
+    "subject": "Fwd: Application for the HR Coordinator role",
+    "body": "---------- Forwarded message ---------\nFrom: Jordan Ellis <jordan.ellis.hr@gmail.com>\nSubject: Application for the HR Coordinator role\nTo: maria@acme.com\n\nHi Maria,\n\nPlease find my resume attached for the HR Coordinator position posted on your careers page. I have five years of experience in benefits administration and would welcome the chance to interview. Thank you for your consideration.\n\nBest,\nJordan",
+    "linkScores": [],
+    "expectNotes": "Personal 1:1 from gmail (webmail, neutral). No crown-jewel, no urgency. Should be SAFE (or at worst benign REVIEW from webmail cap) — a resume is not a scam."
+  },
+  {
+    "id": "deshawn-bec-giftcard-01",
+    "persona": "deshawn",
+    "archetype": "payment-bec",
+    "expect": "DANGER",
+    "desc": "CEO gift-card BEC from free webmail — no link, danger is entirely in the words + webmail sender",
+    "from": "deshawn@startup.io",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Quick favor - need this handled discreetly",
+    "body": "---------- Forwarded message ---------\nFrom: Mark Reyes <mark.reyes.ceo.office@gmail.com>\nSubject: Quick favor - need this handled discreetly\nTo: deshawn@startup.io\n\nAre you at your desk? I'm tied up in back-to-back meetings and can't take calls. I need you to purchase 5 Apple gift cards ($200 each) for a client gift today. Scratch off the back and send me photos of the codes right away. Keep this between us until the announcement.",
+    "linkScores": [],
+    "expectNotes": "payment crown-jewel + urgency + secrecy, from free webmail claiming to be the CEO. sender webmail(60) + corroborated crown → DANGER."
+  },
+  {
+    "id": "deshawn-calendar-legit-01",
+    "persona": "deshawn",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "Genuine Google Calendar invite for a prospect meeting",
+    "from": "deshawn@startup.io",
+    "to": "orbischecks+deshawn@gmail.com",
+    "subject": "Fwd: Invitation: Discovery call @ Thu Jul 30",
+    "body": "---------- Forwarded message ---------\nFrom: Google Calendar <calendar-notification@google.com>\nSubject: Invitation: Discovery call @ Thu Jul 30, 2026\nTo: deshawn@startup.io\n\nYou have been invited to the following event.\n\nDiscovery call\nThursday, July 30, 2026, 2:00 - 2:30pm (Central)\nOrganizer: alex@prospectco.com\n\nYes / Maybe / No",
+    "linkScores": [
+      92
+    ],
+    "expectNotes": "Real google.com sender + benign invite + safe link. SAFE."
+  },
+  {
+    "id": "priya-paypal-lookalike-01",
+    "persona": "priya",
+    "archetype": "lookalike-impersonation",
+    "expect": "DANGER",
+    "desc": "PayPal credential-harvest on paypa1-secure.com — the load-bearing impersonation case (must never regress)",
+    "from": "priya@techco.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Your account has been limited - action required within 24 hours",
+    "body": "---------- Forwarded message ---------\nFrom: PayPal Security <service@paypa1-secure.com>\nSubject: Your account has been limited - action required within 24 hours\nTo: priya@techco.com\n\nDear Customer,\n\nWe detected unusual activity and temporarily limited your account. You must confirm your login credentials within 24 hours or it will be permanently suspended. Click below to verify and restore access.\n\nVerify My Account Now\n\nPayPal Security Team",
+    "linkScores": [
+      8
+    ],
+    "expectNotes": "lookalike sender (paypa1) → sender ceiling 15; credential + urgency; dangerous link. DANGER, high confidence."
+  },
+  {
+    "id": "priya-newsletter-legit-01",
+    "persona": "priya",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "A coaching newsletter from a niche-but-real small business (reputation-floor case)",
+    "from": "priya@techco.com",
+    "to": "orbischecks+priya@gmail.com",
+    "subject": "Fwd: Your training check-in + this week's article",
+    "body": "---------- Forwarded message ---------\nFrom: Legion <contact@legionathletics.com>\nSubject: Your training check-in + this week's article\nTo: priya@techco.com\n\nHey, quick check-in from the coaching team. This week's article covers how to structure a training block when you're short on time. If you're on the beginner program, reply and let us know how week 3 went. You're receiving this because you subscribed. Unsubscribe any time.",
+    "linkScores": [
+      72
+    ],
+    "expectNotes": "Niche but real domain (reputation floor) + soft-only marketing body + marginal-but-safe link. SAFE, not REVIEW."
+  },
+  {
+    "id": "tom-otp-delivery-legit-01",
+    "persona": "tom",
+    "archetype": "legit-transactional",
+    "expect": "SAFE",
+    "desc": "A genuine one-time-code DELIVERY email (we SENT you a code) — must not be confused with a code SOLICITATION",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Your verification code is 481920",
+    "body": "---------- Forwarded message ---------\nFrom: GitHub <noreply@github.com>\nSubject: Your verification code is 481920\nTo: tom@nonprofit.org\n\nHere is your one-time verification code: 481920\n\nEnter this code to finish signing in. This code expires in 10 minutes. If you did not request it, you can safely ignore this email or change your password.",
+    "linkScores": [],
+    "expectNotes": "sensitive_info keyword (2FA code) but DELIVERY not solicitation, real brand, no link. crown-jewel must NOT escalate. SAFE."
+  },
+  {
+    "id": "tom-softonly-legit-01",
+    "persona": "tom",
+    "archetype": "legit-marketing",
+    "expect": "SAFE",
+    "desc": "Legit reminder with a deadline + generic greeting (soft-only) — the urgency+greeting FP class",
+    "from": "tom@nonprofit.org",
+    "to": "orbischecks+tom@gmail.com",
+    "subject": "Fwd: Reminder: benefits enrollment closes Friday",
+    "body": "---------- Forwarded message ---------\nFrom: BenefitsAdmin <notifications@benefitsadmin.com>\nSubject: Reminder: benefits enrollment closes Friday\nTo: tom@nonprofit.org\n\nDear Employee,\n\nThis is a reminder that open enrollment for your 2026 benefits closes this Friday at 5pm. Please review your elections in the portal before the deadline. No action is required if you are keeping your current plan.",
+    "linkScores": [
+      80
+    ],
+    "expectNotes": "urgency(deadline) + generic_greeting, but NO hard signal → soft weights (soloWeight). Reputable-ish sender + safe link. SAFE."
+  }
+]
