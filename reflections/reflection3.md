@@ -1,25 +1,31 @@
-# Reflection #3
+# Reflection #3: Week 9 Capstone Sprint 3
 
-Pod Members: **Add Pod Members Names**
+Pod Members: **Michael Jissa, David Gonzalez-Cesar, Ozias Tumimana**
 
 ## Reflection Questions
 
-* Name at least one successful thing this week.
+* **Name at least one thing that went well this sprint.**
 
- Add response here
+The biggest win for me was turning the Ask Orbo data assistant from a fragile keyword matcher into a genuinely capable, ask-anything feature — and doing it without ever loosening security. It started as a keyword router that misread small rewordings ("how many reports this week" got sent to the Weekly Report because it matched "report" and "week"). I rebuilt it in stages: first LLM-first with a validated catalog, then a full text-to-SQL engine where the LLM writes SQL against a locked-down, read-only database view (`v_reports`) that exposes only shareable columns. Every generated query passes a guard (single read-only SELECT, that view only, no writes or escapes — 33 adversarial tests), runs in a scoped read-only transaction that injects the caller's org and role filter, and is capped and timed out. Then the LLM composes a natural, professional answer from the real rows, with matching reports shown as cards. On top of that I built an MCP server so an external client like Claude Desktop can query the org's data through the user's own API key — which is exactly what my mentor had asked me to explore. David shipped a coherent app-wide animation layer, a resilience pass that removed blank-screen failure modes, and a full mobile-responsive fix so the dashboards no longer scroll sideways on phones. The app is deployed and running end-to-end at a live URL, and our server test suite is now over 600 tests.
 
-* What were some challenges you and/or your group faced this week?
+* **What challenges did your team face?**
 
- Add response here
+The hardest thinking this sprint was architectural, not mechanical. My mentor asked me to implement MCP, and I spent real time researching whether MCP actually solved our goal (letting users ask our data anything) before building. I concluded MCP is a transport for exposing tools to an agent — it does not add language understanding and does not remove the work of hand-building each capability — so I pivoted to text-to-SQL to attack the real constraint (query coverage), and only then wrapped that capability in an MCP server, which is the correct use case for MCP. Getting there involved several failed intermediate designs and a lot of adversarial testing to prove the SQL layer could not be broken out of. A concrete late bug: when I switched the model to `gpt-5-nano`, the GPT-5 API rejects `max_tokens` (it wants `max_completion_tokens`) and only accepts the default temperature, and as a reasoning model it can spend a low token budget entirely on hidden reasoning and return empty content — so I had to adjust our LLM wire format and token caps. On the collaboration side, David and I independently built responsive dashboard layouts in the same files during the same sprint, so I had to hand-resolve merge conflicts and unify two different class-naming schemes into one coherent system rather than letting either overwrite the other.
 
-* Did you finish all of your tasks in your sprint plan for this week? If you did not finish all of the planned tasks, how would you prioritize the remaining tasks on your list?  (i.e over planned, did not know how to implement certain features, miscommunication from the team, had to pivot from original plans, etc.)
+* **Did you finish all of your planned tasks? If not, what contributed to that?**
 
- Add response here
+I finished the tasks I set out to do and more. The planned work — finishing the interactive Ask Orbo experience, the org member auth flow, and hardening the deployed app — all shipped, and the MCP server was extra scope I took on because of the mentor conversation. What contributed to going beyond the plan was that the auth work I flagged as "at risk" last sprint turned into a clean build: I moved org invitations server-side (invites are now created with the Clerk secret key on the backend, and the invite email points at our own sign-in page instead of Clerk's hosted page), and added per-page role routing so logging in through the wrong door (personal / organizational / analyst) either routes you to the right variant or shows an error linking to the correct page. The one thing I deliberately deferred is that the deployed backend is a few commits behind `main` — the MCP server and latest polish are local-verified but not yet redeployed — because I did not want to risk a Render migration issue right before demos. Redeploying cleanly is my first Sprint 4 task.
 
-* Did the resources provided to you help prepare you in planning and executing your capstone project sprint this week? Be specific, what resources did you find particularly helpful or which tasks did you need more support on?
+* **What did the spec audit during the bug bash surface? Were there significant gaps between documented and actual behavior, and how did you address them? Is the Spec Reconciliation — Bug Bash section committed to your repo?**
 
- Add response here
+The bug bash surfaced that our biggest documentation gap is the Ask Orbo / Insights data layer: the spec still describes the original catalog-and-chart approach, but the actual implementation is now a guarded text-to-SQL engine over the `v_reports` view, with a matching MCP server that is not in the spec at all. It also surfaced smaller real behavior gaps I fixed on the spot — the Insights page was falling back to "I can only answer from your data" on every query because the LLM was wrapping its SQL in a markdown code fence that our cleaner did not fully strip; the dashboards scrolled sideways on phones; and the API-key settings copy still said "browser extension" even though the same key now authenticates the MCP server. I addressed the behavior gaps with code fixes (a robust SQL-fence stripper with a regression test, the responsive layout classes, and generalized settings copy). The documentation gaps are only partly reconciled: a formal "Spec Reconciliation — Bug Bash" section is not yet committed to the repo, so writing it is an outstanding item I am carrying into Sprint 4.
 
-* Which features and user stories would you consider “at risk”? How will you change your plan if those items remain “at risk”?
+* **Going into Sprint 4, is your master spec accurate? What sections still need updating?**
 
- Add response here
+It is mostly accurate but has drifted in the areas that changed most this sprint. The data model (Section 5) and the core API contracts (Section 6) are still reliable. The sections that need updating are: the AI-query feature description (it should document the text-to-SQL-over-`v_reports` architecture and the four security layers, replacing the older catalog/chart framing); a new section for the MCP server and how an external client connects with an API key; the auth flow (the server-side invitation path and the per-page role routing are new and undocumented); and the Decisions Log, which still owes entries for the MCP-vs-text-to-SQL pivot and the OpenAI model change. The `v_reports` migration is in the repo but should be called out in the deployment/spec notes so teammates know to run `prisma migrate deploy` after pulling.
+
+* **Which features and user stories are "at risk"? How will you change your plan for the final sprint?**
+
+At risk: (1) The deployed environment being current — the live backend is behind `main`, so the MCP server and latest fixes are not yet demoable from the deployed URL. (2) The MCP connection on a free-plan Claude account — local MCP servers are generally available, but plan gating shifts, so I have the MCP Inspector as a guaranteed-to-work fallback for the demo. (3) Full three-role auth testing — the per-page routing and invite flow are built and unit-tested, but the complete invited-member round trip needs a real end-to-end pass across three isolated sessions. (4) Spec and Decisions Log documentation lagging behind the code.
+
+For the final sprint I will: redeploy the backend cleanly and verify it from the live URL first, so everything demos from production; do a full manual auth pass across three separate browsers (one per role) to confirm invitations and role routing end to end; write the Spec Reconciliation — Bug Bash section and bring the master spec and Decisions Log back in sync with the shipped architecture; and prepare the MCP demo with the Inspector fallback ready. The feature work is in strong shape — the risk now is almost entirely in deployment currency, documentation, and final verification rather than in building new functionality.
