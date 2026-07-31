@@ -18,6 +18,29 @@ const LLM_TIMEOUT_MS = 60_000;
 
 // Low-level call. `messages` is the OpenAI messages array (content may be a string
 // or an array of {type:text|image_url} parts). Returns the raw assistant string.
+// The GPT-5 family (gpt-5, gpt-5-mini, gpt-5-nano, …) changed the Chat Completions wire format vs
+// gpt-4o in three ways we have to accommodate so switching LLM_MODEL "just works" without touching
+// call sites:
+//   1. the token cap is `max_completion_tokens`, not `max_tokens`;
+//   2. only the DEFAULT temperature is accepted (a custom value is rejected) → omit it;
+//   3. these are REASONING models: they spend "reasoning tokens" from the completion budget BEFORE
+//      emitting any visible text. A small cap (e.g. our classifier's ~8-30) gets fully consumed by
+//      reasoning, leaving empty content ("LLM returned no content"). So we add a reasoning headroom
+//      floor: the effective cap is at least GPT5_MIN_COMPLETION on top of what the caller asked for.
+const isGpt5Family = (model) => /(^|\/)gpt-5/i.test(String(model));
+const GPT5_REASONING_HEADROOM = 1024; // reserve room for reasoning tokens so visible output survives
+
+const buildBody = ({ model, maxTokens, temperature, messages }) => {
+  if (isGpt5Family(model)) {
+    return {
+      model,
+      max_completion_tokens: maxTokens + GPT5_REASONING_HEADROOM,
+      messages,
+    };
+  }
+  return { model, max_tokens: maxTokens, temperature, messages };
+};
+
 const chat = async ({ messages, model = env.llmModel, maxTokens = 512, temperature = 0 }) => {
   if (!env.llmApiKey) throw new Error("LLM key not set");
 
@@ -29,7 +52,7 @@ const chat = async ({ messages, model = env.llmModel, maxTokens = 512, temperatu
     res = await fetch(`${env.llmBaseUrl}/chat/completions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${env.llmApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, max_tokens: maxTokens, temperature, messages }),
+      body: JSON.stringify(buildBody({ model, maxTokens, temperature, messages })),
       signal: controller.signal,
     });
   } catch (e) {
