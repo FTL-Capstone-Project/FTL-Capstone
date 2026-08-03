@@ -151,16 +151,11 @@ const SignIn = () => {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Once Clerk confirms the session, hand off to the post-auth router: it applies the per-page
-  // role rules (personal always → personal variant; org needs an org; analyst needs admin) and
-  // either routes into the app or shows a "wrong page" error with a link to the right one.
-  // (An invite ticket is mid-processing when this flips, but PostAuthRouter's rules still hold —
-  // the invitee is an org member, so the org page's checks pass.)
-  if (isSignedIn) return <PostAuthRouter type={type} />;
-
   // ── Invite-ticket auto-processing ──────────────────────────────────────────
-  // Runs once when the component mounts with a ticket in the URL.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+  // Runs once when the component mounts with a ticket in the URL. (Must run UNCONDITIONALLY —
+  // no early return above any hook, or React throws "rendered fewer hooks than expected" the
+  // moment isSignedIn flips. It no-ops when there's no ticket, so running it while signed-in is
+  // harmless. The signed-in branch is handled AFTER all hooks, below.)
   useEffect(() => {
     if (!inviteTicket || !isLoaded || !signUpLoaded) return;
     let alive = true;
@@ -200,7 +195,13 @@ const SignIn = () => {
     return () => { alive = false; };
   }, [inviteTicket, isLoaded, signUpLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // OAuth (Google/Apple) → Clerk hosts the redirect; we come back at /sso-callback.
+  // Once Clerk confirms the session, hand off to the post-auth router (per-page role routing →
+  // the right variant, or a "wrong page" message). Placed AFTER all hooks so hook order is stable
+  // across the signed-out → signed-in transition — an early return above the useEffect above was
+  // what crashed the page on login.
+  if (isSignedIn) return <PostAuthRouter type={type} />;
+
+  // OAuth (Google) → Clerk hosts the redirect; we come back at /sso-callback.
   const oauth = async (strategy) => {
     if (!isLoaded) return;
     setError("");
