@@ -61,7 +61,7 @@ export const env = {
   // .env files / Render configs keep working during the switch.
   llmApiKey: process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY,
   llmBaseUrl: process.env.LLM_BASE_URL || "https://api.openai.com/v1",
-  llmModel: process.env.LLM_MODEL || "gpt-5-nano",
+  llmModel: process.env.LLM_MODEL || "gpt-4o-mini",
   // True when Clerk backend creds are present; lets middleware fall back to a
   // dev stub locally (so David/Ozias can build without live Clerk) while using
   // real verification as soon as keys exist.
