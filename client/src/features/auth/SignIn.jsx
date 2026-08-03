@@ -2,7 +2,7 @@
 // Pixel-matches the wireframe (Personal/Orbis SignIn_Page) but the REAL auth is
 // Clerk's useSignIn() hook underneath (custom-flow pattern, Core 2 SDK v5).
 //
-// Flow: Google/Apple/SSO (OAuth redirect) OR email+password. Password sign-in that
+// Flow: Google (OAuth redirect) OR email+password. Password sign-in that
 // needs an email code drops into a small verification step. On success → setActive
 // → into the app.
 //
@@ -10,11 +10,11 @@
 // link + tagline — the sign-in itself is identical for everyone (Clerk decides the
 // real org/role once they're in).
 import { useState, useEffect } from "react";
-import { useSignIn, useSignUp, useAuth, useOrganizationList } from "@clerk/clerk-react";
+import { useSignIn, useSignUp, useAuth, useOrganizationList, useClerk } from "@clerk/clerk-react";
 import { Navigate, useSearchParams, Link } from "react-router-dom";
 import { useOrbisRole } from "../../lib/useOrbisRole.js";
 import {
-  AuthCard, SocialButton, SsoButton, Field, PrimaryButton, Divider, PrivacyNote, GoogleMark, AppleMark,
+  AuthCard, SocialButton, Field, PrimaryButton, Divider, PrivacyNote, GoogleMark,
 } from "./AuthKit.jsx";
 
 const AFTER_AUTH = "/ask-orbo"; // where a signed-in user lands once routing is settled
@@ -49,9 +49,11 @@ const ErrorText = ({ children }) => (
 // auto-activate an org on sign-in). While memberships load we render nothing (avoids a flash).
 const PostAuthRouter = ({ type }) => {
   const { role, orgId } = useOrbisRole();
-  const { isLoaded, setActive, userMemberships } = useOrganizationList({
-    userMemberships: { infinite: true },
-  });
+  // NOTE: pass `userMemberships: true` (NOT `{ infinite: true }`) — the object form throws in this
+  // Clerk version, which is what was crashing login into the ErrorBoundary. This matches the shape
+  // AppShell uses. setActive comes from useClerk() (the reliable source), not from this hook.
+  const { isLoaded, userMemberships } = useOrganizationList({ userMemberships: true });
+  const { setActive } = useClerk();
   const [decision, setDecision] = useState(null); // null=deciding | "go" | "wrong-personal" | "wrong-org"
 
   useEffect(() => {
@@ -62,29 +64,36 @@ const PostAuthRouter = ({ type }) => {
     const anyM = memberships[0] ?? null;
 
     (async () => {
-      // ── Personal page: always land in the personal variant (no active org). ──
-      if (type === "personal") {
-        if (orgId) { try { await setActive?.({ organization: null }); } catch { /* best-effort */ } }
-        setDecision("go");
-        return;
-      }
+      try {
+        // ── Personal page: always land in the personal variant (no active org). ──
+        if (type === "personal") {
+          if (orgId) { try { await setActive?.({ organization: null }); } catch { /* best-effort */ } }
+          setDecision("go");
+          return;
+        }
 
-      // ── Analyst page: requires org:admin. ──
-      if (type === "analyst") {
-        if (role === "analyst") { setDecision("go"); return; } // already admin in an active org
-        if (adminM) { try { await setActive?.({ organization: adminM.organization.id }); } catch { /* */ } setDecision("go"); return; }
-        if (orgId || anyM) { setDecision("wrong-org"); return; } // a member → send to Org login
-        setDecision("wrong-personal"); // no org at all → send to Personal
-        return;
-      }
+        // ── Analyst page: requires org:admin. ──
+        if (type === "analyst") {
+          if (role === "analyst") { setDecision("go"); return; } // already admin in an active org
+          if (adminM) { try { await setActive?.({ organization: adminM.organization.id }); } catch { /* */ } setDecision("go"); return; }
+          if (orgId || anyM) { setDecision("wrong-org"); return; } // a member → send to Org login
+          setDecision("wrong-personal"); // no org at all → send to Personal
+          return;
+        }
 
-      // ── Organizational page: requires any org membership (admin lands as analyst variant). ──
-      // An invite ticket already activated the org, so a set orgId is the fast path.
-      if (orgId || anyM) {
-        if (!orgId && anyM) { try { await setActive?.({ organization: anyM.organization.id }); } catch { /* */ } }
+        // ── Organizational page: requires any org membership (admin lands as analyst variant). ──
+        // An invite ticket already activated the org, so a set orgId is the fast path.
+        if (orgId || anyM) {
+          if (!orgId && anyM) { try { await setActive?.({ organization: anyM.organization.id }); } catch { /* */ } }
+          setDecision("go");
+        } else {
+          setDecision("wrong-personal"); // no org → send them to Personal
+        }
+      } catch {
+        // Login must never dead-end at the error page over a routing edge case. If anything
+        // unexpected happens deciding the variant, just let the user into the app — they're
+        // validly signed in; the app's own role-aware screens handle the rest.
         setDecision("go");
-      } else {
-        setDecision("wrong-personal"); // no org → send them to Personal
       }
     })();
   }, [isLoaded, type, orgId, role, userMemberships, setActive]);
@@ -339,8 +348,6 @@ const SignIn = () => {
       }
     >
       <SocialButton icon={<GoogleMark />} label="Continue with Google" onClick={() => oauth("oauth_google")} disabled={!isLoaded} />
-      <SocialButton icon={<AppleMark />} label="Continue with Apple" onClick={() => oauth("oauth_apple")} disabled={!isLoaded} />
-      <SsoButton onClick={() => oauth("saml")} />
 
       <Divider />
 

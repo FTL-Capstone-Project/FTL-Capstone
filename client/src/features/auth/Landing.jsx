@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ShieldCheck, Building2, ScatterChart, Zap, BarChart3,
-  Twitter, Linkedin, Github, ArrowRight, Download, Send,
+  ArrowRight, Download, Send,
   Mail, Globe, Users, AlertTriangle, Loader2, Search,
 } from "lucide-react";
 import { api } from "../../lib/api.js";
@@ -542,54 +542,6 @@ const FinalCta = () => (
   </section>
 );
 
-// ── footer (light: dark logo sits bare, page stays in the light family) ──
-const Footer = () => {
-  const cols = [
-    { head: "Product", items: ["Features", "Security", "Intelligence", "API"] },
-    { head: "Company", items: ["About", "Blog", "Careers", "Contact"] },
-    { head: "Legal", items: ["Privacy", "Terms", "Cookie Policy", "GDPR"] },
-  ];
-  const socials = [Twitter, Linkedin, Github];
-  return (
-    <footer style={{ background: "var(--canvas)", borderTop: "1px solid var(--border)", color: "var(--text-dim)", padding: "64px 24px 32px" }}>
-      <div style={{ maxWidth: SECTION_MAX, margin: "0 auto" }}>
-        <div className="landing-footer" style={{ display: "grid", gridTemplateColumns: "1.6fr repeat(3, 1fr)", gap: 40 }}>
-          <div>
-            <OrbisLogo height={30} />
-            <p style={{ margin: "16px 0 24px", maxWidth: 300, lineHeight: 1.6 }}>
-              AI-powered phishing defense that checks any link or email for scams, and explains why in plain English.
-            </p>
-            <div style={{ display: "flex", gap: 12 }}>
-              {socials.map((Icon, i) => (
-                <span key={i} style={{
-                  width: 36, height: 36, borderRadius: "50%", background: "var(--surface)",
-                  border: "1px solid var(--border)", display: "grid", placeItems: "center",
-                }}>
-                  <Icon size={16} color="var(--navy)" />
-                </span>
-              ))}
-            </div>
-          </div>
-          {cols.map((c) => (
-            <div key={c.head}>
-              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "var(--navy)", marginBottom: 16 }}>{c.head}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {c.items.map((i) => (
-                  <a key={i} href={i === "About" ? "#about" : "#"} style={{ color: "var(--text-dim)" }}>{i}</a>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ height: 1, background: "var(--border)", margin: "40px 0 24px" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, fontSize: 14, color: "var(--text-dim)" }}>
-          <span>© 2026 Orbis Security. All rights reserved.</span>
-          <span style={{ display: "flex", gap: 24 }}><a href="#" style={{ color: "var(--text-dim)" }}>Status</a><a href="#" style={{ color: "var(--text-dim)" }}>Security</a></span>
-        </div>
-      </div>
-    </footer>
-  );
-};
 
 const Landing = () => {
   useReveal(); // wire up the scroll-reveal observer for the whole page
@@ -602,7 +554,6 @@ const Landing = () => {
       <Features />
       <Process />
       <FinalCta />
-      <Footer />
     </div>
   );
 }

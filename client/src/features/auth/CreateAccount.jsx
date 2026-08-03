@@ -9,7 +9,7 @@ import { useState } from "react";
 import { useSignUp, useAuth } from "@clerk/clerk-react";
 import { Navigate, Link } from "react-router-dom";
 import {
-  AuthCard, SocialButton, Field, PrimaryButton, Divider, PrivacyNote, GoogleMark, AppleMark,
+  AuthCard, SocialButton, Field, PrimaryButton, Divider, PrivacyNote, GoogleMark,
 } from "./AuthKit.jsx";
 import OrboAvatar from "../../components/OrboAvatar.jsx";
 
@@ -124,7 +124,6 @@ const CreateAccount = () => {
       </h2>
 
       <SocialButton icon={<GoogleMark />} label="Continue with Google" onClick={() => oauth("oauth_google")} disabled={!isLoaded} />
-      <SocialButton icon={<AppleMark />} label="Continue with Apple" onClick={() => oauth("oauth_apple")} disabled={!isLoaded} />
 
       <Divider />
 
