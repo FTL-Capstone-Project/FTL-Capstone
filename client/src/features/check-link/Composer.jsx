@@ -1,3 +1,4 @@
+// ── feature: check-link · composer · owner: David ──
 import { useState, useRef } from "react";
 import { Paperclip, ArrowUp, X, AlertCircle } from "lucide-react";
 

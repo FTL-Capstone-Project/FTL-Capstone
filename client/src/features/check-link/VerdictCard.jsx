@@ -1,3 +1,5 @@
+// ── feature: check-link · verdict card · owner: David ──
+// Renders one link's AI verdict: score gauge, evidence list, sandbox screenshot, report action.
 import { useState, useEffect } from "react";
 import { Eye, ShieldCheck, Flag, Clock } from "lucide-react";
 import { VERDICT_STYLES } from "../../config/constants.js";

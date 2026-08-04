@@ -8,7 +8,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { rateLimit } from "../../middleware/rateLimit.js";
 import { env } from "../../config/env.js";
 import { visionText, visionJSON } from "../../services/llm.js";
-import { buildImageReport, SIGNAL_CATALOG } from "./phishingSignals.js";
+import { buildImageReport } from "./phishingSignals.js";
 
 export const visionRouter = Router();
 
@@ -63,9 +63,8 @@ visionRouter.post("/read-screenshot", requireAuth, limit, async (req, res) => {
 });
 
 // The red-flag signal TYPES the model may report (must match phishingSignals.js's catalog).
-// Kept as a plain, comma-joined list so the prompt is easy to read and stays in sync with the
-// deterministic scorer — the model picks from THIS closed set; code owns the scoring.
-const SIGNAL_TYPES = Object.keys(SIGNAL_CATALOG);
+// Spelled out as a plain, comma-joined guide so the prompt is easy to read and stays in sync
+// with the deterministic scorer — the model picks from THIS closed set; code owns the scoring.
 const SIGNAL_GUIDE =
   "credentials (asks for a password/login), sensitive_info (asks for SSN, full card number, bank " +
   "details, or a 2FA/one-time code), payment (send money, wire, gift cards, pay a fee), " +
