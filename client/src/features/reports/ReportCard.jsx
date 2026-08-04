@@ -1,3 +1,5 @@
+// ── feature: reports · report card · owner: Ozias ──
+// One row in the Reports list: a report's title, verdict badge, and archive/delete menu.
 import { useState, useEffect, useRef } from "react";
 import { Mail, MoreHorizontal, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import StatusBadge from "../../components/StatusBadge.jsx";

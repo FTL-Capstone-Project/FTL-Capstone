@@ -1,3 +1,7 @@
+// ── feature: reports · owner: Ozias ──
+// The Reports page: lists the caller's reports (and, for org members, their team's via the
+// scope toggle), plus the analyst triage queue. Rows come from GET /api/history; clicking one
+// opens ReportDetailModal. Role-aware — what shows depends on useOrbisRole().
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpDown } from "lucide-react";
 import { api } from "../../lib/api.js";

@@ -1,3 +1,7 @@
+// ── feature: reports · analyst review modal · owner: Ozias ──
+// The report detail overlay: shows one report's verdict + evidence, and (for analysts)
+// the review form that PATCHes /api/indicators/:id/review to record an authoritative
+// verdict and move the report through its triage/closure states.
 import { useEffect, useState, useRef } from "react";
 import { X, ShieldCheck, Clock, FileCheck2, UserCheck, Layers } from "lucide-react";
 import { api } from "../../lib/api.js";
