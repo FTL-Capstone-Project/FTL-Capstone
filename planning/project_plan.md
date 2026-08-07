@@ -7,6 +7,17 @@
 
 > Master spec / source of truth. Before code is written, the relevant section here is updated first.
 
+> **Sprint 4 status (final reconciliation pass).** This is the canonical, as-built version of the spec:
+> every section below has been walked against the shipped code and updated to describe what Orbis
+> *actually does*, not what we planned in Week 6. The app is deployed on Render (client + API) against a
+> Neon Postgres database, with 751 automated tests passing (617 server, 134 client). The largest changes
+> from the original plan — the score is computed by our own code and the AI only writes the words; the
+> inbound-email path is a Gmail Apps Script relay, not SendGrid; the analyst "ask the data" feature writes
+> guarded SQL against a read-only view instead of a whitelisted filter object; and a browser extension,
+> a Vision screenshot reader, and an MCP bridge all shipped — are called out in **§13 (Sprint 4 Spec
+> Reconciliation)** and folded into the Decisions Logs (§8, §10). Where a word like "danger score" or
+> "structured outputs" survived from an earlier draft, it has been corrected to match the code.
+
 ---
 
 ## 1. Problem Statement and Solution Description
@@ -18,13 +29,16 @@ part of a larger campaign) is slow, repetitive, and needs specialized expertise.
 reported it gets no quick answer. The people most targeted,
 students, individuals, and small companies without a security team, have the least help.
 
-**Solution.** Orbis takes the slow, manual work out of phishing triage. A user submits a suspicious URL;
+**Solution.** Orbis takes the slow, manual work out of phishing triage. A user submits a suspicious URL (in
+the web app, by forwarding an email to Orbo's inbox, or right from Gmail through the browser extension);
 Orbis detonates it in a secure sandbox (urlscan.io), gathers evidence about what the page does, and returns
-a plain-English danger verdict with a 0-100 score and a screenshot, without anyone opening the link on their
-own machine. One product serves three roles: **individuals** and **organization members** get a lightweight
-"is this safe?" page and their own report history; **analysts** get a full triage dashboard (org-wide history,
-keyword search, campaign clustering, and natural-language querying of the threat database). Each organization
-sees only its own data.
+a plain-English verdict with a **0-100 safety score** (100 = safe, 0 = dangerous) and a screenshot, without
+anyone opening the link on their own machine. The score itself is computed by our own deterministic rubric
+from the gathered signals — the AI only writes the human-readable explanation and can never move a
+known-bad link into "safe." One product serves three roles: **individuals** and **organization members** get
+a lightweight "is this safe?" page and their own report history; **analysts** get a full triage dashboard
+(org-wide history, keyword search, campaign clustering, and natural-language querying of the threat
+database). Each organization sees only its own data.
 
 **Target audience:** SOC/IT security analysts who triage suspicious URLs, and the everyday organization members
 (and solo individuals) who encounter those links.
@@ -165,15 +179,26 @@ not one layout with columns toggled:
   priority (score × recency × report count), with a pending-review filter front and center. The flat filterable
   list is a secondary view. This is what makes the analyst's grouped information genuinely useful (story #9).
 
-**Ask Orbo scope:** 6 visualization variants are wireframed to show the vision; **MVP ships 1-2** (weekly
-report + one chart), the rest are fast-follow. (Decisions Log - avoids "boiling the ocean.")
+**Ask Orbo scope (as built):** 6 visualization variants were wireframed. We ended up building the client
+renderers for **all six** (weekly report, heatmap, trend, campaign table, score histogram, bucket count) plus
+generic count/bar/line/pie fallbacks — so the chart *components* over-delivered on the "ship 1-2" plan. In
+practice the shipped ask-the-data engine (see §8 Feature B) reliably drives the count / bar / bucket-count /
+table shapes; the richer heatmap/trend/histogram/weekly-report components render when a matching chart spec
+is produced but are effectively dormant on the everyday query path. The dashboard's own charts (trend,
+verdict distribution, etc.) are always populated from the analyst stats endpoint. (Decisions Log.)
 
-**Auth screens are Clerk components (design decision).** Login, Register, org creation, and invites are Clerk's
-prebuilt, themeable React components, not hand-built forms - so **social login (Google/Apple) is a core MVP
-feature** (Clerk provides it out of the box) and **domain auto-join** (a company email auto-joins its org) works
-in Clerk's dev mode for the demo. We style the components to match the wireframes. **Enterprise SSO/SAML** (the
-20k-employee "Sign in with SSO" scenario, e.g. via WorkOS AuthKit's test-IdP sandbox) is a **stretch** feature,
-easy to layer on later since auth is already provider-based. (Decisions Log.)
+**Auth screens are a custom Clerk flow (as built).** We did *not* drop in Clerk's prebuilt `<SignIn/>` /
+`<SignUp/>` components. Instead every auth screen (`SignIn`, `CreateAccount`, `CreateTeam`,
+`ChooseAccountType`) is hand-built on Clerk's **headless hooks** (`useSignIn`, `useSignUp`, `useClerk`,
+`useOrganizationList`) so the pages match our wireframes exactly; the only Clerk-rendered piece is the OAuth
+return handler (`<AuthenticateWithRedirectCallback>` on `/sso-callback`). **Social login (Google/Apple) is a
+core feature** — the buttons call Clerk's `authenticateWithRedirect`. The user picks **personal / org /
+analyst** on a `/get-started` screen (carried as a `?type=` hint); the *real* variant is decided after auth
+by which Clerk organization is active. A known cost of the custom flow was a redirect race (a freshly
+-signed-in user briefly bounced to the landing page); we fixed it by driving redirects off Clerk's settled
+`isSignedIn`/`isLoaded` state rather than an imperative `navigate()`. **Enterprise SSO/SAML** (the "Sign in
+with SSO" button) is present in the UI but **not configured** — it's a stretch item and is disabled in the
+demo. (Decisions Log.)
 
 **≥3 wireframed screens (required):** comfortably exceeded - Login, Register, Home, Check Link (Checking →
 Result → 3 verdict states → Invalid Input), Analyst Dashboard, Ask Orbo (6), Reports (3 role variants + modal),
@@ -194,29 +219,44 @@ and the team-setup flow are all drawn.
 | | org_id | integer | FK → organizations.id, **nullable** - `NULL` = individual (no org) |
 | | email | text | copied from Clerk (used to match forwarded emails) |
 | | name | text | display name |
-| | role | text | `individual` \| `member` \| `analyst` - drives view + access (`member` = Organization Member) |
+| | role | text | `individual` \| `member` \| `analyst` - drives view + access (`member` = Organization Member). **As built:** analyst is granted only by an explicit `orbisRole: "analyst"` flag in Clerk metadata; an org admin is *not* auto-promoted to analyst (see §13). |
+| | email_reports | boolean | opt-out for the emailed report we send after a forwarded-email check finishes (default `true` = opted in). **Added Sprint 3.** |
+| | api_key_hash | text | SHA-256 hash of the user's browser-extension API key (never the raw key); unique; `null` = no key issued. Rotating overwrites it (instant per-user revocation). **Added Sprint 3.** |
 | | created_at | timestamp | account creation |
 | **submissions** | id | integer | primary key (one report event) |
 | | user_id | integer | FK → users.id (who submitted) |
 | | indicator_id | integer | FK → indicators.id (the judged thing) |
 | | raw_url | text | URL exactly as submitted |
 | | context_text | text | optional pasted email/message context |
+| | org_id | integer | FK → organizations.id, nullable - `NULL` = reported as an individual. **Added:** copied onto the submission so a report's org is fixed at submit time. |
 | | source | text | `web` \| `email` - how it was submitted (email = forwarded to the Orbo inbox) |
 | | escalated | boolean | true when auto-routed to an analyst for review (all org-member submissions) |
+| | archived_at | timestamp | soft-archive: when set, hidden from *this user's* default Reports view but not deleted (reversible); other users + the global indicator are untouched. `null` = active. **Added Sprint 3.** |
+| | email_thread_id | text | Gmail thread id of the forwarded email (`source = 'email'` only); lets the report email reply *into* the user's original forward thread instead of arriving standalone. **Added Sprint 3.** |
 | | created_at | timestamp | submission time |
 | **indicators** | id | integer | primary key (the judged thing) - **GLOBAL / shared threat intel, one row per unique URL** |
 | | canonical_key | text | dedup key (host + path + semantic params), **unique globally** - the same URL is one indicator for everyone |
 | | domain | text | destination domain |
 | | status | text | `pending` \| `scanning` \| `done` \| `error` |
-| | ai_score | integer | 0-100 AI danger score - shared by all who report this URL |
-| | ai_verdict | text | Claude plain-English explanation (shared) |
-| | ai_confidence | text | `low` \| `medium` \| `high` (nullable) |
+| | ai_score | integer | **0-100 SAFETY score (100 = safe, 0 = dangerous)** - computed by our deterministic rubric (§8), not invented by the model; shared by all who report this URL. *(Corrected Sprint 4: earlier drafts called this a "danger score" — the whole system treats it as a safety score.)* |
+| | ai_verdict | text | Claude plain-English explanation (shared); rule-based fallback text if the model call fails |
+| | ai_confidence | text | `low` \| `medium` \| `high` (nullable) - derived from how many independent danger signals fired, not the model's self-report |
+| | ai_title | text | short headline for the Reports card, e.g. "Fake PayPal login" (nullable). **Added.** |
+| | ai_description | text | one-sentence summary under the title (nullable). **Added.** |
+| | ai_tags | json | category chips, e.g. `["Credential phishing","Impersonation"]`, forced to agree with the score bucket (nullable). **Added.** |
+| | ai_reasons | json | the "why" rows: `[{ text, severity: safe\|review\|dangerous, weight? }]`, always ≥3; for emails also carries a tagged per-leg breakdown row. **Added** (this is the shipped shape of the Week-6 `evidence_summary`). |
 | | screenshot_url | text | from urlscan.io (shared) |
 | | urlscan_uuid | text | scan reference |
+| | final_url | text | where the link *actually* landed after redirects (urlscan `page.url`) (nullable). **Added.** |
+| | final_host | text | just the landing host, e.g. `amazon.com` - powers the "goes to X" cue and the reputation check on the true destination (nullable). **Added.** |
+| | redirected_to_different_host | boolean | did the link leave the domain it started on? (default false). **Added.** |
 | | blacklist_hit | boolean | is the URL on a known-bad blacklist? (Google Safe Browsing) - shared signal |
 | | blacklist_source | text | which list flagged it, e.g. `google_safe_browsing:SOCIAL_ENGINEERING` (nullable) |
 | | domain_age_days | integer | signal (nullable) |
 | | report_count | integer | total submissions across all orgs + individuals - powers "seen before, reported N times" |
+| | global_review_status | text | for the VerdictCard "Report it" flow: `null` \| `pending review` \| `confirmed safe` \| `confirmed dangerous`. **Added Sprint 3.** |
+| | reported_count | integer | how many users flagged this indicator via "Report it" (default 0). **Added Sprint 3.** |
+| | trust_votes | integer | **parked / unused** - a community "Mark safe" vote that was built then pulled before the demo (a global count could reassure a victim next to a red verdict); column kept empty rather than run a destructive migration on the shared DB. See §13. |
 | | created_at / updated_at | timestamp | first-seen / last re-scanned (enables TTL later) |
 | **org_reviews** | id | integer | primary key - an org's private authoritative review of a (global) indicator |
 | | org_id | integer | FK → organizations.id |
@@ -240,11 +280,19 @@ and the team-setup flow are all drawn.
 | | message | text | human-readable notification text |
 | | is_read | boolean | has the user seen it |
 | | created_at | timestamp | when raised |
+| **report_reasons** | id | integer | primary key - **Added Sprint 3.** One user's "Report it" on an indicator with their free-text *why* (≤200 words, capped server-side) |
+| | indicator_id | integer | FK → indicators.id |
+| | user_id | integer | FK → users.id (nullable for dev-stub / anonymous) |
+| | reason | text | the user's explanation of why they're reporting |
+| | created_at | timestamp | when reported |
+| **user_trusts** | id | integer | primary key - **parked / unused** (empty table). The "Mark safe" community vote this backed was pulled before the demo (see `indicators.trust_votes`); left in place rather than dropped by a destructive migration on the shared DB |
+| | indicator_id / user_id | integer | FKs; **UNIQUE (indicator_id, user_id)** - one vote per person per indicator (the constraint to keep if the feature is ever revived, analyst-only) |
+| | created_at | timestamp | |
 
-**Relationships:** an organization has many users, org_reviews, and campaigns; a user has many submissions and
-notifications; an **indicator (global) has many submissions** (this is the dedup - many reports across the whole
-platform, one judged thing) and many org_reviews (one per org that has reviewed it); a campaign groups many
-org_reviews. **Two layers, by design:** the **indicator** holds objective, shared threat intel (AI score,
+**Relationships:** an organization has many users, org_reviews, and campaigns; a user has many submissions,
+notifications, and report_reasons; an **indicator (global) has many submissions** (this is the dedup - many
+reports across the whole platform, one judged thing), many org_reviews (one per org that has reviewed it), and
+many report_reasons; a campaign groups many org_reviews. **Two layers, by design:** the **indicator** holds objective, shared threat intel (AI score,
 verdict, screenshot) computed **once for everyone**; an **org_review** holds one org's private authoritative
 call (`human_*`, `review_status`) on that shared indicator. **Two-phase verdict:** `ai_*` on the indicator is
 set instantly and globally; the `human_*` + `review_status` on an org_review are set later by that org's
@@ -329,23 +377,32 @@ webhook (`POST /api/webhooks/inbound-email`); the backend matches the sender to 
 flow is identical to a web submission - scan, AI verdict, and (for org members) auto-escalation. Because it has
 no screen of its own, **no wireframe is needed**; the results appear on the user's existing Reports page.
 
-**Inbound-email provider decision (Jul 13).** ~~Microsoft Azure~~ is **ruled out**: Azure Communication
-Services Email is a *send-only* product (transactional/bulk/marketing sending) — it cannot **receive** a
-forwarded email and hand it to a webhook, which is the only thing we need. The important insight: only the very
-first hop (an email physically arriving) needs any third party; everything after the webhook is our own code. So
-we have two viable, free paths (Wk 9, Michael's slice):
-1. **Simulate the webhook (chosen for the demo, $0, no domain).** Build the real webhook end-to-end (parse →
-   sender-match → submission → verdict → escalation → Reports) and demonstrate a "forward" by POSTing a realistic
-   email payload (`{ from, subject, body, links[] }`) to `/api/webhooks/inbound-email` — via a small "simulate a
-   forward" button or a saved request. The *entire pipeline is real*; only the SMTP delivery hop is stand-in.
-   Legitimate here because email is explicitly a backend-only pipeline and the app isn't publicly deployed.
-2. **Real forwarding via SendGrid Inbound Parse (optional, if a domain is free/available).** SendGrid's Inbound
-   Parse receives mail at a subdomain and POSTs it to our webhook; its payload (`from`, `subject`, `text`,
-   `attachments`) already matches our contract. **Setup:** point an MX record for a parse subdomain (e.g.
-   `parse.<ourdomain>`) at `mx.sendgrid.net`, then set the destination URL to our webhook in the SendGrid console.
-   **The one catch = a domain we control** (needed to set that MX record; Gmail can't be used because Google owns
-   it). Avoid paying: use the **GitHub Student Pack → Namecheap free-domain-for-a-year** offer, or a subdomain of a
-   domain a teammate already owns. The webhook from option 1 doesn't change — this just adds a real front door.
+**Inbound-email provider decision — as built (Ozias's slice).** ~~Microsoft Azure~~ was **ruled out** (Azure
+Communication Services Email is *send-only* — it can't receive a forwarded email and hand it to a webhook). The
+key insight held: only the very first hop (an email physically arriving) needs any third party; everything after
+the webhook is our own code. We considered SendGrid Inbound Parse as the "real path," but **it was never built** —
+it needs a domain we control, and a simpler free option turned out to work better:
+
+1. **Simulate the webhook (still supported).** The single-email `POST /api/webhooks/inbound-email` accepts a
+   realistic payload (`{ from, subject, body, links[] }`) so a "forward" can be demonstrated with a saved
+   request/curl. The *entire pipeline is real*; only the delivery hop is stand-in.
+2. **Gmail + Google Apps Script relay (chosen and shipped, $0, no domain).** A short Apps Script pasted into
+   script.google.com runs on a ~1-minute Gmail trigger against a dedicated `orbischecks@gmail.com` inbox, and
+   POSTs new forwards (in a **batch** — see below) to `POST /api/webhooks/inbound-email/batch`, authenticated by
+   a shared `x-orbis-token` header. Chosen over SendGrid because it needs **no owned domain**, costs nothing, and
+   rides real Gmail deliverability. The same relay pattern is reused *in reverse* for outbound: report emails are
+   POSTed to a second Apps Script Web App that sends them via `GmailApp` (HTTPS, not SMTP — Render's free tier
+   blocks SMTP ports), threaded back into the user's original forward via the stored `email_thread_id`. The `.gs`
+   relay scripts live in `server/appsscript/` but are pasted into Google by hand — they are the deployment, not
+   deployed-from-repo.
+
+**Batch intake + bounded concurrency (Sprint 3, in response to pod-sync scaling feedback).** After a mentor
+flagged that one-LLM-call-per-email would bottleneck at scale, we added `POST /api/webhooks/inbound-email/batch`
+(`{ emails: [...] }`, up to 50), analyzed with a small bounded concurrency (4 in flight) and returning per-email
+results in order so nothing is silently dropped. We deliberately did **not** batch several users' emails into one
+LLM call — because indicators are global, a prompt-injection in one email could poison the shared verdict served
+to everyone. Throughput comes from concurrency + caching instead. A durable queue and dedup-batched LLM calls are
+documented as roadmap in `planning/email_forwarding_scaling.md`.
 
 ---
 
@@ -371,7 +428,24 @@ and `org_id` from the verified Clerk session token (no hand-rolled JWTs).
 | Read | GET | `/api/campaigns/:id` | Campaign detail: grouped indicators (analyst) | - | `{ campaign, indicators: [...], reportCount }` | 401; 403 non-analyst or wrong org; 404 not found | 9 |
 | Read | GET | `/api/notifications` | My notifications (closure alerts) | - | `{ notifications: [...], unreadCount }` | 401 unauthenticated | 7 |
 | Update | PATCH | `/api/notifications/:id/read` | Mark a notification read (clears the bell badge) | `{}` | `{ id, is_read: true }` | 401; 403 not mine; 404 not found | 7 |
-| Create | POST | `/api/nlp-query` | English → validated filter → results + chart (analyst) ★AI | `{ question }` | `{ filter, results: [...], chartSpec }` | 401; 403 non-analyst; 422 unmappable question (→ "try rephrasing") | 11 |
+| Create | POST | `/api/nlp-query` | English → **guarded LLM-written SQL over a read-only view** → answer + chart (analyst; members get their own scope) ★AI | `{ question }` | `{ answer, cards, data, chartSpec }` or `{ fallback }` | 401; 403 individual/no-org; rejected SQL → safe fallback | 11 |
+| Read | GET | `/api/history/:id` … | *(see history routes: `?mine`, `?org`, `?org&all`, plus analyst org-wide stats when no query)* | - | - | - | 7,8,12 |
+| Update | PATCH | `/api/history/:indicatorId/archive` | Soft-archive/unarchive a report in *my* view (`{ archived }`) | `{ archived }` | `{ ok }` | 401; 400 non-boolean; 404 not mine | 7,14 |
+| Delete | DELETE | `/api/history/:indicatorId` | Permanently delete from *my* history - **individuals only** (org members get 403; their reports feed the analyst queue) | - | `{ ok }` | 401; 403 org member; 404 not mine | 14 |
+| Update | PATCH | `/api/notifications/read-all` | Mark all my notifications read (clears the badge past the 50-row page cap) | `{}` | `{ ok }` | 401 | 7 |
+| Create | POST | `/api/indicators/:id/report` | User "Report it" on a verdict → free-text reason + bumps `reported_count` / `global_review_status` | `{ reason }` | `{ ok }` | 401; 400 empty reason; 404 | 6 |
+| Create | POST | `/api/ask-orbo` | Conversational, verdict-grounded security Q&A about a specific indicator ★AI | `{ indicatorId?, question, history? }` | `{ answer }` | 401; 400 empty question | 15 |
+| Create | POST | `/api/ask-orbo/sender-report` | Analyze a sender email address (lookalike / webmail / brand / DNS) and persist it as an indicator ★AI | `{ email }` | `{ ...verdict, isSenderReport: true }` | 401 | 6,13 |
+| Create | POST | `/api/prescreen` | Instant **deterministic-only** structural pre-check (extension click-guard; no sandbox, no LLM) | `{ sender?, urls[] }` | `{ level, score, reasons }` | 401 | 1,4 |
+| Create | POST | `/api/prescreen/demo` | Public "try it" widget on the landing page (one URL, no sender, IP rate-limited) | `{ url }` | `{ level, score, reasons }` | 400; 429 | 1 |
+| Create | POST | `/api/prescreen/email` | Content-aware email pre-check (extension Gmail badge) - runs the 3 legs, persists **nothing** ★AI | `{ sender, subject, body, urls[] }` | `{ level, score, ... }` | 401; 503 no LLM key; 422 nothing scorable | 4,13 |
+| Create | POST | `/api/vision/read-screenshot` | Read/explain a urlscan screenshot in plain English (SSRF-guarded: `urlscan.io` host allowlist) ★AI | `{ url }` | `{ text }` | 401; 400 host not allowlisted | 2,15 |
+| Create | POST | `/api/vision/extract` | Extract URLs/emails/signals from an **uploaded image** (inline data URL; no server-side fetch) ★AI | `{ imageDataUrl }` | `{ urls, emails, summary, ...score }` | 401; 400 bad image | 2,13 |
+| Read | GET | `/api/dashboard` | Personal / member dashboard stats + charts | - | `{ stats, ... }` | 401 | 7 |
+| Create | POST | `/api/users/api-key` | Issue/rotate the caller's browser-extension API key (raw key returned **once**) | `{}` | `{ apiKey }` | 401 | 1,4 |
+| Read | GET | `/api/users/api-key` | Whether the caller has a key (`{ hasKey }`) - never leaks the key | - | `{ hasKey }` | 401 | 1,4 |
+| Delete | DELETE | `/api/users/api-key` | Revoke the caller's API key | - | `{ ok }` | 401 | 1,4 |
+| Create | POST | `/api/org/invite` | Analyst invites a teammate to the org (server-side Clerk op) | `{ email }` | `{ ok }` | 401; 403 non-analyst | 12 |
 
 **Role & org enforcement (story #12):** the org-wide analyst **dashboard** reads (`/history` stats, `/search`,
 `/nlp-query`, `/campaigns/*`) and the review PATCH (`/api/indicators/:id/review`) require the **analyst** role
@@ -381,8 +455,10 @@ items — still scoped to the caller's own `org_id`, so no org can read another 
 middleware verifies the Clerk session and checks role + org on every protected route, reused everywhere.
 (Role is stored in Clerk's user/org metadata and mirrored to `users.role`.)
 
-**Note - endpoint count for the rubric:** even after handing auth/orgs/invites to Clerk, we still build 12
-first-party endpoints across full CRUD, comfortably past the "5 Node endpoints" bar.
+**Note - endpoint count for the rubric:** even after handing auth/orgs/invites to Clerk, we shipped ~30
+first-party endpoints across 14 feature routers and full CRUD — far past the "5 Node endpoints" bar. The
+table above lists the load-bearing ones; the browser extension authenticates to them with an app-issued API
+key (SHA-256 hashed in `users.api_key_hash`), checked by the same auth middleware before Clerk.
 
 ---
 
@@ -412,32 +488,61 @@ context so the closure badge shows on any screen. State flows App → pages → 
 
 ## 8. AI Feature Specification
 
-Orbis has **two** AI features (rubric requires one).
+Orbis shipped **more than two** AI-touched features (the rubric requires one). The two headliners are the
+danger verdict (A) and the ask-the-data query (B); Sprint 2-3 added a conversational assistant, a Vision
+screenshot reader, and email/sender analysis, all described below. The governing principle across all of
+them: **our own code owns every score; the model only writes words**, and every model output is treated as
+untrusted and validated before it can affect anything.
 
-### Feature A - Plain-English Danger Verdict (generation)
-- **What it does for the user:** turns raw sandbox evidence into a human-readable "is this safe?" verdict + score anyone can act on.
-- **Where it lives:** triggered server-side after a scan completes; shown on the **Check Link - Result** screen and the report detail modal.
-- **Input:** distilled urlscan evidence (final domain, redirect chain, page resources, form/credential fields, domain age, cert info) + **the Google Safe Browsing blacklist result** (`blacklist_hit`/`blacklist_source`) + optional user-pasted context.
-- **Output:** structured JSON - `{ score: 0-100, verdict_text, confidence, evidence_summary }` (via structured outputs, so it's always valid JSON).
-- **Validation:** score within 0-100; verdict_text non-empty and references at least one concrete signal; a deterministic floor forces a high score on hard signals (e.g. **a Google Safe Browsing blacklist hit**, or a credential form on a <7-day-old domain) regardless of model output - a confirmed known-bad URL can never be reported as "safe."
-- **Endpoint:** produced during the `/api/submissions` → scan → **blacklist check** → score flow; read via `GET /api/indicators/:id`.
-- **Fallback:** if the Claude call fails, show the raw evidence + a "verdict unavailable, review manually" state (score `null`, status `error`) - never a false "safe."
+### Feature A - Plain-English Safety Verdict (generation) — *as built*
+- **What it does for the user:** turns raw sandbox evidence into a human-readable "is this safe?" verdict + a 0-100 safety score anyone can act on.
+- **Where it lives:** triggered server-side after a scan completes; shown on the **Check Link - Result** screen, the Reports cards, and the report detail modal.
+- **Input:** distilled urlscan evidence (final URL/host after redirects, redirect-off-domain flag, page resources, form/credential fields, domain age, cert/scheme, raw-IP/port) + **the Google Safe Browsing blacklist result** + a typosquat/lookalike assessment + a reputation lookup on the *landing* host + optional user-pasted context.
+- **The score is deterministic (this is the core change from Week 6).** Code computes `score = clamp(100 − sum of triggered danger weights)` from a fixed weighted table (e.g. Safe Browsing hit −60, urlscan-malicious −55, domain <7 days −35, credential form on a young domain −30, brand impersonation −20, redirects off-domain −15…). The model is asked for a number too, but its number is only allowed to **nudge the rubric score by ±15**, never past the floors/ceilings below. Buckets: ≥70 safe, ≥35 review, <35 dangerous. Confidence is derived from how many independent danger signals fired, not from the model.
+- **Hard overrides the model can't cross:**
+  - **Ceiling ≤20** on any hard signal — a Safe Browsing blacklist hit, a credential form on a <7-day-old domain, or a confirmed typosquat that doesn't land on the real brand. When a hard signal fires the model's nudge is disabled entirely. *A confirmed known-bad URL can never be reported as "safe."*
+  - **Floor ≥75** only when the link is clean *and* its landing host is a reputable domain (curated allowlist + Tranco top-list, minus a denylist of shorteners/free-hosting/UGC). Never applied over a hard signal.
+- **Output written onto the indicator:** `ai_score`, `ai_verdict` (prose), `ai_confidence`, `ai_title`, `ai_description`, `ai_tags`, `ai_reasons` (≥3 `{text, severity, weight?}` rows) — plus the redirect facts (`final_url`, `final_host`, `redirected_to_different_host`). *(The Week-6 spec said `{ score, verdict_text, confidence, evidence_summary }` via "structured outputs"; shipped is the richer shape above, produced as prompt-instructed JSON parsed loosely with a rule-based fallback — not the structured-outputs API.)*
+- **Endpoint:** produced during the `/api/submissions` → scan → blacklist/typosquat/reputation → score flow; read via `GET /api/indicators/:id`.
+- **Fallback:** if the Claude call fails or returns junk, a rule-based writer produces the words using the *same* deterministic score and confidence — never a false "safe," never a fabricated high score.
 
-### Feature B - Ask-the-Data Dashboarding (conversation → visualization)
-- **What it does for the user:** an analyst asks a question in plain English and gets a chart - no SQL.
-- **Where it lives:** the **Ask Orbo** query bar (reachable from the analyst Dashboard). Wireframes show 6 chart variants; MVP ships 1-2.
-- **Input:** the analyst's natural-language question + the allowed field/filter schema.
-- **Output:** a **validated, whitelisted filter object** (not raw SQL) + a `chartSpec` describing what to render.
-- **Validation:** the filter must match the allowlist (fields, operators, date ranges); anything off-list is rejected and the query is not run. Backend runs a parameterized query from the validated filter.
-- **Endpoint:** `POST /api/nlp-query`.
-- **Fallback:** if Claude returns an invalid/unmappable filter, show "couldn't understand that - try rephrasing" and offer the keyword search instead.
+### Feature B - Ask-the-Data (natural language → chart) — *re-architected, as built*
+- **What it does for the user:** an analyst (or a scoped member) asks a question in plain English and gets a prose answer, summary cards, and a chart — no SQL by hand.
+- **Where it lives:** the dashboard "Ask Orbo" rail and the Insights page. `POST /api/nlp-query`.
+- **How it works now:** the model **writes a read-only PostgreSQL `SELECT`** against a single curated view (`v_reports`) that exposes only shareable columns (no Clerk ids, no email, no raw URL). *(The Week-6 plan was "model emits a validated whitelisted filter, never SQL." We rebuilt it to LLM-written SQL because it answered far more questions; the old filter engine still exists in the codebase but is dead/unused.)*
+- **Validation (the safety story is preserved, just moved):** every generated query is parsed and must be a single read-only `SELECT` over only `v_reports` — no comments, no stacked statements, no schema-qualified names, one corrective retry on rejection. It's then executed inside a **parameterized, org-scoped, read-only transaction** with a statement timeout and a row cap. So the model never touches raw tables and can't widen its own scope; org isolation is enforced by the wrapping CTE, not by trusting the model.
+- **Output:** `{ answer, cards, data, chartSpec }`, or `{ fallback }` if there's no LLM key or the query can't be built. On the everyday path the reliable chart shapes are count / bar / bucket-count / table.
+- **Reused by the MCP bridge:** the standalone `orbis-mcp-server` package exposes one `ask_orbis` tool to Claude Desktop that calls this same endpoint with the user's API key (see §13).
 
-#### AI Feature Decisions Log
+### Feature C - Ask Orbo conversational assistant (Sprint 2)
+An interactive, **verdict-grounded** security chatbot (`POST /api/ask-orbo`). Given an `indicatorId` it folds that verdict's facts into the prompt and answers follow-up questions. Hard guardrails in the system prompt: it declines off-topic requests, **never** re-adjudicates whether a specific URL/sender is safe (it defers to the real scanner), and treats the client-supplied transcript as forgeable/untrusted.
+
+### Feature D - Email & sender analysis (Sprint 2-3)
+A forwarded email is scored in **three independent legs** — sender, body, and each embedded link — then reconciled. Deterministic code owns each leg's number: the sender leg classifies the domain (lookalike → ≤15, free webmail → ≤60 neutral, known brand → ≥55, reputable → ≥70) and adds free DNS signals (MX/SPF/DMARC *absence* is a mild negative; *presence* proves nothing since scammers set it up too); the body leg lets the model only *observe* red-flag categories while code scores them from a signal catalog, with model-guessable signals (link/sender mismatch) admitted only when code proves them; DKIM/DMARC *fail* in the original headers is a hard "forged" signal (bare SPF fail is ignored — it fails on legit forwards). Legs combine worst-of, but a lone "log in by Friday"-style ask is corroboration-gated so benign mail isn't over-flagged. This calibration work (with a measured false-positive corpus) is captured in `scripts/out/EMAIL-SCORING-TEST-REPORT.md`.
+
+### Feature E - Vision (Sprint 3)
+`POST /api/vision/read-screenshot` reads a urlscan screenshot in plain English (SSRF-guarded by a strict `urlscan.io` host allowlist — the one place we fetch by URL). `POST /api/vision/extract` pulls URLs/emails/signals out of an **uploaded** image (inline data URL, no server-side fetch at all); code owns the score, and a clean image caps at "review," never "safe," because a picture can't be sandboxed.
+
+#### AI Feature Decisions Log — *rebuilt Sprint 4 to match shipped behavior*
 | Decision | Sprint | What changed | Why |
 |---|---|---|---|
-| NLP emits a whitelisted filter object, not SQL | Sprint 0 (plan) | Architecture | Eliminates AI-driven SQL-injection risk; safer + simpler to validate |
-| Verdict uses structured outputs | Sprint 0 (plan) | Output format | Guarantees valid JSON, no hand-rolled parsing |
-| Feed Google Safe Browsing blacklist result into the verdict + as a deterministic high-score floor | Sprint 0 (plan) | Prompt input + validation | A confirmed known-bad URL is a decisive signal; the floor guarantees Orbo never calls a blacklisted URL "safe" |
+| NLP keeps the model away from raw tables | Sprint 0 (plan) | Architecture | The safety goal — no AI-driven injection, org isolation enforced in code — that every later NLP change preserved |
+| Verdict returns validated JSON with a deterministic fallback | Sprint 0 (plan) → refined S1-2 | Output format | Guarantees a usable verdict even when the model fails; shipped as prompt-instructed JSON + rule-based fallback (not the structured-outputs API we first named) |
+| Feed Google Safe Browsing into the verdict as a hard signal | Sprint 0 (plan) | Prompt input + validation | A confirmed known-bad URL is decisive; became the ≤20 ceiling below |
+| **Code owns the score; the model only writes the words** | Sprint 1 | Scoring architecture | The model contradicted itself (scored + explained differently) and could be talked out of a bad verdict. A fixed weighted rubric makes the score repeatable, testable, and explainable — like real scanners |
+| **Score direction fixed as SAFETY (100 = safe)** | Sprint 1 | Semantics | One consistent direction across verdict, email legs, prescreen, and Vision; removes the "is 80 good or bad?" ambiguity (the §5 "danger score" wording was stale until this Sprint-4 pass) |
+| **Hard-signal ceiling (≤20) + reputation floor (≥75)** | Sprint 1-2 | Validation | The model's ±15 nudge can polish wording but can never move a known-bad link to "safe" or bury a clearly-reputable one; the floor judges the *landing* host so open-redirects are caught |
+| **Typosquat / lookalike + confusable-script detector** | Sprint 1-2 | New deterministic signal | Catches brand-in-subdomain and homoglyph attacks a blacklist hasn't seen yet; "lands on the real brand" downgrades to safe |
+| **Reputation trust floor from a popularity list** | Sprint 2 | New deterministic signal | A fresh scam domain can't retroactively appear in a pre-built top-list, so it's a trust anchor that can't be faked (unlike DKIM/WHOIS-age) |
+| **Capture the real landing host after redirects** | Sprint 1 | New signal + prompt input | Fixed the "zon.com redirects to amazon.com" hallucination — where a link *actually* lands is now a required fact, not a guess |
+| **Three-leg email scoring (sender / body / links), reconciled** | Sprint 2-3 | New AI surface | A scam is the whole message, not one URL; each leg scored independently by code, model only observes signals |
+| **DKIM/DMARC fail = hard signal; SPF-only fail ignored** | Sprint 3 | Email validation | Auth-header failure is strong forgery evidence, but SPF nearly always fails on *forwarded* mail — using it would false-positive every forward |
+| **Email FP calibration (code-delivery, personal greeting, corroboration-gated crown-jewel)** | Sprint 3 | Threshold tuning | Measured against a corpus: a delivered-package code isn't a phishing ask, a greeting by first name isn't "Dear customer," and a lone "log in" line needs corroboration before it's flagged |
+| **Ask Orbo assistant is verdict-grounded and won't re-adjudicate** | Sprint 2 | New AI surface + guardrail | Keeps the chat honest — it explains a verdict but defers the safe/dangerous call to the real scanner; treats the transcript as untrusted |
+| **NLP rebuilt: model writes guarded SQL over a read-only view** | Sprint 3 | Architecture pivot | The whitelisted-filter engine answered too few questions; guarded SQL over `v_reports` (parsed, read-only, org-scoped) answers far more with the same safety guarantee |
+| **Vision reads screenshots; SSRF-guarded by host allowlist** | Sprint 3 | New AI surface + security | Reading a screenshot avoids opening the page; the only URL-fetch is locked to `urlscan.io`, uploads are never fetched server-side |
+| **Batch email intake, but one email per LLM call** | Sprint 3 | Scale + security | Concurrency gives throughput; batching several users' emails into one prompt would let an injection in one poison the shared verdict for all |
+| **Community "Mark safe" vote built then pulled** | Sprint 3 | Feature removed | A global "N people marked this safe" count could reassure a victim next to a red verdict; columns parked empty rather than run a destructive migration (see §13) |
 
 ---
 
@@ -483,6 +588,16 @@ screen of its own - its results appear on the existing Reports page, so nothing 
 | **Ask Orbo ships 1-2 chart variants at MVP** (6 are wireframed) | Six visualizations is the full vision, not the MVP; mentors warned against "boiling the ocean" | Build all 6 | Some charts are fast-follow; keeps Sprint-2 MVP achievable |
 | **Responsive everywhere; deploy on free tiers; seed stand-in data** | Personas are phone-first; the app must be live and populated for the demo | Desktop-only MVP; skip deploy until later; empty dashboard | One responsive build (no separate mobile app); a bit of deploy + seed-script work up front; demo looks real and works on a phone |
 | **Add Google Safe Browsing as a free blacklist signal** (urlscan = sandbox/screenshot/evidence; Safe Browsing = known-bad blacklist; Claude = final verdict) | urlscan's free tier gives evidence + screenshot but its reputation/verdict data is largely Pro-gated; we still want a real "known-bad" check | urlscan-only (no blacklist); VirusTotal (4 req/min, no commercial use); PhishTank (phishing-only) | One extra free API call per new URL; big accuracy + demo payoff. **Caveat:** Safe Browsing is *non-commercial use only* - a real product would switch to Google Web Risk. Stored on the global indicator, so checked once and shared. |
+| **Deterministic score, AI narrates (Sprint 1)** — our code computes the 0-100 from a weighted rubric; the model's number may only nudge ±15 and never crosses a hard floor/ceiling | The model contradicted its own evidence and could be argued out of a bad verdict; a security tool's score must be repeatable and testable | Let the model own the number (original plan); pure rules with no model prose | More scoring code + a signal table to maintain; in exchange the score is explainable, testable, and can't be talked into calling a known-bad link "safe" |
+| **Inbound email via Gmail + Apps Script relay, not SendGrid (Sprint 2-3)** — `orbischecks@gmail.com` on a 1-min trigger → batch POST to our webhook; a second relay sends threaded report emails back | SendGrid Inbound Parse needed a domain we control; the Apps Script relay is free, needs no domain, and rides real Gmail deliverability + HTTPS (Render blocks SMTP) | SendGrid Inbound Parse (planned "real path", never built); keep only the simulated webhook | `.gs` scripts are pasted into Google by hand (not deployed from repo); best-effort delivery, no auto-retry yet (roadmap) — but $0 and real end-to-end |
+| **Batch email intake + bounded concurrency (Sprint 3)** — `/inbound-email/batch` (≤50), 4 in flight, per-email results in order; still one email per LLM call | Pod-sync feedback: one request + one LLM call per email bottlenecks at scale | Unbounded parallelism (trips urlscan/LLM rate limits, drains DB pool); batch several emails into one LLM prompt | Deliberately kept one-email-per-prompt to avoid a prompt-injection poisoning the shared global verdict; throughput comes from concurrency + caching. Durable queue is roadmap (`email_forwarding_scaling.md`) |
+| **NLP re-architected to guarded LLM-written SQL over a read-only view (Sprint 3)** | The whitelisted-filter engine answered too few real analyst questions | Keep the filter object (original plan); let the model hit tables directly (unsafe) | Model writes SQL but only a parsed, read-only, single-view `SELECT`, executed in an org-scoped parameterized transaction; same injection/isolation guarantee, far more questions answered. Old filter engine left in place but dead |
+| **Custom headless Clerk auth flow, not Clerk's prebuilt UI (Sprint 2)** | The wireframes needed pixel control the hosted components don't give | Drop in Clerk `<SignIn/>`/`<SignUp/>` (original plan) | More auth code + a redirect race to fix (solved by driving off settled `isSignedIn` state); in exchange the pages match the design exactly |
+| **Analyst role is explicit metadata, not "org admin = analyst" (Sprint 2-3)** | Auto-promoting every org admin would drop normal team owners into the analyst cockpit by accident | The original "org:admin ⇒ analyst" rule | Analyst is granted only by an `orbisRole:"analyst"` flag in Clerk; noted as a tension with the org-invite guard to verify against the live Clerk config (§13) |
+| **Browser extension shipped as a Sprint-3 feature (not just a stretch)** — Chromium MV3, inline Gmail auto-scan badge + click-guard + right-click check, authed by app-issued API key | The web app is universal, but scanning Gmail inline is the highest-value everyday surface; the earlier "extension is a fast-follow stretch" call was revisited once the API was stable | Leave it as a stretch; build a separate mobile app | Chromium/Gmail only; packed + distributable via download/load-unpacked but not confirmed live on the Chrome Web Store; adds an API-key issuance/rotation flow |
+| **Report-it flow + community "Mark safe" vote (built, then vote pulled) (Sprint 3)** | Users wanted to flag a verdict; a "mark safe" vote seemed symmetric | Ship the safe-vote too | "Report it" (free-text reason + counter) shipped; the safe-vote was pulled because a *global* "N marked safe" count could reassure a victim next to a red verdict — columns parked empty rather than dropped (§13) |
+| **Soft-archive + individual-only delete for Reports (Sprint 3)** | Users need to tidy their history without stranding an analyst's review | Hard delete for everyone; no archive | Members can archive (reversible, per-user) but not permanently delete (their reports feed the analyst queue/Team History); individuals can delete their own |
+| **SSO/SAML stays a stubbed button; notifications are in-app + emailed, not push (Sprint 4 demo call)** | SAML needs a configured IdP we didn't stand up; real-time push is a larger build | Configure SAML for the demo; build push | Honest roadmap framing: the SSO button is disabled in the demo, closure is delivered in-app + by threaded email; real-time push is "next" |
 
 ---
 
@@ -500,32 +615,38 @@ flagged **OPEN** for the pod sync.
 | 5 | **Seed/demo data** - dashboard shows thousands of checks, trends, campaigns | **Resolved:** we'll write a seed script of realistic stand-in threats + campaigns before the Sprint-2 demo. | Needed because we won't have real usage. |
 | 6 | **Mobile/responsive** - personas are phone-first, wireframes are desktop | **Resolved:** one responsive build across all screens; **no separate mobile MVP**. | Apply responsive layout as we build each screen, not as a retrofit. |
 | 7 | **Deployment** - frontend + backend + Postgres | **Resolved:** we will deploy, all on free hosting tiers. | Stand up a "hello world" deploy of both early in Sprint 1 before feature work (CORS, env vars, DB host). |
-| 8 | **Campaign clustering definition** - what makes two submissions "the same campaign"? | **OPEN** (for the pod sync) | Lean: a canonicalized key that strips per-victim tracking tokens (host + path + semantic params); refine once we see real/seed data. |
-| 9 | **Clerk ↔ Postgres sync edge cases** - webhook lag or a missed event could leave a submission with no mirrored user/org row | **OPEN** (raise with mentors) | Lean: create-or-fetch the mirror row lazily on first authenticated request as a backstop to the webhook. |
+| 8 | **Campaign clustering definition** - what makes two submissions "the same campaign"? | **Partly resolved (as built).** Campaigns exist as a table + an org-scoped grouped triage queue + a detail page, and the demo groups from seeded/curated data. **Auto-clustering of brand-new submissions did not ship** and is on the roadmap. | The `canonical_key` dedup collapses identical URLs; grouping *related-but-different* indicators into a campaign is still analyst-/seed-driven, not automatic. |
+| 9 | **Clerk ↔ Postgres sync edge cases** - webhook lag or a missed event could leave a submission with no mirrored user/org row | **Resolved (as built).** The Clerk webhook mirrors user/org rows, and the auth middleware creates-or-fetches the mirror row lazily on first authenticated request as a backstop. | Shipped exactly the lean we noted; also covers the dev-stub and API-key identity paths. |
+| 10 | **Analyst-role provisioning** - how does an account actually become an analyst? | **Resolved, with a caveat to verify (§13).** Analyst is granted only by an explicit `orbisRole:"analyst"` flag in Clerk metadata; org admins are *not* auto-promoted. | This creates a tension with `requireAnalyst` on `POST /api/org/invite` (a fresh team admin derives to `member`) — verify the live Clerk metadata setup before trusting the invite path. |
 
 ---
 
 ## 12. Build Plan — Ownership & Scope
 
-> **How to read this section:** it says *who builds what* and *what we are building right now*. Each slice is a
-> **full vertical** — the same person owns the UI, the API route, and the logic for their feature end to end.
-> **This week's scope is deliberately narrow — see "MVP 0 scope" below.**
+> **How to read this section:** it says *who built what*. Each slice is a **full vertical** — the same person
+> owns the UI, the API route, and the logic for their feature end to end. The original narrow "MVP 0" scope is
+> kept below as a historical marker; the "Sprint sequence" and "as-built" notes describe what actually shipped
+> across all four sprints and all three roles.
 
-### MVP 0 scope (this week) — Individual + Organization Member only
-This week we build **only** the Individual and Organization Member experience. The **Security Analyst** role is
-**out of scope this week** (its dashboard, triage queue, campaign clustering, and authoritative-review flow come
-later, once the data and submission flows exist). Concretely, this week covers:
+### MVP 0 scope (Week 7, historical) — Individual + Organization Member only
+Week 7 built **only** the Individual and Organization Member experience; the Security Analyst role came in
+Sprint 2. This is left here as the original slice so the git/plan history reads honestly — the analyst
+dashboard, triage queue, campaign detail, authoritative review, ask-the-data, email pipeline, browser
+extension, and Vision all shipped in **later** sprints (see the sprint sequence and Decisions Log). Concretely
+Week 7 covered:
 - **Individual:** sign in → paste a link on Home → see a verdict (score, screenshot, plain-English explanation) →
   see it in their own Reports history.
 - **Organization Member:** the same check, plus their submission **auto-escalates** to their org's analyst
-  (a `pending review` `org_reviews` row is created) and their Reports page shows the **closure status**
-  ("Pending review" → "Confirmed by analyst") — even though the analyst-facing UI that flips that status is a
-  later slice.
-- **Organization Member — Team History (added):** a read-only "Team History" tab on the Reports page showing
-  only the org's analyst-reviewed-**and-shared** items (`GET /api/history?org=1`, gated by
-  `org_reviews.shared_with_org`). The `shared_with_org` column + the member view + the filter ship now; the
-  **analyst UI that sets the flag** (`PATCH /api/indicators/:id/review`) remains a later slice, so for MVP 0 the
-  flag is populated by the demo/seed data. See the "Team History share gate" note in §5.
+  (a `pending review` `org_reviews` row is created) and their Reports page shows the **closure status**.
+- **Organization Member — Team History:** a read-only "Team History" tab showing only the org's
+  analyst-reviewed-**and-shared** items (`GET /api/history?org=1`, gated by `org_reviews.shared_with_org`).
+
+**What shipped beyond MVP 0 (all three roles, Sprints 2-4):** the full analyst experience (dashboard with
+tiles + charts + review analytics, campaign-grouped triage queue, campaign detail page, authoritative review
+that overrides the AI and notifies the reporter, keyword search); the email-forwarding pipeline with threaded
+report emails; a Chromium browser extension (inline Gmail auto-scan + click-guard + right-click); Vision
+screenshot reading; the ask-the-data NLP feature + an MCP bridge; a member-specific dashboard; and deployment
+on Render against Neon Postgres.
 
 ### Who does what (each = a full UI + API + logic vertical)
 | Person | Slice | End-to-end goal | Owns |
@@ -541,10 +662,19 @@ later, once the data and submission flows exist). Concretely, this week covers:
 3. **Agree the `GET /api/indicators/:id` response shape** — this is the **seam** between David's Result screen and
    Ozias's Reports cards; both render the same score/verdict/status fields, so the field names must match.
 
-### Sprint sequence
-- **Wk 7:** skeleton (auth + app shell + schema) · submission + dedup · reports-list (individual + member).
-- **Wk 8:** real AI verdict end-to-end (the "money" demo).
-- **Wk 9:** email-forwarding pipeline · polish · deploy.
+### Sprint sequence (as built)
+- **Sprint 1 (Wk 7):** skeleton (Clerk auth + app shell + Prisma schema/seed) · submission + dedup · reports
+  list (individual + member) · escalation + closure notifications · first AI verdict, moved to a deterministic
+  score. Tests 52 → 96.
+- **Sprint 2 (Wk 8):** analyst experience (dashboard, triage queue, review-that-overrides-the-AI) · custom
+  Clerk auth flow · Recharts charts · ask-the-data · deploy on Render · browser extension (first working
+  build) · scoring hardening (typosquat, SPF/DKIM/DMARC, reputation floor). Tests → 360+.
+- **Sprint 3 (Wk 9):** email-forwarding pipeline + threaded report emails + batch intake · Vision · NLP
+  rebuilt to guarded SQL · member dashboard · keyword search · campaign detail · extension polish (v0.3.x) ·
+  email FP calibration.
+- **Sprint 4 (Wk 10):** polish, cut/disable anything shaky for the demo (SSO button disabled, auto-clustering
+  and the "Mark safe" vote pulled), rehearse the demo, and this final spec reconciliation. Tests → 751 (617
+  server + 134 client), all green.
 
 ### Shared seams (owned jointly — agree before coding)
 - **`escalateSubmission(user, indicator)` helper** (Ozias writes it, David calls it inside `POST /api/submissions`)
@@ -556,11 +686,26 @@ later, once the data and submission flows exist). Concretely, this week covers:
   agree the exact fields a report card/row needs.
 
 ### Repository structure (as built — this is the source of truth)
-The monorepo skeleton is **scaffolded and on `main`** (npm workspaces). Two rules keep it beginner-friendly:
-**styling lives only in `client/src/theme/`**, and **every external API is wrapped in its own file under
-`server/src/services/`** so each is isolated and swappable. Code is grouped **by feature** (mirrored on client
-and server), not by file type. Every major folder has its own `README.md`, and the root `README.md` has a
-"where does X live?" table. All external services are **stubbed** so the app runs end-to-end with no keys.
+The monorepo (npm workspaces) grew well past the Week-6 skeleton. Two rules still hold: **styling lives only in
+`client/src/theme/`**, and **every external API is wrapped in its own file under `server/src/services/`** so each
+is isolated and swappable. Code is grouped **by feature** (mirrored on client and server), not by file type.
+Every major folder has its own `README.md`, and the root `README.md` has a "where does X live?" table. All
+external services are **stubbed** so the app runs end-to-end with no keys.
+
+Beyond `client/` and `server/`, the repo now also contains **`extension/`** (the Chromium browser extension),
+**`mcp-server/`** (the standalone `orbis-mcp-server` bridge for Claude Desktop), **`server/appsscript/`** (the
+inbound + outbound Gmail relay `.gs` scripts, pasted into Google by hand), **`scripts/`** (scoring corpora +
+harnesses, the deck generators, `pack-extension.sh`), and **`planning/`** (this spec + `DEMO_SCRIPT.md` +
+`email_forwarding_scaling.md`). As-built counts: **9 Prisma models** (the original 7 + `report_reasons` and
+the parked `user_trusts`), **14 server feature routers**, and **751 passing tests**.
+
+Server feature routers (`server/src/features/`): `submissions`, `indicators`, `history`, `dashboard`,
+`notifications`, `webhooks` (clerk + inbound-email + batch), `vision`, `prescreen`, `users` (api-key),
+`askOrbo`, `nlpQuery`, `campaigns`, `search`, `org`. Shared services (`server/src/services/`) include the
+deterministic scoring core: `verdict`, `prescreen`, `typosquat`, `reputation`, `senderDns`, `nextSteps`,
+`urlShape`, `canonicalize`, plus the external wrappers `urlscan`, `safeBrowsing`, `llm`, `mailer`, `apiKey`.
+Client features (`client/src/features/`): `auth`, `check-link`, `reports`, `dashboard`, `insights`, `settings`.
+The original skeleton diagram below is kept as the *intended* shape; the lists above are the as-built truth.
 
 ```
 FTL-Capstone/
@@ -611,4 +756,64 @@ FTL-Capstone/
 
 > **Assets:** the Orbo mascot renders from an inline SVG placeholder (`components/OrboAvatar.jsx`) so the app
 > works with no image files; swap in real PNGs under `client/src/assets/` when exported.
+
+---
+
+## 13. Sprint 4 Spec Reconciliation
+
+This section closes the gap between what we planned and what we shipped. It was written in the final week by
+walking the whole spec against the code, and it's the honest record of where the two drifted. Nothing here is
+a surprise to the team — most of these were deliberate calls made mid-sprint that never made it back into the
+plan until now.
+
+### What changed most from the Week 6 spec
+- **The score became deterministic.** The Week 6 plan had Claude produce the 0-100 number. We moved that into
+  a fixed weighted rubric in code; the model now only writes the explanation and can nudge the number by at
+  most ±15, never past a hard floor or ceiling. This is the single biggest architectural change and it touches
+  §1, §5, and §8. It was driven by the model contradicting its own evidence and by the simple fact that a
+  security tool's score has to be repeatable and testable.
+- **The score is a *safety* score, not a danger score.** 100 = safe, 0 = dangerous, everywhere in the code.
+  The §5 data dictionary called `ai_score` a "danger score" right up until this pass — that wording was stale
+  and has been corrected. This mattered enough to fix because the two readings are exact opposites.
+- **Inbound email shipped on a Gmail Apps Script relay, not SendGrid.** The plan named SendGrid Inbound Parse
+  as the "real path." It was never built — a free Gmail + Apps Script relay (in *and* out, with threaded
+  report replies) turned out to need no owned domain and to ride real Gmail deliverability. See §5 and the
+  Decisions Log.
+- **Ask-the-data was rebuilt.** Planned as "model emits a validated whitelisted filter, never SQL." Shipped as
+  "model writes a read-only `SELECT` over a curated view, parsed and org-scoped before it runs." Same safety
+  guarantee, far more questions answered; the old filter engine is still in the tree but dead. See §8 Feature B.
+- **Auth is a custom headless Clerk flow,** not Clerk's drop-in components — needed to match the wireframes,
+  cost us a redirect race we fixed by driving off settled `isSignedIn` state.
+
+### Built but never documented until now
+The browser extension (Chromium, inline Gmail scanning, v0.3.x), the MCP bridge, the Vision screenshot reader,
+the three-leg email/sender scoring, the prescreen endpoints, the app-issued API-key auth for the extension,
+the report-it flow, soft-archive/delete on Reports, the member-specific dashboard, and the keyword-search
+endpoint all shipped without a spec entry. They're now in §4, §5, §6, and §8. Two earlier reflections
+(Sprints 1-2) called the member dashboard and `GET /api/search` "cut" — both actually shipped later in the
+project, so those reflections describe an earlier state, not the final one.
+
+### Cut or disabled for the demo (Sprint 4)
+- **Enterprise SSO/SAML** — the button is in the UI but no IdP is configured, so it's disabled in the demo.
+- **The "Mark safe" community vote** — built, then pulled before the demo. Because indicators are global, a
+  "N people marked this safe" count could reassure a victim sitting next to a red verdict. The vote never moved
+  the score; the *display* was the hazard. The `indicators.trust_votes` column and the `user_trusts` table are
+  left in place but empty rather than run a destructive migration on the shared DB; if the feature ever comes
+  back, the count must be analyst-only.
+- **Auto-clustering of new submissions into campaigns** — campaigns, the grouped triage queue, and the detail
+  page all shipped, but grouping brand-new submissions automatically did not; the demo groups from seeded data.
+- **Real-time push notifications** — closure is delivered in-app plus a threaded email; live push is roadmap.
+
+### Known inconsistency to verify (not a blocker)
+Shipped role derivation grants **analyst only via an explicit `orbisRole:"analyst"` Clerk flag** and does *not*
+auto-promote an org admin. But `POST /api/org/invite` is guarded by `requireAnalyst`, and a freshly-created
+team admin derives to `member` — so on paper that admin would get a 403 inviting teammates, even though the
+CreateTeam flow assumes it passes. This only resolves cleanly if the live Clerk instance also stamps team
+creators with the analyst flag. Flagged here to verify against the Clerk configuration before relying on the
+invite path in production; it does not affect the demo, which uses a pre-provisioned analyst account.
+
+### Test + deployment state at reconciliation
+751 automated tests pass (617 server across 48 files, 134 client across 12). The app is deployed on Render
+(static client + Node API) against an external Neon Postgres; external services (urlscan, Safe Browsing, LLM,
+email relays) are stubbed when their keys are absent so the app runs end-to-end locally with no credentials.
 
