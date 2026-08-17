@@ -1,3 +1,4 @@
+// ── feature: webhooks · clerk event mapping · owner: Michael ──
 // ============================================================
 // Pure Clerk-webhook event mapping — no svix, no DB, no Express.
 // Turns a verified Clerk event into a normalized {action, payload}

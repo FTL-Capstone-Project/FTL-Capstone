@@ -1,3 +1,4 @@
+// ── middleware: auth · owner: Michael ──
 // ============================================================
 // Auth middleware — verifies the Clerk session and attaches
 // req.user = { id, clerkUserId, role, orgId, email, name, isAdmin }

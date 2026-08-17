@@ -55,5 +55,3 @@ export const runScopedSql = async (innerSql, scope) => {
     return { rows };
   });
 };
-
-export const SQL_LIMITS = { ROW_LIMIT, STATEMENT_TIMEOUT_MS };

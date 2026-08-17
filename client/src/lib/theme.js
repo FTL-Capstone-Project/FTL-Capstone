@@ -85,9 +85,3 @@ export const watchSystemTheme = () => {
   mq.addEventListener?.("change", onChange);
   return () => mq.removeEventListener?.("change", onChange);
 };
-
-// ── Back-compat for the existing top-bar sun/moon toggle ──
-// getTheme() returns the resolved theme; toggleTheme() flips to the OPPOSITE explicit theme
-// (so a single click gives a definite light/dark, matching the old button's behavior).
-export const getTheme = getResolvedTheme;
-export const toggleTheme = () => setThemePreference(getResolvedTheme() === "dark" ? "light" : "dark");

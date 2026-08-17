@@ -16,9 +16,6 @@ export const VERDICT_POLL_MS = 1500;
 // focus, so returning to the tab feels instant regardless of where we are in this interval.
 export const NOTIFICATION_POLL_MS = 30_000;
 
-// Kept as an alias so any straggler import doesn't break; prefer the two named constants above.
-export const POLL_INTERVAL_MS = VERDICT_POLL_MS;
-
 // Sidebar nav per role (§4 / DESIGN_SPEC). Each item: label, sublabel, path, icon.
 // The chat is "Ask Orbo" at /ask-orbo (the canonical Home). Individuals & members lead
 // with it; analysts lead with Dashboard then Ask Orbo.

@@ -36,5 +36,7 @@ myNotes.txt
 
 # Local scratch — generated test-run output (regenerable by re-running the harness)
 scripts/out/
-# Slide decks are heavy binaries; keep them out of git
+# Slide decks are heavy binaries; keep NEW ones out of git.
+# (planning/Orbis_Demo.pptx + Orbis_Pod_Sync.pptx were committed before this rule and are kept
+#  on purpose as demo deliverables — this rule only stops future decks from being added.)
 *.pptx

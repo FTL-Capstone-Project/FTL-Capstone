@@ -1,3 +1,4 @@
+// ── feature: users · service · owner: Michael ──
 // ============================================================
 // Mirror-row resolution + Clerk→DB sync helpers.
 //

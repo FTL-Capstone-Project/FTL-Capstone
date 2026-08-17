@@ -1,3 +1,4 @@
+// ── lib: api client · owner: David ──
 // ============================================================
 // The ONE place the client talks to the backend.
 // Every component calls api.get()/api.post()/... — never raw fetch().

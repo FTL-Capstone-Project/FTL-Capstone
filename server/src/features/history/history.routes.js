@@ -9,8 +9,7 @@
 // isolation): ?mine=1 = their own rows; ?org=1 = rows scoped to THEIR org only.
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireAnalyst } from "../../middleware/requireAnalyst.js";
-import { isAnalyst, ROLES } from "../../middleware/roles.js";
+import { isAnalyst } from "../../middleware/roles.js";
 import { prisma } from "../../db.js";
 import { toReportJson, setArchivedForUser, deleteForUser } from "./history.service.js";
 import { scoreBucket } from "../../services/verdict.js";
@@ -188,11 +187,11 @@ historyRouter.get("/", requireAuth, async (req, res, next) => {
 
     // ── Analyst dashboard stats branch ────────────────────────────────────────
     // GET /api/history (no ?mine/?org) → org-scoped stats for the analyst dashboard.
-    // Guarded by requireAnalyst: non-analysts get 403, no data leaks.
+    // Analyst-only: non-analysts get 403, no data leaks.
     // All queries are parameterized and scoped to req.user.orgId (story #12).
 
-    // requireAnalyst runs as an inline guard (not a global route middleware) so
-    // the ?mine and ?org branches above stay accessible to all roles.
+    // The analyst check runs as an inline guard here (not a global route middleware)
+    // so the ?mine and ?org branches above stay accessible to all roles.
     if (!req.user || !isAnalyst(req.user.role)) {
       return res.status(403).json({ error: "Analyst role required" });
     }

@@ -53,8 +53,7 @@ export const scoreToKind = (aiScore) => {
 // An analyst has spoken when they either scored it themselves or closed it with a confirmed status.
 // "pending review" / "investigating" are work-in-progress, NOT a verdict — those must keep showing
 // Orbo's assessment, or opening a triage ticket would blank out the only verdict the user has.
-const CONFIRMED_STATUSES = ["confirmed malicious", "confirmed safe"];
-
+//
 // Which verdict the card should wear: the analyst's when there is one, else Orbo's score.
 // A confirmed-malicious close with no explicit score still reads "dangerous" (and confirmed-safe
 // reads "safe"), because the status IS the verdict even when the analyst didn't type a number.

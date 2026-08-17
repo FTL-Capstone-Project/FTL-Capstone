@@ -13,7 +13,7 @@
 //   useOrganization → org.createDomain, domain.updateEnrollmentMode, org.inviteMembers
 import { useState, useEffect } from "react";
 import { useSignUp, useClerk, useOrganization, useAuth } from "@clerk/clerk-react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { AuthCard, Field, PrimaryButton, PrivacyNote } from "./AuthKit.jsx";
 import { useApi } from "../../lib/useApi.js";

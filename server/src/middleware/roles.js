@@ -1,3 +1,4 @@
+// ── middleware: roles · owner: Michael ──
 // ============================================================
 // Pure role logic — no Clerk, no DB, no Express. Easy to unit-test.
 //

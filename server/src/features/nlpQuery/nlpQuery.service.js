@@ -45,6 +45,16 @@ const startOfUtcDay = (daysBack = 0) => {
 };
 
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// DEPRECATED — the CATALOG/PLAN path (everything from here down to answerNlpQuery below).
+// The live endpoint no longer runs this: answerNlpQuery() now delegates to answerWithSql()
+// (sqlPlanner.js — Michael's LLM-writes-SQL-over-a-safe-view rearchitecture). This whole
+// plan-based subsystem — planWithLLM, validatePlan, runNlpQuery and the report/count builders —
+// is retained ONLY because its tests (nlpQuery.service.test.js) still document the catalog
+// security gate and the member-privacy scoping rules. Nothing in production calls it. Don't wire
+// it back in without deleting the SQL path first; when that test coverage moves, this can go too.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
 // ── The LLM planner: question + catalog → a structured plan ──────────────────────────────────
 // We describe the catalog (trimmed to the caller's role) and ask the model to pick ONE metric,
 // its filters, and an optional group-by — using ONLY names from the catalog. Temperature 0 for

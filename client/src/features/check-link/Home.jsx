@@ -1,3 +1,5 @@
+// ── feature: check-link · Home (Orbo chat) · owner: David ──
+// The central check-link screen: paste a link/email → submit → poll for the AI verdict.
 import { useState, useRef, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth, useUser } from "@clerk/clerk-react";
